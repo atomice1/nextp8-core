@@ -1,0 +1,62 @@
+# Makefile for building p8audio test ROM
+# Requires m68k-elf toolchain in PATH
+
+# Toolchain
+TOOLCHAIN = m68k-elf-
+AS = $(TOOLCHAIN)as
+LD = $(TOOLCHAIN)ld
+OBJCOPY = $(TOOLCHAIN)objcopy
+OBJDUMP = $(TOOLCHAIN)objdump
+
+# Flags
+ASFLAGS = -m68000
+LDFLAGS = -T p8audio_test.ld
+
+# Files
+SRC = p8audio_test.s
+OBJ = p8audio_test.o
+ELF = p8audio_test.elf
+BIN = p8audio_test.bin
+MEM = p8audio_test_rom.mem
+LST = p8audio_test.lst
+
+.PHONY: all clean
+
+all: $(MEM)
+
+# Assemble
+$(OBJ): $(SRC)
+	$(AS) $(ASFLAGS) -o $@ $<
+
+# Link
+$(ELF): $(OBJ) p8audio_test.ld
+	$(LD) $(LDFLAGS) -o $@ $(OBJ)
+
+# Create binary
+$(BIN): $(ELF)
+	$(OBJCOPY) -O binary $< $@
+
+# Create listing
+$(LST): $(ELF)
+	$(OBJDUMP) -d $< > $@
+
+# Convert to memory hex file
+# The .mem file format is word-addressed hex format for $readmemh
+$(MEM): $(BIN) $(LST)
+	@echo "Converting binary to .mem format..."
+	@od -v -w2 -Ax -tx2 --endian=big $< | cut -d' ' -f2 -s > $@
+	@echo "ROM created: $@"
+	@echo "Size: $$(stat -c%s $(BIN)) bytes"
+
+clean:
+	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
+
+help:
+	@echo "Makefile targets:"
+	@echo "  make all (default) - Build ROM memory file"
+	@echo "  make clean         - Remove generated files"
+	@echo ""
+	@echo "Generated files:"
+	@echo "  $(MEM)  - Memory file for testbench"
+	@echo "  $(BIN)  - Raw binary ROM image"
+	@echo "  $(LST)  - Disassembly listing"

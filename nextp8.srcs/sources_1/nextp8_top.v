@@ -198,7 +198,6 @@ wire clk2;
 
 BUFG  BUFG_inst2 (.I (clk2i), .O (clk2));
 
-
 // ---------------------------------------------------------------------------------
 // -------------------------------------- CPU --------------------------------------
 // ---------------------------------------------------------------------------------
@@ -220,6 +219,7 @@ wire cpu_ram = cpu_addr[23:21] == 3'b000;
 wire cpu_rom = 1'b0;
 wire cpu_mem = cpu_ram || cpu_rom;
 wire memio_rd = cpu_act && (cpu_addr[23:20] == 4'b1000);
+wire p8audio_mem = memio_rd && cpu_addr[8];                              // $800100 - $8001ff
 wire da_mem  = cpu_act && (cpu_addr[23:14] == 10'b1100000011);           // $c0c000 - $c0ffff
 wire vid_mem = cpu_act && (cpu_addr[23:15] ==  9'b110000000);            // $c00000 - $c07fff
 wire pal_mem = cpu_act && (cpu_addr[23:4]  == 20'b11000000100000000000); // $c08000 - $c0800f
@@ -321,6 +321,60 @@ end
 
 //------------- P8 Audio --------------
 
+// P8 Audio interface signals
+wire [6:0]  p8audio_address;
+wire [15:0] p8audio_din;
+wire [15:0] p8audio_dout;
+wire        p8audio_nUDS;
+wire        p8audio_nLDS;
+wire        p8audio_write_en;
+wire        p8audio_read_en;
+wire signed [15:0] p8audio_pcm_out;
+
+// P8 Audio DMA interface
+wire [30:0] p8audio_dma_addr;
+wire [15:0] p8audio_dma_rdata;
+wire        p8audio_dma_req;
+wire        p8audio_dma_ack;
+
+// Latched DMA request/address (captured when req pulses, cleared when serviced)
+// Both p8audio and nextp8_top FSM run on mclk - same clock domain
+reg         p8audio_dma_req_latched;
+reg  [30:0] p8audio_dma_addr_latched;
+
+// P8 Audio MMIO signal assignments
+assign p8audio_address  = cpu_addr[7:1];  // 7-bit word address from bits 7:1
+assign p8audio_din      = cpu_dout;
+assign p8audio_nUDS     = cpu_ds[1];
+assign p8audio_nLDS     = cpu_ds[0];
+assign p8audio_write_en = p8audio_mem && cpu_wr;
+assign p8audio_read_en  = p8audio_mem && cpu_rd;
+
+// P8 Audio module instantiation
+p8audio p8audio_inst (
+    // Clock and reset
+    .clk_sys    (mclk),
+    .clk_pcm    (clk_pcm_pulse),    // 22.05 kHz sample clock
+    .resetn     (~reset),           // Active-low reset
+    
+    // MMIO interface
+    .address    (p8audio_address),
+    .din        (p8audio_din),
+    .dout       (p8audio_dout),
+    .nUDS       (p8audio_nUDS),
+    .nLDS       (p8audio_nLDS),
+    .write_en   (p8audio_write_en),
+    .read_en    (p8audio_read_en),
+    
+    // PCM output
+    .pcm_out    (p8audio_pcm_out),
+    
+    // DMA interface
+    .dma_addr   (p8audio_dma_addr),
+    .dma_rdata  (p8audio_dma_rdata),
+    .dma_req    (p8audio_dma_req),
+    .dma_ack    (p8audio_dma_ack)
+);
 
 //------------- RTC -----------------
 
@@ -516,6 +570,27 @@ always @(posedge clk2) begin
 end
 
 // -------------------------------------------------------------------------
+// ---------------------- Audio Subsystem Clock (22.05 kHz) ----------------
+// -------------------------------------------------------------------------
+// Generate 22.05 kHz from 22 MHz using fractional-N divider (phase accumulator)
+// Required ratio: 22,050 / 22,000,000 = 0.0010022727...
+// Phase increment: 0.0010022727 × 2^32 = 4,304,728.585 ≈ 4,304,729
+
+reg [31:0] clk_pcm_phase = 32'd0;
+reg clk_pcm_pulse = 1'b0;
+
+always @(posedge clk22 or posedge reset)
+begin
+    if (reset) begin
+        clk_pcm_phase <= 32'd0;
+        clk_pcm_pulse <= 1'b0;
+    end else begin
+        // Add fractional increment, pulse on overflow
+        {clk_pcm_pulse, clk_pcm_phase} <= {1'b0, clk_pcm_phase} + 33'd4304729;
+    end
+end
+
+// -------------------------------------------------------------------------
 // --------- memory/io access and rom initialization ----------
 // -------------------------------------------------------------------------
 
@@ -543,6 +618,34 @@ assign ram_data_io = ramwe ? 16'bZZZZZZZZZZZZZZZZ : rdout;
 reg [2:0] estate =3'b000;
 reg clk2i=1'b0;
 
+// P8 Audio DMA arbiter signals (depend on estate)
+// Acknowledge is a single-cycle pulse in state 3'b100 (after data latched in state 011)
+assign p8audio_dma_ack = (estate == 3'b100);
+assign p8audio_dma_rdata = rdata;
+
+// P8 Audio DMA request capture - latch any request pulse until serviced
+// Both p8audio and FSM run on mclk (same clock domain)
+always @(posedge mclk) begin
+	if (!pll_locked) begin
+		p8audio_dma_req_latched <= 1'b0;
+		p8audio_dma_addr_latched <= 31'd0;
+	end else begin
+		// Latch request when it goes high
+		if (p8audio_dma_req) begin
+			p8audio_dma_req_latched <= 1'b1;
+			p8audio_dma_addr_latched <= p8audio_dma_addr;
+			$display("[nextp8_top] time=%0t DMA request captured: addr=0x%05h, estate=%b", 
+			         $time, p8audio_dma_addr[19:0], estate);
+		end
+		// Clear latched request when FSM detects it in state 000
+		// Non-blocking assignment ensures FSM sees old value before it changes
+		else if (p8audio_dma_req_latched && (estate == 3'b000)) begin
+			p8audio_dma_req_latched <= 1'b0;
+			$display("[nextp8_top] time=%0t DMA request cleared (FSM picked up in state 000)", $time);
+		end
+	end
+end
+
 always @(posedge mclk)
 begin
 	if (pll_locked)
@@ -550,23 +653,38 @@ begin
 		if (!cpu_enable) post_code <= 6'd2;
 		case (estate)
 		3'b000: begin
-			cpu_enable <= 1'b1;
-			ramce <= 1'b0;
-			ramoe <= ~sys_oe;
-			raddr <= sys_addr[19:0];
-			clk2i<=1'b0;
-			if (back_mem)
-			    vaddr1 <= {^vfront, cpu_addr[12:1]};
-            else if (front_mem)
-			    vaddr1 <= {vfront, cpu_addr[12:1]};
-			else if (fb_mem)
-			    vaddr1 <= cpu_addr[13:1];
-			rds <= cpu_ds;
-			memio_go<=1'b0;
-		    if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
-		    if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
-		    estate<=3'b001;
+			// P8 Audio DMA has priority - if requesting, service it first
+			if (p8audio_dma_req_latched) begin
+				$display("[nextp8_top] time=%0t DMA servicing in state 000: addr=0x%05h, setting up read", $time, p8audio_dma_addr_latched[19:0]);
+				cpu_enable <= 1'b0;  // Stall CPU
+				ramce <= 1'b0;
+				ramoe <= 1'b0;  // Enable read
+				ramwe <= 1'b1;  // DMA is read-only
+				raddr <= p8audio_dma_addr_latched[19:0];  // DMA address (word-addressed)
+				rds <= 2'b00;   // Both bytes enabled
+				clk2i <= 1'b0;
+				memio_go <= 1'b0;
+				estate <= 3'b011;  // DMA state
+			end else begin
+				// Normal CPU access
+				cpu_enable <= 1'b1;
+				ramce <= 1'b0;
+				ramoe <= ~sys_oe;
+				raddr <= sys_addr[19:0];
+				clk2i<=1'b0;
+				if (back_mem)
+					vaddr1 <= {^vfront, cpu_addr[12:1]};
+				else if (front_mem)
+					vaddr1 <= {vfront, cpu_addr[12:1]};
+				else if (fb_mem)
+					vaddr1 <= cpu_addr[13:1];
+				rds <= cpu_ds;
+				memio_go<=1'b0;
+				if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
+				if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
+				estate<=3'b001;
 			end
+		end
 		3'b001: begin
 			if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
 			memio_go<=1'b1;
@@ -608,6 +726,27 @@ begin
 			ramwe <= 1'b1; vw1 <= 2'b00;
 		    estate<=3'b000;
 			 end
+		3'b011: begin
+			// DMA read cycle - data is valid on ram_data_io, ack asserted
+			$display("[nextp8_top] time=%0t State 011: raddr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
+			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
+            rdata <= ram_data_io;
+			ramce <= 1'b1;
+			ramoe <= 1'b1;
+			estate <= 3'b100;
+		end
+        3'b100: begin
+			$display("[nextp8_top] time=%0t State 100: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
+			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
+            // Complete DMA cycle
+            estate <= 3'b000;
+        end
+/*        3'b101: begin
+			$display("[nextp8_top] time=%0t State 101: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
+			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
+            // Complete DMA cycle
+            estate <= 3'b000;
+        end*/
 		endcase
 	end
 	else	begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk2i<=1'b0; ramoe <= 1'b1; post_code <= 6'd1; reset_cnt = RESET_CNT; end
@@ -690,64 +829,71 @@ reg [31:0] debug_reg;
 always @(posedge memio_go)
 begin
 	if (memio_rd) begin  // read memory mapped ports
-        // ------------ video ----------------------------------------------------
-        if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out={7'b0, vfront, 7'b0, vfront}; //h80000E
-	    //--------------- QLSD --------------------------------------------------
-		if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data, qlsd_data }; //h800006
-		if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
-		//------------- RTC -------------------------------------------------------
-		if (cpu_addr[6:1]==6'b010000 && cpu_rd ) memio_out <= {i2c_din,i2c_din}; //h800021
-		if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
-		//-------------- ESP UART ----------------------------------------------------------
-		if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout,esp_dout}; //h800025
-		if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,esp_rd,esp_dr, 6'b0,esp_rd,esp_dr}; //h800024
-		//------------- User timers -------------------------
-		if (cpu_addr[6:1]==6'b010111 && cpu_rd) memio_out <= utimer_1mhz[31:16]; utbuf_1mhz<=utimer_1mhz[15:0];  //h80002E
-		if (cpu_addr[6:1]==6'b011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
-		if (cpu_addr[6:1]==6'b011001 && cpu_rd) memio_out <= utimer_1khz[31:16]; utbuf_1khz<=utimer_1khz[15:0];  //h800032
-		if (cpu_addr[6:1]==6'b011010 && cpu_rd) memio_out <= utbuf_1khz;  //h800034
-		//------------- digital audio -----------------------------
-		if (cpu_addr[6:1]==6'b011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
-		//------------- keyboard ----------------------------- h800040-h80005f
-		if (cpu_addr[6:5]==2'b10 && cpu_rd && !cpu_ds[1]) memio_out <= kbd_matrix[{cpu_addr[4:1], 1'b0}];
-		if (cpu_addr[6:5]==2'b10 && cpu_rd && !cpu_ds[0]) memio_out <= kbd_matrix[{cpu_addr[4:1], 1'b1}];
-		//------------- joystick -----------------------------
-		if (cpu_addr[6:1]==6'b110000 && cpu_rd && !cpu_ds[1]) memio_out <= js0; //h800060
-		if (cpu_addr[6:1]==6'b110000 && cpu_rd && !cpu_ds[0]) memio_out <= js1; //h800061
+        if (cpu_addr[8] == 1'b0) begin
+            // ------------ video ----------------------------------------------------
+            if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out={7'b0, vfront, 7'b0, vfront}; //h80000E
+            //--------------- QLSD --------------------------------------------------
+            if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data, qlsd_data }; //h800006
+            if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
+            //------------- RTC -------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010000 && cpu_rd ) memio_out <= {i2c_din,i2c_din}; //h800021
+            if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
+            //-------------- ESP UART ----------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout,esp_dout}; //h800025
+            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,esp_rd,esp_dr, 6'b0,esp_rd,esp_dr}; //h800024
+            //------------- User timers -------------------------
+            if (cpu_addr[6:1]==6'b010111 && cpu_rd) memio_out <= utimer_1mhz[31:16]; utbuf_1mhz<=utimer_1mhz[15:0];  //h80002E
+            if (cpu_addr[6:1]==6'b011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
+            if (cpu_addr[6:1]==6'b011001 && cpu_rd) memio_out <= utimer_1khz[31:16]; utbuf_1khz<=utimer_1khz[15:0];  //h800032
+            if (cpu_addr[6:1]==6'b011010 && cpu_rd) memio_out <= utbuf_1khz;  //h800034
+            //------------- digital audio -----------------------------
+            if (cpu_addr[6:1]==6'b011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
+            //------------- keyboard ----------------------------- h800040-h80005f
+            if (cpu_addr[6:5]==2'b10 && cpu_rd && !cpu_ds[1]) memio_out <= kbd_matrix[{cpu_addr[4:1], 1'b0}];
+            if (cpu_addr[6:5]==2'b10 && cpu_rd && !cpu_ds[0]) memio_out <= kbd_matrix[{cpu_addr[4:1], 1'b1}];
+            //------------- joystick -----------------------------
+            if (cpu_addr[6:1]==6'b110000 && cpu_rd && !cpu_ds[1]) memio_out <= js0; //h800060
+            if (cpu_addr[6:1]==6'b110000 && cpu_rd && !cpu_ds[0]) memio_out <= js1; //h800061
+        end else begin
+		    //------------- P8 Audio ----------------------------- h800100-h8001FF
+		    if (cpu_rd) memio_out <= p8audio_dout;
+        end
 	end
 end
 
 always @(negedge memio_go) // write memory mapped ports
 begin
 	if (memio_rd) begin
-		// ------------  ql-sd io -------------------------------------------------
-		if (cpu_addr[6:1]==6'b000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800004
-		if (cpu_addr[6:1]==6'b000000 && cpu_wr ) ql_sd_w <= cpu_dout[0];       //h800000
-		if (cpu_addr[6:1]==6'b000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800002
-		if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000a
-		//------------- post code -------------------------------------------------------
-		if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code <= cpu_dout[5:0]; //h80000C
-        // ------------ video ----------------------------------------------------
-        if (cpu_addr[6:1]==6'b000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
-        // ------------ parameters -------------------------------------------------------
-		if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[0]) params[7:0] <= cpu_dout[7:0]; //h800013  bit0=key_ms
-		if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[1]) params[15:8] <= cpu_dout[15:8]; //h800012
-		//-------------- RTC -------------------------------------------------------
-		if (cpu_addr[6:1]==6'b010000 && cpu_wr ) i2c_dout <= cpu_dout[7:0]; //h800021
-		if (cpu_addr[6:1]==6'b010001 && cpu_wr ) begin i2c_rw <= cpu_dout[1];  i2c_ena <= cpu_dout[0]; end //h800023
-		//-------------- UART ------------------------------------------------------
-		if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end //h800024
-		if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end //h800025
-		// ---------- esp baud rate divider  ------------------------------------------------------
-		if (cpu_addr[6:1]==6'b010110 && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end //h80002C   8388652
-		// --------------- digital audio -----------------------------------------------------------
-		if (cpu_addr[6:1]==6'b011011 && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end //h800036
-		if (cpu_addr[6:1]==6'b011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
-		//------------------ CPU ------------------------------
-		if (cpu_addr[6:1]==6'b011111 && cpu_wr ) begin cpu_type <= cpu_dout[1:0]; end //h80003E 8388670-1
-        //------------------ debug ------------------------------
-		if (cpu_addr[6:1]==6'b110001 && cpu_wr) debug_reg[31:16] <= cpu_dout; //h800062
-		if (cpu_addr[6:1]==6'b110010 && cpu_wr) debug_reg[15:0]  <= cpu_dout; //h800064
+        if (cpu_addr[8] == 1'b0) begin
+            // ------------  ql-sd io -------------------------------------------------
+            if (cpu_addr[6:1]==6'b000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800004
+            if (cpu_addr[6:1]==6'b000000 && cpu_wr ) ql_sd_w <= cpu_dout[0];       //h800000
+            if (cpu_addr[6:1]==6'b000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800002
+            if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000a
+            //------------- post code -------------------------------------------------------
+            if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code <= cpu_dout[5:0]; //h80000C
+            // ------------ video ----------------------------------------------------
+            if (cpu_addr[6:1]==6'b000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
+            // ------------ parameters -------------------------------------------------------
+            if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[0]) params[7:0] <= cpu_dout[7:0]; //h800013  bit0=key_ms
+            if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[1]) params[15:8] <= cpu_dout[15:8]; //h800012
+            //-------------- RTC -------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010000 && cpu_wr ) i2c_dout <= cpu_dout[7:0]; //h800021
+            if (cpu_addr[6:1]==6'b010001 && cpu_wr ) begin i2c_rw <= cpu_dout[1];  i2c_ena <= cpu_dout[0]; end //h800023
+            //-------------- UART ------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end //h800024
+            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end //h800025
+            // ---------- esp baud rate divider  ------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010110 && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end //h80002C   8388652
+            // --------------- digital audio -----------------------------------------------------------
+            if (cpu_addr[6:1]==6'b011011 && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end //h800036
+            if (cpu_addr[6:1]==6'b011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
+            //------------------ CPU ------------------------------
+            if (cpu_addr[6:1]==6'b011111 && cpu_wr ) begin cpu_type <= cpu_dout[1:0]; end //h80003E 8388670-1
+            //------------------ debug ------------------------------
+            if (cpu_addr[6:1]==6'b110001 && cpu_wr) debug_reg[31:16] <= cpu_dout; //h800062
+            if (cpu_addr[6:1]==6'b110010 && cpu_wr) debug_reg[15:0]  <= cpu_dout; //h800064
+        end
 	end
 end
 
@@ -758,10 +904,12 @@ wire [9:0] ored,ogreen,oblue;
 wire [3:0] tmds_out_p,tmds_out_n;
 wire [15:0] pcm_audio_L,pcm_audio_R;
 
-assign pcm_audio_L = da_playing ? (da_mono ? da_data : {da_data[7:0], 8'd0} ) :
-                                  16'd0;
-assign pcm_audio_R = da_playing ? (da_mono ? da_data : {da_data[15:8], 8'd0}) :
-                                  16'd0;
+// Mix digital audio (da_playing) with P8 audio (p8audio_pcm_out)
+// P8 audio is mono, send to both channels
+assign pcm_audio_L = (da_playing ? (da_mono ? da_data : {da_data[7:0], 8'd0}) : 16'd0) + 
+                     p8audio_pcm_out;
+assign pcm_audio_R = (da_playing ? (da_mono ? da_data : {da_data[15:8], 8'd0}) : 16'd0) + 
+                     p8audio_pcm_out;
 
 hdmi_out_xilinx hdmiqout (
 	.clock_pixel_i 	(clk65),

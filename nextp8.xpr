@@ -45,7 +45,7 @@
     <Option Name="SimulatorGccVersionActiveHdl" Val="9.3.0"/>
     <Option Name="BoardPart" Val=""/>
     <Option Name="SourceMgmtMode" Val="DisplayOnly"/>
-    <Option Name="ActiveSimSet" Val="sim_4"/>
+    <Option Name="ActiveSimSet" Val="sim_1"/>
     <Option Name="DefaultLib" Val="xil_defaultlib"/>
     <Option Name="ProjectType" Val="Default"/>
     <Option Name="IPOutputRepo" Val="$PCACHEDIR/ip"/>
@@ -59,7 +59,7 @@
     <Option Name="IPUserFilesDir" Val="$PIPUSERFILESDIR"/>
     <Option Name="IPStaticSourceDir" Val="$PIPUSERFILESDIR/ipstatic"/>
     <Option Name="EnableBDX" Val="FALSE"/>
-    <Option Name="WTXSimLaunchSim" Val="218"/>
+    <Option Name="WTXSimLaunchSim" Val="262"/>
     <Option Name="WTModelSimLaunchSim" Val="0"/>
     <Option Name="WTQuestaLaunchSim" Val="0"/>
     <Option Name="WTIesLaunchSim" Val="0"/>
@@ -127,12 +127,6 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/Sprites.vhd">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/TG68K.C-master/TG68K_Pack.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
@@ -187,33 +181,6 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/alu.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/alu.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/bus_mux.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/bus_mux.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/clock_ctrl.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/clock_ctrl.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/cond_branch_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
@@ -223,26 +190,8 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/cond_branch.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/cond_branch.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/dac.vhd">
         <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/db_bus.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/db_bus.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
@@ -283,33 +232,6 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/decoder.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/decoder.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/dmem_ctrl.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/dmem_ctrl.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/system/generic_ram_ena.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/generic_ram_ena.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/hdmi_out_xilinx.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
@@ -328,107 +250,11 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/int.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/int.vhd"/>
-          <Attr Name="ImportTime" Val="1706000091"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/opc_decoder.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/opc_decoder.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/opc_table.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/opc_table.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/p1.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/p1.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/p2.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/p2.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/pmem_ctrl.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/pmem_ctrl.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/ps2_in.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/ps2_in.vhd"/>
           <Attr Name="ImportTime" Val="1710107989"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/ps2_intf.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/ps2_intf.vhd"/>
-          <Attr Name="ImportTime" Val="1706000089"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/psw.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/psw.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/qlvideo.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/qlvideo.vhd"/>
-          <Attr Name="ImportTime" Val="1713558930"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/qlvideo256.vhd">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/system/rom_t49.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/rom_t49.vhd"/>
-          <Attr Name="ImportTime" Val="1711144026"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
@@ -442,15 +268,6 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/t48_core.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_core.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/t48_core_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
@@ -460,31 +277,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t8049_notri.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t8049_notri.vhd"/>
-          <Attr Name="ImportTime" Val="1706000090"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/timer.vhd">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/timer.vhd"/>
-          <Attr Name="ImportTime" Val="1706000092"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
       <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/uart.vhd">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/ym2149.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -556,6 +349,34 @@
           <Attr Name="ImportPath" Val="$PPRDIR/new/ps2_read_keyboard.vhd"/>
           <Attr Name="ImportTime" Val="0"/>
           <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/sources_1/p8audio.v">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/sources_1/p8sfx_voice.v">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/sources_1/p8sfx_core.v">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/sources_1/dma_arbiter.v">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
@@ -631,19 +452,6 @@
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
     </FileSet>
-    <FileSet Name="sprite_mem" Type="BlockSrcs" RelSrcDir="$PSRCDIR/sprite_mem" RelGenDir="$PGENDIR/sprite_mem">
-      <File Path="$PSRCDIR/sources_1/ip/sprite_mem/sprite_mem.xci">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="implementation"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <Config>
-        <Option Name="TopModule" Val="sprite_mem"/>
-        <Option Name="UseBlackboxStub" Val="1"/>
-      </Config>
-    </FileSet>
     <FileSet Name="pll_hdmi" Type="BlockSrcs" RelSrcDir="$PSRCDIR/pll_hdmi" RelGenDir="$PGENDIR/pll_hdmi">
       <File Path="$PSRCDIR/sources_1/ip/pll_hdmi_2/pll_hdmi.xci">
         <FileInfo>
@@ -707,9 +515,22 @@
     </FileSet>
     <FileSet Name="sim_3" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_3" RelGenDir="$PGENDIR/sim_3">
       <Filter Type="Srcs"/>
+      <File Path="$PSRCDIR/sim_3/tb_p8audio_sfx.sv">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PPRDIR/tb_p8audio_sfx_behav.wcfg">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
       <Config>
         <Option Name="DesignMode" Val="RTL"/>
-        <Option Name="TopAutoSet" Val="TRUE"/>
+        <Option Name="TopModule" Val="tb_p8audio_sfx"/>
+        <Option Name="TopLib" Val="xil_defaultlib"/>
         <Option Name="TransportPathDelay" Val="0"/>
         <Option Name="TransportIntDelay" Val="0"/>
         <Option Name="SelectedSimModel" Val="rtl"/>
@@ -718,11 +539,12 @@
         <Option Name="PamSignalDriverFile" Val="xil_bypass_driver"/>
         <Option Name="PamPseudoTop" Val="pseudo_tb"/>
         <Option Name="SrcSet" Val="sources_1"/>
+        <Option Name="XSimWcfgFile" Val="$PPRDIR/tb_p8audio_sfx_behav.wcfg"/>
         <Option Name="CosimPdi" Val=""/>
         <Option Name="CosimPlatform" Val=""/>
         <Option Name="CosimElf" Val=""/>
         <Option Name="Dmv" Val=""/>
-        <Option Name="xsim.simulate.runtime" Val="5ms"/>
+        <Option Name="xsim.simulate.runtime" Val="26ms"/>
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
@@ -753,6 +575,74 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
+    <FileSet Name="sim_5" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_5" RelGenDir="$PGENDIR/sim_5">
+      <File Path="$PSRCDIR/sim_5/tb_p8audio_music.sv">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <Config>
+        <Option Name="DesignMode" Val="RTL"/>
+        <Option Name="TopAutoSet" Val="TRUE"/>
+        <Option Name="TransportPathDelay" Val="0"/>
+        <Option Name="TransportIntDelay" Val="0"/>
+        <Option Name="SelectedSimModel" Val="rtl"/>
+        <Option Name="PamDesignTestbench" Val=""/>
+        <Option Name="PamDutBypassFile" Val="xil_dut_bypass"/>
+        <Option Name="PamSignalDriverFile" Val="xil_bypass_driver"/>
+        <Option Name="PamPseudoTop" Val="pseudo_tb"/>
+        <Option Name="SrcSet" Val="sources_1"/>
+        <Option Name="CosimPdi" Val=""/>
+        <Option Name="CosimPlatform" Val=""/>
+        <Option Name="CosimElf" Val=""/>
+        <Option Name="Dmv" Val=""/>
+        <Option Name="xsim.simulate.runtime" Val="26ms"/>
+        <Option Name="xsim.simulate.log_all_signals" Val="true"/>
+      </Config>
+    </FileSet>
+    <FileSet Name="sim_6" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_6" RelGenDir="$PGENDIR/sim_6">
+      <File Path="$PSRCDIR/sim_6/tb_nextp8_p8audio.sv">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/sim_6/tb_p8audio_sfx.p8"/>
+      <File Path="$PSRCDIR/sim_6/p8audio_test_rom.mem">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PPRDIR/tb_nextp8_p8audio_behav.wcfg">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <Config>
+        <Option Name="DesignMode" Val="RTL"/>
+        <Option Name="TopModule" Val="tb_nextp8_p8audio"/>
+        <Option Name="TopLib" Val="xil_defaultlib"/>
+        <Option Name="TransportPathDelay" Val="0"/>
+        <Option Name="TransportIntDelay" Val="0"/>
+        <Option Name="SelectedSimModel" Val="rtl"/>
+        <Option Name="PamDesignTestbench" Val=""/>
+        <Option Name="PamDutBypassFile" Val="xil_dut_bypass"/>
+        <Option Name="PamSignalDriverFile" Val="xil_bypass_driver"/>
+        <Option Name="PamPseudoTop" Val="pseudo_tb"/>
+        <Option Name="SrcSet" Val="sources_1"/>
+        <Option Name="XSimWcfgFile" Val="$PPRDIR/tb_nextp8_p8audio_behav.wcfg"/>
+        <Option Name="CosimPdi" Val=""/>
+        <Option Name="CosimPlatform" Val=""/>
+        <Option Name="CosimElf" Val=""/>
+        <Option Name="Dmv" Val=""/>
+        <Option Name="xsim.simulate.runtime" Val="5ms"/>
+        <Option Name="xsim.simulate.log_all_signals" Val="true"/>
+      </Config>
+    </FileSet>
   </FileSets>
   <Simulators>
     <Simulator Name="XSim">
@@ -778,7 +668,9 @@
   <Runs Version="1" Minor="22">
     <Run Id="synth_1" Type="Ft3:Synth" SrcSet="sources_1" Part="xc7a15tcsg324-1" ConstrsSet="constrs_1" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" State="current" Dir="$PRUNDIR/synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023"/>
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
+          <Desc>Vivado Synthesis Defaults</Desc>
+        </StratHandle>
         <Step Id="synth_design"/>
       </Strategy>
       <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
@@ -787,16 +679,6 @@
       <RQSFiles/>
     </Run>
     <Run Id="vram_synth_1" Type="Ft3:Synth" SrcSet="vram" Part="xc7a15tcsg324-1" ConstrsSet="vram" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/vram_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/vram_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/vram_synth_1" ParallelReportGen="true">
-      <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
-        <Step Id="synth_design"/>
-      </Strategy>
-      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
-      <ReportStrategy Name="Vivado Synthesis Default Reports" Flow="Vivado Synthesis 2025"/>
-      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
-      <RQSFiles/>
-    </Run>
-    <Run Id="sprite_mem_synth_1" Type="Ft3:Synth" SrcSet="sprite_mem" Part="xc7a15tcsg324-1" ConstrsSet="sprite_mem" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/sprite_mem_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/sprite_mem_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/sprite_mem_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
@@ -828,7 +710,9 @@
     </Run>
     <Run Id="impl_1" Type="Ft2:EntireDesign" Part="xc7a15tcsg324-1" ConstrsSet="constrs_1" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" State="current" SynthRun="synth_1" IncludeInArchive="true" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/impl_1" LaunchOptions="-jobs 14 " AutoRQSDir="$PSRCDIR/utils_1/imports/impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023"/>
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
+          <Desc>Default settings for Implementation.</Desc>
+        </StratHandle>
         <Step Id="init_design"/>
         <Step Id="opt_design"/>
         <Step Id="power_opt_design"/>
@@ -844,23 +728,6 @@
       <RQSFiles/>
     </Run>
     <Run Id="vram_impl_1" Type="Ft2:EntireDesign" Part="xc7a15tcsg324-1" ConstrsSet="vram" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="vram_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/vram_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/vram_impl_1" ParallelReportGen="true">
-      <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
-        <Step Id="init_design"/>
-        <Step Id="opt_design"/>
-        <Step Id="power_opt_design"/>
-        <Step Id="place_design"/>
-        <Step Id="post_place_power_opt_design"/>
-        <Step Id="phys_opt_design"/>
-        <Step Id="route_design"/>
-        <Step Id="post_route_phys_opt_design"/>
-        <Step Id="write_bitstream"/>
-      </Strategy>
-      <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2025"/>
-      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
-      <RQSFiles/>
-    </Run>
-    <Run Id="sprite_mem_impl_1" Type="Ft2:EntireDesign" Part="xc7a15tcsg324-1" ConstrsSet="sprite_mem" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="sprite_mem_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/sprite_mem_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/sprite_mem_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>
