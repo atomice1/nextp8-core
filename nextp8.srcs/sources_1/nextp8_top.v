@@ -453,14 +453,27 @@ wire video_hs, video_vs;
 wire iblank;
 wire vfront;
 
-(* ram_style = "block" *) reg [4:0] screen_palette [0:15];
+(* ram_style = "block" *) reg [4:0] screen_palette0 [0:15];
+(* ram_style = "block" *) reg [4:0] screen_palette1 [0:15];
 
 reg [4:0] i;
 initial begin
     for (i = 0; i < 16; i = i + 1) begin
-        screen_palette[i] = i;
+        screen_palette0[i] = i;
+        screen_palette1[i] = i;
     end
 end
+
+// Select active palette based on vfront
+wire [79:0] screen_palette_active = vfront ? 
+    {screen_palette0[0],  screen_palette0[1],  screen_palette0[2],  screen_palette0[3],
+     screen_palette0[4],  screen_palette0[5],  screen_palette0[6],  screen_palette0[7],
+     screen_palette0[8],  screen_palette0[9],  screen_palette0[10], screen_palette0[11],
+     screen_palette0[12], screen_palette0[13], screen_palette0[14], screen_palette0[15]} :
+    {screen_palette1[0],  screen_palette1[1],  screen_palette1[2],  screen_palette1[3],
+     screen_palette1[4],  screen_palette1[5],  screen_palette1[6],  screen_palette1[7],
+     screen_palette1[8],  screen_palette1[9],  screen_palette1[10], screen_palette1[11],
+     screen_palette1[12], screen_palette1[13], screen_palette1[14], screen_palette1[15]};
 
 p8video p8video (
 	.clk325(clk325),
@@ -475,22 +488,7 @@ p8video p8video (
 	.VR(video_r),
 	.VG(video_g),
 	.VB(video_b),
-	.screen_palette({screen_palette[0],
-	                 screen_palette[1],
-	                 screen_palette[2],
-	                 screen_palette[3],
-	                 screen_palette[4],
-	                 screen_palette[5],
-	                 screen_palette[6],
-	                 screen_palette[7],
-	                 screen_palette[8],
-	                 screen_palette[9],
-	                 screen_palette[10],
-	                 screen_palette[11],
-	                 screen_palette[12],
-	                 screen_palette[13],
-	                 screen_palette[14],
-	                 screen_palette[15]})
+	.screen_palette(screen_palette_active)
 	);
 
 assign vsync_o = video_vs;
@@ -584,11 +582,23 @@ begin
 			end
 			if (pal_mem) begin
                 if (cpu_wr) begin
-			          if (~cpu_ds[0]) screen_palette[{cpu_addr[3:1], 1'b1}]<={cpu_dout[7],  cpu_dout[3:0]};
-			          if (~cpu_ds[1]) screen_palette[{cpu_addr[3:1], 1'b0}]<={cpu_dout[15], cpu_dout[11:8]};
+			          // Write to inactive palette (opposite of vfront)
+			          if (~vfront) begin
+			              if (~cpu_ds[0]) screen_palette1[{cpu_addr[3:1], 1'b1}]<={cpu_dout[7],  cpu_dout[3:0]};
+			              if (~cpu_ds[1]) screen_palette1[{cpu_addr[3:1], 1'b0}]<={cpu_dout[15], cpu_dout[11:8]};
+			          end else begin
+			              if (~cpu_ds[0]) screen_palette0[{cpu_addr[3:1], 1'b1}]<={cpu_dout[7],  cpu_dout[3:0]};
+			              if (~cpu_ds[1]) screen_palette0[{cpu_addr[3:1], 1'b0}]<={cpu_dout[15], cpu_dout[11:8]};
+			          end
 			     end else begin
-			          if (~cpu_ds[0]) rdata[7:0]  <= {screen_palette[{cpu_addr[3:1], 1'b1}][4], 3'b000, screen_palette[{cpu_addr[3:1], 1'b1}][3:0]};
-			          if (~cpu_ds[1]) rdata[15:9] <= {screen_palette[{cpu_addr[3:1], 1'b0}][4], 3'b000, screen_palette[{cpu_addr[3:1], 1'b1}][3:0]};
+			          // Read from inactive palette (opposite of vfront)
+			          if (~vfront) begin
+			              if (~cpu_ds[0]) rdata[7:0]  <= {screen_palette1[{cpu_addr[3:1], 1'b1}][4], 3'b000, screen_palette1[{cpu_addr[3:1], 1'b1}][3:0]};
+			              if (~cpu_ds[1]) rdata[15:9] <= {screen_palette1[{cpu_addr[3:1], 1'b0}][4], 3'b000, screen_palette1[{cpu_addr[3:1], 1'b0}][3:0]};
+			          end else begin
+			              if (~cpu_ds[0]) rdata[7:0]  <= {screen_palette0[{cpu_addr[3:1], 1'b1}][4], 3'b000, screen_palette0[{cpu_addr[3:1], 1'b1}][3:0]};
+			              if (~cpu_ds[1]) rdata[15:9] <= {screen_palette0[{cpu_addr[3:1], 1'b0}][4], 3'b000, screen_palette0[{cpu_addr[3:1], 1'b0}][3:0]};
+			          end
 			     end
 			end
 			estate<=3'b010;
