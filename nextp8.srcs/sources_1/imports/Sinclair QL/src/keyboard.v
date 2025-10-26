@@ -73,7 +73,7 @@ always @(posedge clk) begin
 end
 
 // the ps2 decoder has been taken from the zx spectrum core
-ps2_intf ps2_keyboard (
+ps2_read_keyboard ps2_keyboard (
 	.CLK		 ( clk             ),
 	.nRESET	 ( !reset          ),
 	
