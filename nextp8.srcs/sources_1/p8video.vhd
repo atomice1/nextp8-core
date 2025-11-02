@@ -93,7 +93,6 @@ CONSTANT SystemPalette : PaletteArray := (
 );
 
 begin
-vfronto <= vfront;
 process (clk325)
     variable screen_index: integer;
     variable system_index: integer;
@@ -127,6 +126,9 @@ if rising_edge(clk325) then
             px:=800; ln:=300;
         end if;
     end if;
+
+    vfronto <= vfront;
+
     --px_debug <= std_logic_vector(to_unsigned(px, 11));
     --pixel_debug <= std_logic_vector(to_unsigned(pixel, 11));
     --ln_debug <= std_logic_vector(to_unsigned(ln, 10));
