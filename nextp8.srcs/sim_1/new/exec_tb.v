@@ -2,7 +2,9 @@
 // Copyright (C) 2025 Chris January  
 //////////////////////////////////////////////////////////////////////////////////
 
-module exec_tb(
+module exec_tb #(
+    parameter POST_TARGET = 3  // Target POST code for successful completion
+) (
     );
 
 //Clock
@@ -348,8 +350,20 @@ wire [5:0] post_code;
 assign post_code = accel_io[27:22];
 
 initial begin
-    $monitor ("[$monitor] time=%0t ", $time, post_code);
+    $monitor ("[$monitor] time=%0t POST=%0d (target=%0d)", $time, post_code, POST_TARGET);
 end 
+
+// Monitor POST code and finish successfully when target POST code is reached
+reg [5:0] post_code_prev = 0;
+always @(posedge clock_50_i) begin
+    post_code_prev <= post_code;
+    if (post_code == POST_TARGET && post_code_prev != POST_TARGET) begin
+        $display("=== SUCCESS: POST code %0d reached at time %0t ===", POST_TARGET, $time);
+        $display("=== Boot sequence completed successfully ===");
+        #100; // Small delay to allow any pending operations
+        $finish(0); // Exit with success code
+    end
+end
 
 endmodule
 
@@ -394,12 +408,8 @@ module sram #(
 
     integer i;
     initial begin
-        $display("Loading rom 1...");
-        $readmemh("femto8-rom1.mem", mem);
-        $display("Loading rom 2...");
-        $readmemh("femto8-rom2.mem", mem, 'h40000);
-        $display("Loading cart...");
-        $readmemh("testcard.mem", mem, 'h80000);
+        $display("Loading boot ROM...");
+        $readmemh("loader.mem", mem);
     end
 
 endmodule
