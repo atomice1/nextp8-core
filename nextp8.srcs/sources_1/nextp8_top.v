@@ -161,12 +161,6 @@
 
 reg [15:0] params = 16'd0;
 reg [5:0] post_code_cpu = 6'd0;
-wire [5:0] post_code;
-
-// Post code priority: system status overrides CPU value when active
-assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
-                   reset ? 6'd2 :             // in reset
-                   post_code_cpu;
 
 // -------------------------------------------------------------------------
 // -------------------------- clock generation -----------------------------
@@ -192,12 +186,6 @@ pll_hdmi pl2
 	.clk_out2  ( clk1625 ),
 	.clk_out3  ( clk1625n )
 );
-
-reg [2:0] clock_div = 3'b000;
-always @(posedge clk22)
-begin
-    clock_div = clock_div + 3'd1;
-end
 
 wire clk2;
 
@@ -512,8 +500,8 @@ wire video_hs, video_vs;
 wire iblank;
 wire vfront;
 
-(* ram_style = "block" *) reg [4:0] screen_palette0 [0:15];
-(* ram_style = "block" *) reg [4:0] screen_palette1 [0:15];
+reg [4:0] screen_palette0 [0:15];
+reg [4:0] screen_palette1 [0:15];
 
 reg [4:0] i;
 initial begin
@@ -562,17 +550,22 @@ assign rgb_b_o = video_b[7:5];
 // -------------------------------------- reset ------------------------------------
 // ---------------------------------------------------------------------------------
 
-// parameter RESET_CNT = 15'h7FFE;
 parameter RESET_CNT = 15'h0003;
-
 reg [14:0] reset_cnt = RESET_CNT;
 wire reset = (reset_cnt != 15'h0);
+
 always @(posedge clk2) begin
     if (!pll_locked  || !btn_reset_n_i)
         reset_cnt <= RESET_CNT;
     else if(reset_cnt != 15'h0)
         reset_cnt <= reset_cnt - 15'h1;
 end
+
+// Post code priority: system status overrides CPU value when active
+wire [5:0] post_code;
+assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
+                   reset ? 6'd2 :             // in reset
+                   post_code_cpu;
 
 // -------------------------------------------------------------------------
 // ---------------------- Audio Subsystem Clock (22.05 kHz) ----------------
