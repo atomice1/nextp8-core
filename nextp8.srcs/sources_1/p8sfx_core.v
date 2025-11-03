@@ -132,6 +132,7 @@ reg [5:0] loop_end_sys;          // clk_sys: Loop end from loaded SFX data
 reg [5:0] start_idx_pcm;         // clk_pcm: CDC'd copy of start_idx
 reg [5:0] sfx_length_pcm;        // clk_pcm: CDC'd copy of sfx_length input
 reg [5:0] loop_start, loop_end;  // clk_pcm: Loop bounds (modifiable on force_release)
+reg [5:0] loop_start_cdc, loop_end_cdc;  // clk_pcm: CDC synchronized values from sys domain
 reg loading_pcm;                 // clk_pcm: Loading state CDC stages
 
 // Playback control (clk_pcm domain)
@@ -338,6 +339,8 @@ always @(posedge clk_pcm or negedge resetn) begin
         force_release_toggle_pcm_d <= 1'b0; force_release_toggle_pcm_q <= 1'b0;
         start_idx_pcm <= 6'd0;
         sfx_length_pcm <= 6'd0;
+        loop_start_cdc <= 6'd0;
+        loop_end_cdc <= 6'd0;
         loading_pcm_d<=1'b0; loading_pcm<=1'b0;
     end else begin
         // Stage 1: Synchronize toggles from clk_sys
@@ -356,8 +359,8 @@ always @(posedge clk_pcm or negedge resetn) begin
         if (sfx_load_done_pcm) begin
             start_idx_pcm <= start_idx;
             sfx_length_pcm <= sfx_length;
-            loop_start <= loop_start_sys;
-            loop_end <= loop_end_sys;
+            loop_start_cdc <= loop_start_sys;
+            loop_end_cdc <= loop_end_sys;
         end
 
         loading_pcm_d<=loading_sys; loading_pcm<=loading_pcm_d;
@@ -716,6 +719,7 @@ always @(posedge clk_pcm or negedge resetn) begin
         attack_ctr<=0; release_ctr<=0; releasing<=0;
         sfx_loaded<=0; sfx_done<=0;
         note_tick_acc<=0;
+        loop_start<=6'd0; loop_end<=6'd0;
         inst_active_pcm<=1'b0; inst_idx_pcm<=3'd0; play_req_toggle_pcm<=1'b0; stop_req_toggle_pcm<=1'b0;
     end else begin
         sfx_done <= 1'b0;
@@ -725,6 +729,8 @@ always @(posedge clk_pcm or negedge resetn) begin
             sfx_loaded <= 1'b1;
             note_idx = start_idx_pcm;
             note_tick_acc <= 8'd0;
+            loop_start <= loop_start_cdc;
+            loop_end <= loop_end_cdc;
             // Trigger the first note immediately since play command has already passed
             // This sets up all the note parameters (pitch, volume, waveform, etc.)
             if (is_waveform_inst) begin
@@ -1203,7 +1209,6 @@ integer rel_num;
 always @(posedge clk_pcm or negedge resetn) begin
     if (!resetn) begin
         pcm_out<=0; damp_state<=0; rev_idx2<=0; rev_idx4<=0; rev_idx2_valid<=0; rev_idx4_valid<=0;
-        brown_state<=32'sd0;
     end else begin
         if (run && sfx_loaded) begin
             if (is_waveform_inst) begin

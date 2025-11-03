@@ -431,6 +431,33 @@ always @(posedge clk_pcm or negedge resetn) begin
 end
 
 //==============================================================
+// MUSIC Sequencer + stat counters (clk_sys domain)
+//==============================================================
+reg [5:0] cur_frame;                      // clk_sys: Current music pattern frame index
+reg       music_active;                   // clk_sys: Music sequencer active flag
+reg [7:0] frame_bytes [0:3];              // clk_sys: Current frame data (4 bytes)
+reg [1:0] fb_idx;                         // clk_sys: Frame byte fetch index
+
+reg [5:0] loop_start, loop_end;           // clk_sys: Loop start/end frame indices
+reg       loop_def, stop_on_loop;         // clk_sys: Loop flags
+reg [3:0] music_mask;                     // clk_sys: Channel enable mask for music
+
+reg [3:0] seq_played_mask;                // clk_sys: Channels triggered by current pattern
+reg       seq_waiting;                    // clk_sys: Wait for voice_done before advancing
+
+reg [15:0] stat_music_pattern;            // clk_sys: Current pattern index (stat 54)
+reg [15:0] stat_music_pattern_count;      // clk_sys: Pattern loop count (stat 55)
+reg [15:0] stat_music_tick_count;         // clk_sys: Note tick count (stat 56)
+
+// CDC: note_tick toggle synchronizer from clk_pcm to clk_sys
+reg note_tick_toggle_sys_d;               // clk_sys: CDC stage 1
+reg note_tick_toggle_sys_q;               // clk_sys: CDC stage 2
+
+// CDC: Reserved for future use
+reg frame_toggle_sys_d;                   // clk_sys: CDC stage 1 (unused)
+reg frame_toggle_sys_q;                   // clk_sys: CDC stage 2 (unused)
+
+//==============================================================
 // SFX API queueing (clk_sys domain)
 //==============================================================
 // Queue for pending SFX requests per voice
@@ -459,8 +486,22 @@ reg [5:0] off_f;
 reg [5:0] len_f;
 reg [1:0] chx;
 
+// Music command variables
+reg [5:0] pat;
+reg [3:0] msk;
+reg start;
+reg stop;
+
+// Sequencer variables
+integer ch;
+reg [1:0] leftmost_nonloop;
+
+//==============================================================
+// SFX queueing + MUSIC sequencer + Note tick counter (clk_sys domain)
+//==============================================================
 always @(posedge clk_sys or negedge resetn) begin
     if (!resetn) begin
+        // SFX queueing resets
         for (l=0;l<NUM_VOICES;l=l+1) begin
             q_valid[l]<=0; q_index[l]<=0; q_off[l]<=0; q_len[l]<=0;
             play_strobe_sys[l]<=0; play_sfx_index[l]<=0; play_sfx_off[l]<=0; play_sfx_len[l]<=0;
@@ -468,6 +509,22 @@ always @(posedge clk_sys or negedge resetn) begin
             force_release_sys[l]<=0;
         end
         sfx_strobe_mask <= 4'b0000;
+        // MUSIC command handler resets
+        music_active<=0; music_mask<=4'b1111; cur_frame<=0;
+        music_fade_ctr_in<=0; music_fade_ctr_out<=0; music_fade_len<=0;
+        // Sequencer resets
+        seq_dma_req<=0; fb_idx<=0;
+        frame_toggle_sys_d <= 1'b0; frame_toggle_sys_q <= 1'b0;
+        seq_played_mask <= 4'b0000; seq_waiting <= 1'b0;
+        loop_def<=0; loop_start<=0; loop_end<=0; stop_on_loop<=0;
+        stat_music_pattern<=0; stat_music_pattern_count<=0;
+        // Note tick counter resets
+        note_tick_toggle_sys_d <= 1'b0;
+        note_tick_toggle_sys_q <= 1'b0;
+        stat_music_tick_count <= 0;
+        // Initialize frame_bytes to disabled channels (bit 6 set)
+        frame_bytes[0] <= 8'h41; frame_bytes[1] <= 8'h42;
+        frame_bytes[2] <= 8'h43; frame_bytes[3] <= 8'h44;
     end else begin
         // Clear SFX-triggered strobes from previous cycle
         if (sfx_strobe_mask != 4'b0000) begin
@@ -479,6 +536,7 @@ always @(posedge clk_sys or negedge resetn) begin
         
         force_stop_sys <= 4'b0000; force_release_sys <= 4'b0000;
 
+        // SFX command handler
         if (write_en && address==ADDR_SFX_CMD) begin
             if (din[15]) begin
                 ch_f = din[14:12];
@@ -549,6 +607,7 @@ always @(posedge clk_sys or negedge resetn) begin
             end
         end
 
+        // SFX queue processing - trigger queued SFX when voices become available
         for (l=0;l<NUM_VOICES;l=l+1) begin
             if (q_valid[l] && (voice_done[l] || !voice_busy[l])) begin
                 play_sfx_index[l] <= q_index[l];
@@ -559,53 +618,8 @@ always @(posedge clk_sys or negedge resetn) begin
                 q_valid[l] <= 1'b0;
             end
         end
-    end
-end
 
-//==============================================================
-// MUSIC Sequencer + stat counters (clk_sys domain)
-//==============================================================
-reg [5:0] cur_frame;                      // clk_sys: Current music pattern frame index
-reg       music_active;                   // clk_sys: Music sequencer active flag
-reg [7:0] frame_bytes [0:3];              // clk_sys: Current frame data (4 bytes)
-reg [1:0] fb_idx;                         // clk_sys: Frame byte fetch index
-
-reg [5:0] loop_start, loop_end;           // clk_sys: Loop start/end frame indices
-reg       loop_def, stop_on_loop;         // clk_sys: Loop flags
-reg [3:0] music_mask;                     // clk_sys: Channel enable mask for music
-
-reg [3:0] seq_played_mask;                // clk_sys: Channels triggered by current pattern
-reg       seq_waiting;                    // clk_sys: Wait for voice_done before advancing
-
-reg [15:0] stat_music_pattern;            // clk_sys: Current pattern index (stat 54)
-reg [15:0] stat_music_pattern_count;      // clk_sys: Pattern loop count (stat 55)
-reg [15:0] stat_music_tick_count;         // clk_sys: Note tick count (stat 56)
-
-// CDC: note_tick toggle synchronizer from clk_pcm to clk_sys
-reg note_tick_toggle_sys_d;               // clk_sys: CDC stage 1
-reg note_tick_toggle_sys_q;               // clk_sys: CDC stage 2
-
-// CDC: Reserved for future use
-reg frame_toggle_sys_d;                   // clk_sys: CDC stage 1 (unused)
-reg frame_toggle_sys_q;                   // clk_sys: CDC stage 2 (unused)
-
-//==============================================================
-// MUSIC command handler (clk_sys domain)
-//==============================================================
-// Music command variables
-reg [5:0] pat;
-reg [3:0] msk;
-reg start;
-reg stop;
-
-always @(posedge clk_sys or negedge resetn) begin
-    if (!resetn) begin
-        music_active<=0; music_mask<=4'b1111; cur_frame<=0;
-        loop_def<=0; stop_on_loop<=0; loop_start<=0; loop_end<=0;
-        music_fade_ctr_in<=0; music_fade_ctr_out<=0; music_fade_len<=0;
-        stat_music_pattern<=0; stat_music_pattern_count<=0;
-    end else begin
-        // MUSIC command
+        // MUSIC command handler
         if (write_en && address==ADDR_MUSIC_CMD) begin
             pat = din[12:7];
             msk = din[6:3];
@@ -631,40 +645,20 @@ always @(posedge clk_sys or negedge resetn) begin
                 seq_dma_addr <= seq_dma_addr_temp[30:0];
                 seq_dma_req  <= 1'b1;
                 fb_idx <= 0;
-                // stat resets
                 stat_music_pattern       <= {10'd0, pat};
                 stat_music_pattern_count <= 0;
                 stat_music_tick_count    <= 0;
             end
         end
-    end
-end
 
-//==============================================================
-// MUSIC sequencer DMA and pattern advancement (clk_sys domain)
-//==============================================================
-// Sequencer variables
-integer ch;
-reg [1:0] leftmost_nonloop;
-
-always @(posedge clk_sys or negedge resetn) begin
-    if (!resetn) begin
-        seq_dma_req<=0; fb_idx<=0;
-        frame_toggle_sys_d <= 1'b0; frame_toggle_sys_q <= 1'b0;
-        seq_played_mask <= 4'b0000; seq_waiting <= 1'b0;
-        // Initialize frame_bytes to disabled channels (bit 6 set)
-        frame_bytes[0] <= 8'h41; frame_bytes[1] <= 8'h42;
-        frame_bytes[2] <= 8'h43; frame_bytes[3] <= 8'h44;
-    end else begin
-        // Clear music-triggered play strobes (SFX command handler clears SFX-triggered ones)
-        // Only clear bits that were set by music sequencer
+        // Clear music-triggered play strobes
         if (seq_played_mask != 4'b0000) begin
             for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
                 if (seq_played_mask[ch]) play_strobe_sys[ch] <= 1'b0;
             end
         end
         
-        // Fetch 4 bytes per frame (2 DMA reads of 16 bits each) - pulse-based
+        // MUSIC sequencer DMA: Fetch 4 bytes per frame (2 DMA reads of 16 bits each)
         if (seq_dma_ack) begin
             // Unpack 16-bit DMA read into two consecutive bytes
             // Big-endian: bits[15:8] = first byte (lower address), bits[7:0] = second byte (higher address)
@@ -704,9 +698,9 @@ always @(posedge clk_sys or negedge resetn) begin
             seq_dma_req <= 1'b0;
         end
 
+        // MUSIC sequencer pattern advancement
         if (music_active) begin
             // Dynamically find leftmost non-looping channel among triggered channels
-            // using synchronized looping status from clk_pcm domain
             leftmost_nonloop = 2'd0;  // default
             if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
                 leftmost_nonloop = 2'd0;
@@ -719,7 +713,6 @@ always @(posedge clk_sys or negedge resetn) begin
             end
             
             // advance only if not waiting or if leftmost non-looping channel reports done
-            // Also ensure we're not currently in a DMA sequence
             if ((!seq_waiting || (seq_waiting && voice_done[leftmost_nonloop])) && !seq_dma_req) begin
                 if (loop_def && cur_frame==loop_end) begin
                     if (stop_on_loop) begin
@@ -743,25 +736,13 @@ always @(posedge clk_sys or negedge resetn) begin
                 seq_waiting <= 1'b0;
             end
         end
-    end
-end
 
-//==============================================================
-// Note tick counter (clk_sys domain)
-//==============================================================
-always @(posedge clk_sys or negedge resetn) begin
-    if (!resetn) begin
-        note_tick_toggle_sys_d <= 1'b0;
-        note_tick_toggle_sys_q <= 1'b0;
-        stat_music_tick_count <= 0;
-    end else begin
-        // Sample the pcm-domain toggle into clk_sys domain using two-stage synchronizer.
-        // If the two sampled stages differ, it means the toggle changed -> a new note tick.
+        // Note tick counter - detect edge from clk_pcm domain
         note_tick_toggle_sys_d <= note_tick_toggle_pcm;
         note_tick_toggle_sys_q <= note_tick_toggle_sys_d;
         if (note_tick_toggle_sys_q != note_tick_toggle_sys_d) begin
             stat_music_tick_count <= stat_music_tick_count + 1;
-            // Decrement fade counters on note tick (in clk_sys domain)
+            // Decrement fade counters on note tick
             if (music_fade_ctr_in != 0)  music_fade_ctr_in  <= music_fade_ctr_in - 1;
             if (music_fade_ctr_out != 0) music_fade_ctr_out <= music_fade_ctr_out - 1;
         end

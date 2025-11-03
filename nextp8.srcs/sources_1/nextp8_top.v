@@ -160,8 +160,13 @@
 //-------------- parameters --------------------
 
 reg [15:0] params = 16'd0;
-reg [5:0] post_code = 6'd0;
+reg [5:0] post_code_cpu = 6'd0;
+wire [5:0] post_code;
 
+// Post code priority: system status overrides CPU value when active
+assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
+                   reset ? 6'd2 :             // in reset
+                   post_code_cpu;
 
 // -------------------------------------------------------------------------
 // -------------------------- clock generation -----------------------------
@@ -650,7 +655,6 @@ always @(posedge mclk)
 begin
 	if (pll_locked)
 	begin
-		if (!cpu_enable) post_code <= 6'd2;
 		case (estate)
 		3'b000: begin
 			// P8 Audio DMA has priority - if requesting, service it first
@@ -745,11 +749,11 @@ begin
 			$display("[nextp8_top] time=%0t State 101: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
 			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
             // Complete DMA cycle
-            estate <= 3'b000;
+            estate <= 3'b000;s
         end*/
 		endcase
 	end
-	else	begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk2i<=1'b0; ramoe <= 1'b1; post_code <= 6'd1; reset_cnt = RESET_CNT; end
+	else	begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk2i<=1'b0; ramoe <= 1'b1; end
 end
 
 //-------------- user timer -----------------
@@ -871,7 +875,7 @@ begin
             if (cpu_addr[6:1]==6'b000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800002
             if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000a
             //------------- post code -------------------------------------------------------
-            if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code <= cpu_dout[5:0]; //h80000C
+            if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
             // ------------ video ----------------------------------------------------
             if (cpu_addr[6:1]==6'b000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
             // ------------ parameters -------------------------------------------------------
