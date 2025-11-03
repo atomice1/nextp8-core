@@ -6,7 +6,6 @@
 MEMORY
 {
     ROM (rx) : ORIGIN = 0x00000000, LENGTH = 64K
-    RAM (rwx): ORIGIN = 0x00001000, LENGTH = 960K
 }
 
 SECTIONS
@@ -26,11 +25,8 @@ SECTIONS
         *(.rodata.*)
     } > ROM
 
-    .data :
-    {
-        *(.data)
-        *(.data.*)
-    } > RAM AT > ROM
+    /* Error if .data section is non-empty (we want ROM-only data in .rodata) */
+    ASSERT(SIZEOF(.data) == 0, "ERROR: .data section must be empty - use .rodata for ROM data")
 
     .bss :
     {
