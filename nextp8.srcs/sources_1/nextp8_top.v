@@ -160,7 +160,7 @@
 //-------------- parameters --------------------
 
 reg [15:0] params = 16'd0;
-reg [6:0] post_code = 6'd0;
+reg [5:0] post_code = 6'd0;
 
 
 // -------------------------------------------------------------------------
@@ -986,8 +986,29 @@ assign flash_sclk_o   = 1'b1;
 assign flash_mosi_o   = 1'b1;
 
 // PI GPIO
-assign accel_io[21:0] = 23'bZZZZZZZZZZZZZZZZZZZZZZ;
-assign accel_io[27:22] = post_code;
+// bits [27:22] output POST code
+genvar gpio_idx;
+generate
+    // Lower 22 bits are not used.
+    for (gpio_idx = 0; gpio_idx < 22; gpio_idx = gpio_idx + 1) begin : gpio_input
+        IOBUF gpio_buf (
+            .IO(accel_io[gpio_idx]),
+            .I(1'b0),
+            .O(),
+            .T(1'b1)           // Tristate enabled (high-Z)
+        );
+    end
+
+    // Upper 6 bits are POST code
+    for (gpio_idx = 22; gpio_idx < 28; gpio_idx = gpio_idx + 1) begin : gpio_output
+        IOBUF gpio_buf (
+            .IO(accel_io[gpio_idx]),
+            .I(post_code[gpio_idx-22]),
+            .O(),
+            .T(1'b0)           // Tristate disabled (output enabled)
+        );
+    end
+endgenerate
 
 // Vacant pins
 assign extras_o      = 1'bz;
