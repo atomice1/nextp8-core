@@ -166,7 +166,7 @@ reg [5:0] post_code_cpu = 6'd0;
 // -------------------------- clock generation -----------------------------
 // -------------------------------------------------------------------------
 
-wire pll_locked, clk11, clk325, clk325n, clk1625, clk65, clk1625n, mclk,clk22;
+wire pll_locked, clk11, clk325, clk325n, clk1625, clk65, mclk, clk22;
 
 pll pll
 (
@@ -183,8 +183,7 @@ pll_hdmi pl2
 (
     .clk_in1  ( clk325 ),
 	.clk_out1  ( clk65 ),
-	.clk_out2  ( clk1625 ),
-	.clk_out3  ( clk1625n )
+	.clk_out2  ( clk1625 )
 );
 
 wire clk2;
@@ -911,7 +910,6 @@ assign pcm_audio_R = (da_playing ? (da_mono ? da_data : {da_data[15:8], 8'd0}) :
 hdmi_out_xilinx hdmiqout (
 	.clock_pixel_i 	(clk65),
 	.clock_tmds_i  	(clk1625),
-	.clock_tmds_n_i (clk1625n),
 	.red_i	(ored),
 	.green_i	(ogreen),
 	.blue_i	(oblue),

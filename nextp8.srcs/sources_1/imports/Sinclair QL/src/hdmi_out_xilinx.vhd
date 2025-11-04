@@ -40,7 +40,6 @@ entity hdmi_out_xilinx is
    port (
       clock_pixel_i     : in std_logic;   -- x1
       clock_tmds_i      : in std_logic;   -- x5
-      clock_tmds_n_i    : in std_logic;
       red_i             : in  std_logic_vector(9 downto 0);
       green_i           : in  std_logic_vector(9 downto 0);
       blue_i            : in  std_logic_vector(9 downto 0);
@@ -92,21 +91,21 @@ begin
       --------------------------------------------------------
       -- Convert the TMDS codes into a serial stream, two bits 
       -- at a time using a DDR register
+      -- Note: Changed from ODDR2 to ODDR for 7-series compatibility.
       --------------------------------------------------------
-      to_serial: ODDR2
+      to_serial: ODDR
       generic map (
-         DDR_ALIGNMENT => "C0",
-         INIT          => '0',
-         SRTYPE        => "ASYNC"
+         DDR_CLK_EDGE => "OPPOSITE_EDGE",
+         INIT         => '0',
+         SRTYPE       => "ASYNC"
       )
       port map (
-         C0  => clock_tmds_i,
-         C1  => clock_tmds_n_i,
+         C   => clock_tmds_i,
          CE  => '1',
          R   => '0',
          S   => '0',
-         D0  => output_bits(i)(0),
-         D1  => output_bits(i)(1),
+         D1  => output_bits(i)(0),
+         D2  => output_bits(i)(1),
          Q   => serial_outputs(i)
       );
    end generate;
