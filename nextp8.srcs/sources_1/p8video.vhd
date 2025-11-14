@@ -1,23 +1,22 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: Chris January
--- 
--- Create Date:    19:49:16 29/08/2025
--- Design Name: 
--- Module Name:    p8video - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
+------------------------------------------------------------------
+-- p8video.v
 --
--- Dependencies: 
+-- Copyright (C) 2025 Chris January
 --
--- Revision: 
--- Revision 0.02 - Modified from qlvideo.vhd
--- Revision 0.01 - File Created
--- Additional Comments: 
+-- This source file is free software: you can redistribute it and/or modify
+-- it under the terms of the GNU General Public License as published
+-- by the Free Software Foundation, either version 3 of the License, or
+-- (at your option) any later version.
 --
-----------------------------------------------------------------------------------
+-- This source file is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-- GNU General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with this program.  If not, see <http://www.gnu.org/licenses/>.
+--
+------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 
@@ -102,6 +101,7 @@ if rising_edge(clk325) then
 	if reset='1' then
 		pixel:=0;
 		lin:=0; ln:=0;
+		vfront:='0';
 	else
 		if lin<6 then VSB<='0'; else VSB<='1'; end if;
 		if pixel<136 then HS<='0'; else HS<='1'; end if;
