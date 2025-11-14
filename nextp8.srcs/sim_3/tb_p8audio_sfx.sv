@@ -25,6 +25,7 @@ module tb_p8audio_sfx;
     //====================
     reg clk_sys = 1'b0;     // 33 MHz system clock
     reg clk_pcm = 1'b0;     // ~22.05 kHz PCM sample clock
+    reg clk_pcm_8x = 1'b0;  // 8× PCM sample clock for time-multiplexing
     reg resetn  = 1'b0;
 
     // 33MHz: 30ns period
@@ -34,6 +35,8 @@ module tb_p8audio_sfx;
     // Note: the test bench runs the PCM clock at 1000x to reduce simulation time.
     localparam integer PCM_HALF_NS = 1000000/22050/2; // 22.675ns ~ 44.101MHz
     always #(PCM_HALF_NS) clk_pcm = ~clk_pcm;
+    // 8× PCM rate: ~352.8MHz, period ~2.835ns
+    always #(PCM_HALF_NS/8) clk_pcm_8x = ~clk_pcm_8x;
 
     //====================
     // MMIO signals
@@ -44,7 +47,7 @@ module tb_p8audio_sfx;
     reg         nUDS, nLDS;
     reg         write_en, read_en;
 
-    // MMIO register addresses (mirror of p8audio.v)
+    // MMIO register addresses (mirror of p8audio.sv)
     localparam [6:0] ADDR_CTRL        = 7'h01;
     localparam [6:0] ADDR_SFX_BASE_HI = 7'h02;
     localparam [6:0] ADDR_SFX_BASE_LO = 7'h03;
@@ -56,7 +59,7 @@ module tb_p8audio_sfx;
     //====================
     // PCM output
     //====================
-    wire signed [15:0] pcm_out;
+    wire signed [7:0] pcm_out;
 
     //====================
     // DMA interface
@@ -70,7 +73,7 @@ module tb_p8audio_sfx;
     // DUT: p8audio
     //====================
     p8audio dut (
-        .clk_sys(clk_sys), .clk_pcm(clk_pcm), .resetn(resetn),
+        .clk_sys(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x), .resetn(resetn),
         .address(address), .din(din), .dout(dout), .nUDS(nUDS), .nLDS(nLDS), .write_en(write_en), .read_en(read_en),
         .pcm_out(pcm_out),
         .dma_addr(dma_addr), .dma_rdata(dma_rdata), .dma_req(dma_req), .dma_ack(dma_ack)
@@ -85,12 +88,12 @@ module tb_p8audio_sfx;
     // Provide 16-bit big-endian data on DMA reads from byte-addressed memory.
     // Combinatorial data output, registered ack
     wire [15:0] byte_addr = dma_addr[15:0] * 2;
-    
+
     // Combinatorial read - data available immediately
     always @* begin
         dma_rdata = { base_mem[byte_addr], base_mem[byte_addr+16'd1] };
     end
-    
+
     // Registered ack
     always @(posedge clk_sys or negedge resetn) begin
         if (!resetn) begin
@@ -198,11 +201,11 @@ module tb_p8audio_sfx;
                                         nybble_cnt = nybble_cnt + 1;
                                     end
                                 end
-                                
+
                                 if (nybble_cnt >= 168) begin
                                     // Convert to in-memory format
                                     mem_base = {16'd0, SFX_BASE} + sfx_idx*SFX_BYTES;
-                                    
+
                                     // Bytes 0-3 on disk (8 nybbles) -> bytes 64-67 in memory
                                     base_mem[mem_base + 64] = {nybbles[0], nybbles[1]};  // editor mode/filters
                                     base_mem[mem_base + 65] = {nybbles[2], nybbles[3]};  // speed
@@ -216,16 +219,16 @@ module tb_p8audio_sfx;
                                         integer byte_offset;
                                         integer note_pitch, note_waveform, note_volume, note_effect;
                                         integer note_word;
-                                        
+
                                         // Each note is 5 nybbles, starting at byte 4
                                         byte_offset = 8 + i * 5;  // nybble offset: 8 (header) + i * 5
-                                        
+
                                         // Decode note
                                         note_pitch = {nybbles[byte_offset + 0], nybbles[byte_offset + 1]};
                                         note_waveform = nybbles[byte_offset + 2];
                                         note_volume = nybbles[byte_offset + 3];
                                         note_effect = nybbles[byte_offset + 4];
-                                        
+
                                         // Encode note to in-memory format (16-bit little-endian)
                                         note_word = ((note_waveform > 7 ? 1 : 0) << 15) |
                                                     (note_effect << 12) |
@@ -238,7 +241,7 @@ module tb_p8audio_sfx;
                                         base_mem[mem_base + (i*2) + 1] = note_word[15:8];
                                     end
                                 end
-                                
+
                                 // advance to next SFX slot
                                 sfx_idx = sfx_idx + 1;
                             end
@@ -273,7 +276,7 @@ module tb_p8audio_sfx;
             end
             // Print in format: <4 hex addr> <2 hex>*68
             $display("%04x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
-                     addr[15:0], 
+                     addr[15:0],
                      bytes[ 0], bytes[ 1], bytes[ 2], bytes[ 3], bytes[ 4], bytes[ 5], bytes[ 6], bytes[ 7],
                      bytes[ 8], bytes[ 9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
                      bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
@@ -335,12 +338,12 @@ module tb_p8audio_sfx;
         $display("Using P8 cart: %0s", p8_path);
         // Load SFX from PICO-8 cart file
         load_p8_sfx(p8_path);
-        
+
         // Dump SFX memory contents
         dump_sfx_memory();
-        
+
         // Verify memory contents at key locations
-        $display("Memory check: base_mem[0x3240]=0x%02h, base_mem[0x3241]=0x%02h", 
+        $display("Memory check: base_mem[0x3240]=0x%02h, base_mem[0x3241]=0x%02h",
                  base_mem[16'h3240], base_mem[16'h3241]);
 
         // Release reset
@@ -361,22 +364,35 @@ module tb_p8audio_sfx;
             speed = {24'd0, base_mem[{16'd0, SFX_BASE} + sfx_idx*SFX_BYTES + 65]};
             ticks = NOTES_PER_SFX * speed;
             n_samples = ticks * SAMPLES_PER_TICK;
+
+            $display("Load SFX %d...", sfx_idx);
+
             // Write length override = 0 (full SFX)
             mmio_write(ADDR_SFX_LEN, 16'd0);
             // Trigger on channel 0: SFX_CMD bit15=1, ch=0, off=0, idx=sfx_idx
             mmio_write(ADDR_SFX_CMD, {1'b1, 3'b000, 6'd0, sfx_idx[5:0]});
 
+            // Wait for the SFX to load and  warm up
+            count = 0;
+            while (count < 200 && dut.core_mux_inst.pcm_state[1] != dut.core_mux_inst.PCM_PLAYING) begin
+                @(posedge clk_pcm);
+                count = count + 1;
+            end
+            assert(count != 200) else $error("SFX %d failed to load.", sfx_idx);
+            $display("SFX %d loaded and playing.", sfx_idx);
+
             // Open WAV file tb_p8audio_sfx_out_XX.wav
             // iverilog supports $sformatf for filename formatting
+            $display("Start recording...");
             wav = $fopen($sformatf("tb_p8audio_sfx_out_%0d.wav", sfx_idx), "wb");
             wav_write_header(wav, n_samples);
 
             count=0;
             // Capture at the PCM clock
             while (count < n_samples) begin
-                @(posedge clk_pcm);
                 // Write little-endian PCM samples as bytes
-                $fwrite(wav, "%c%c", pcm_out[7:0], pcm_out[15:8]);
+                $fwrite(wav, "%c%c", 8'd0, pcm_out[7:0]);
+                @(posedge clk_pcm);
                 count = count + 1;
             end
             $fclose(wav);

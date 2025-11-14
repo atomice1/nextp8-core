@@ -10,10 +10,9 @@
 SRC_DIR = ../sources_1
 TB_DIR = .
 
-# Source files (hierarchy: p8sfx_core <- p8sfx_voice <- p8audio <- tb)
-SRCS = $(SRC_DIR)/p8sfx_core.v \
-       $(SRC_DIR)/p8sfx_voice.v \
-       $(SRC_DIR)/p8audio.v \
+# Source files
+SRCS = $(SRC_DIR)/p8sfx_core_mux.sv \
+       $(SRC_DIR)/p8audio.sv \
        $(SRC_DIR)/dma_arbiter.v \
        $(TB_DIR)/tb_p8audio_music.sv
 

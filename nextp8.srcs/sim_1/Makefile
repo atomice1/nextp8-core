@@ -14,9 +14,6 @@ TB_DIR = new
 # Verilog source files
 VERILOG_SOURCES = \
 	$(SRC_DIR)/nextp8_top.v \
-	$(SRC_DIR)/p8audio.v \
-	$(SRC_DIR)/p8sfx_core.v \
-	$(SRC_DIR)/p8sfx_voice.v \
 	$(SRC_DIR)/dma_arbiter.v \
 	$(IMPORTS_DIR)/hdmi/encoder.v \
 	$(IMPORTS_DIR)/hdmi/hdmidataencoder.v \
@@ -33,7 +30,9 @@ IP_SOURCES = \
 
 # SystemVerilog source files
 SYSTEMVERILOG_SOURCES = \
-	$(IMPORTS_DIR)/hdmi/hdmidelay.sv
+	$(IMPORTS_DIR)/hdmi/hdmidelay.sv \
+	$(SRC_DIR)/p8audio.sv \
+	$(SRC_DIR)/p8sfx_core_mux.sv
 
 # VHDL source files
 VHDL_SOURCES = \

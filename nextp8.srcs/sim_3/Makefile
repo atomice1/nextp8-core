@@ -10,10 +10,9 @@
 SRC_DIR = ../sources_1
 TB_DIR = .
 
-# Source files (hierarchy: p8sfx_core <- p8sfx_voice <- p8audio <- tb)
-SRCS = $(SRC_DIR)/p8sfx_core.v \
-       $(SRC_DIR)/p8sfx_voice.v \
-       $(SRC_DIR)/p8audio.v \
+# Source files
+SRCS = $(SRC_DIR)/p8sfx_core_mux.sv \
+       $(SRC_DIR)/p8audio.sv \
        $(SRC_DIR)/dma_arbiter.v \
        $(TB_DIR)/tb_p8audio_sfx.sv
 
@@ -23,7 +22,7 @@ CART ?= tb_p8audio_sfx.p8
 # Simulation parameters
 TOP = tb_p8audio_sfx
 SNAPSHOT = tb_p8audio_sfx_snap
-TIMEOUT ?= 30
+TIMEOUT ?= 240
 
 # xsim commands
 XVLOG = xvlog
@@ -94,7 +93,10 @@ ref:
 		exit 1; \
 	fi
 	@echo "Exporting SFX from $(CART)..."
-	echo $(PICO8) -x $(CART) -export "tb_p8audio_sfx_ref_%d.wav"; \
+	#echo $(PICO8) -x $(CART) -export "tb_p8audio_sfx_ref_%d.wav"; \
+	for file in $$(ls -1 ~/.lexaloffle/pico-8/carts/ | grep '.wav'); do \
+		ln -s ~/.lexaloffle/pico-8/carts/$${file} $${file}; \
+	done
 	@echo "Reference WAV files exported: tb_p8audio_sfx_ref_0.wav to tb_p8audio_sfx_ref_63.wav"
 	@echo ""
 

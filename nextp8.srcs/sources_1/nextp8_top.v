@@ -322,7 +322,7 @@ wire        p8audio_nUDS;
 wire        p8audio_nLDS;
 wire        p8audio_write_en;
 wire        p8audio_read_en;
-wire signed [15:0] p8audio_pcm_out;
+wire signed [7:0] p8audio_pcm_out;
 
 // P8 Audio DMA interface
 wire [30:0] p8audio_dma_addr;
@@ -348,8 +348,9 @@ p8audio p8audio_inst (
     // Clock and reset
     .clk_sys    (mclk),
     .clk_pcm    (clk_pcm_pulse),    // 22.05 kHz sample clock
+    .clk_pcm_8x (clk_pcm_8x_pulse), // 176.4 kHz time-mux clock
     .resetn     (~reset),           // Active-low reset
-    
+
     // MMIO interface
     .address    (p8audio_address),
     .din        (p8audio_din),
@@ -577,14 +578,22 @@ assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
 reg [31:0] clk_pcm_phase = 32'd0;
 reg clk_pcm_pulse = 1'b0;
 
+// Generate 176.4 kHz (8× PCM rate) for time-multiplexing
+// Phase increment: 8 × 4,304,729 = 34,437,832
+reg [31:0] clk_pcm_8x_phase = 32'd0;
+reg clk_pcm_8x_pulse = 1'b0;
+
 always @(posedge clk22 or posedge reset)
 begin
     if (reset) begin
         clk_pcm_phase <= 32'd0;
         clk_pcm_pulse <= 1'b0;
+        clk_pcm_8x_phase <= 32'd0;
+        clk_pcm_8x_pulse <= 1'b0;
     end else begin
         // Add fractional increment, pulse on overflow
         {clk_pcm_pulse, clk_pcm_phase} <= {1'b0, clk_pcm_phase} + 33'd4304729;
+        {clk_pcm_8x_pulse, clk_pcm_8x_phase} <= {1'b0, clk_pcm_8x_phase} + 33'd34437832;
     end
 end
 
@@ -909,10 +918,10 @@ wire [15:0] pcm_audio_L,pcm_audio_R;
 
 // Mix digital audio (da_playing) with P8 audio (p8audio_pcm_out)
 // P8 audio is mono, send to both channels
-assign pcm_audio_L = (da_playing ? (da_mono ? da_data : {da_data[7:0], 8'd0}) : 16'd0) + 
-                     p8audio_pcm_out;
-assign pcm_audio_R = (da_playing ? (da_mono ? da_data : {da_data[15:8], 8'd0}) : 16'd0) + 
-                     p8audio_pcm_out;
+assign pcm_audio_L = (da_playing ? (da_mono ? da_data : {da_data[7:0], 8'd0}) : 16'd0) +
+                     {p8audio_pcm_out, 8'd0};
+assign pcm_audio_R = (da_playing ? (da_mono ? da_data : {da_data[15:8], 8'd0}) : 16'd0) +
+                     {p8audio_pcm_out, 8'd0};
 
 hdmi_out_xilinx hdmiqout (
 	.clock_pixel_i 	(clk65),

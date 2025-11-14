@@ -19,9 +19,6 @@ SIM_DIR = .
 # Verilog source files
 VERILOG_SOURCES = \
 	$(SOURCES_DIR)/nextp8_top.v \
-	$(SOURCES_DIR)/p8audio.v \
-	$(SOURCES_DIR)/p8sfx_core.v \
-	$(SOURCES_DIR)/p8sfx_voice.v \
 	$(SOURCES_DIR)/dma_arbiter.v \
 	$(IMPORTS_DIR)/hdmi/encoder.v \
 	$(IMPORTS_DIR)/hdmi/hdmidataencoder.v \
@@ -37,7 +34,9 @@ IP_SOURCES = \
 
 # SystemVerilog source files
 SYSTEMVERILOG_SOURCES = \
-	$(IMPORTS_DIR)/hdmi/hdmidelay.sv
+	$(IMPORTS_DIR)/hdmi/hdmidelay.sv \
+	$(SOURCES_DIR)/p8audio.sv \
+	$(SOURCES_DIR)/p8sfx_core_mux.sv
 
 # VHDL source files
 VHDL_SOURCES = \

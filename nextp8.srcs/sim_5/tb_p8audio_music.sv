@@ -1,5 +1,5 @@
 //================================================================
-// tb_p8audio_music.v
+// tb_p8audio_music.sv
 //
 // Copyright (C) 2025 Chris January
 //
@@ -44,7 +44,7 @@ module tb_p8audio_music;
     reg         nUDS, nLDS;
     reg         write_en, read_en;
 
-    // MMIO register addresses (must match p8audio.v)
+    // MMIO register addresses (must match p8audio.sv)
     localparam [6:0] ADDR_CTRL          = 7'h01;
     localparam [6:0] ADDR_SFX_BASE_HI   = 7'h02;
     localparam [6:0] ADDR_SFX_BASE_LO   = 7'h03;

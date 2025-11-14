@@ -9,20 +9,20 @@ PICO-8 pitch system:
 - Formula: freq = 440 * 2^((note - 57) / 12)
 
 Phase accumulator:
-- 32-bit phase accumulator incremented at 22050 Hz sample rate
-- phase_inc = (2^32 * freq) / 22050
+18-bit phase accumulator incremented at 22050 Hz sample rate
+- phase_inc = (2^18 * freq) / 22050
 """
 
 import math
 
 SAMPLE_RATE = 22050
-PHASE_BITS = 32
+PHASE_BITS = 18
 REFERENCE_FREQ = 440.0
 REFERENCE_NOTE = 33
 
 def calculate_phase_inc(note):
     """Calculate phase increment for a given PICO-8 pitch (note number)."""
-    # Formula: freq = 440 * 2^((note - 57) / 12)
+    # Formula: freq = 440 * 2^((note - 33) / 12)
     # note 0 = C0 = 16.35Hz
     # note 24 = C2 = 65.41Hz
     # note 33 = A2 = 110Hz
@@ -62,12 +62,12 @@ def main():
     # Generate Verilog table
     print("// Pitch table (32-bit fixed-point phase increments for PICO-8 pitches 0..95)")
     print("// PICO-8 pitch 0 = C0, pitch 24 = C2, pitch 57 = A4 (440 Hz)")
-    print("// phase_inc = (2^32 * freq) / 22050; freq = 440*2^((note-33)/12)")
-    print("reg [31:0] pitch_phase_inc [0:95];")
+    print("// phase_inc = (2^12 * freq) / 22050; freq = 440*2^((note-33)/12)")
+    print(f"reg [{PHASE_BITS-1}:0] pitch_phase_inc [0:95];")
     print("initial begin")
     
     for i in range(0, 96, 2):
-        print(f"    pitch_phase_inc[{i:2d}] = 32'h{entries[i]:08x}; pitch_phase_inc[{i+1:2d}] = 32'h{entries[i+1]:08x};")
+        print(f"    pitch_phase_inc[{i:2d}] = {PHASE_BITS}'h{entries[i]:04x}; pitch_phase_inc[{i+1:2d}] = {PHASE_BITS}'h{entries[i+1]:04x};")
     
     print("end")
 

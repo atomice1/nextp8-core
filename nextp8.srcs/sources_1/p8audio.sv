@@ -1,5 +1,5 @@
 //================================================================
-// p8audio.v
+// p8audio.sv
 //
 // Copyright (C) 2025 Chris January
 //
@@ -24,6 +24,7 @@ module p8audio (
     // Clock and reset
     input  wire        clk_sys,     // clk_sys: 33MHz system clock
     input  wire        clk_pcm,     // clk_pcm: 22.05kHz PCM sample clock
+    input  wire        clk_pcm_8x,  // clk_pcm_8x: 176.4kHz (8× PCM sample clock for time-multiplexing)
     input  wire        resetn,      // async: Active-low reset
 
     // MMIO (16-bit data path, 7-bit address) - clk_sys domain
@@ -36,13 +37,13 @@ module p8audio (
     input wire           read_en,   // clk_sys: Read enable
 
     // PCM mono out - clk_pcm domain
-    output reg signed [15:0] pcm_out,   // clk_pcm: PCM audio output sample (mixed, zero when inactive)
+    output reg signed [7:0] pcm_out,   // clk_pcm: PCM audio output sample (mixed, zero when inactive)
 
     // Shared DMA master to Base RAM - clk_sys domain
     output wire [30:0]  dma_addr,    // clk_sys: DMA address (word address, 16-bit words)
-    input  wire [15:0] dma_rdata,   // clk_sys: DMA read data (16-bit bus)
+    input  wire [15:0]  dma_rdata,   // clk_sys: DMA read data (16-bit bus)
     output wire         dma_req,     // clk_sys: DMA request
-    input  wire        dma_ack      // clk_sys: DMA acknowledge
+    input  wire         dma_ack      // clk_sys: DMA acknowledge
 );
 
 //==============================================================
@@ -51,8 +52,8 @@ module p8audio (
 localparam [15:0] VERSION            = 16'd1;
 localparam integer NUM_VOICES        = 4;         // Fixed voices
 localparam [5:0]  MAX_PATTERN_INDEX  = 6'd63;     // MUSIC pattern wrap
-localparam [15:0] DEFAULT_NOTE_ATK   = 16'd20;    // samples
-localparam [15:0] DEFAULT_NOTE_REL   = 16'd20;    // samples
+localparam [15:0] DEFAULT_NOTE_ATK   = 16'd16;    // samples
+localparam [15:0] DEFAULT_NOTE_REL   = 16'd16;    // samples
 localparam [15:0] DEFAULT_MUS_FADE   = 16'd16;    // frames
 localparam [15:0] DEFAULT_MUSIC_RATE = 16'd16;    // frames / sec
 localparam [7:0]  NOTE_TICK_DIV      = 8'd183;    // global note tick divider (samples)
@@ -77,12 +78,6 @@ localparam [6:0] ADDR_HWFX_5F42     = 7'h07;
 reg [31:0] reg_sfx_base;                // clk_sys: SFX data base address in RAM
 reg [31:0] reg_music_base;              // clk_sys: Music data base address in RAM
 reg [7:0] hwfx_5f40, hwfx_5f41, hwfx_5f42, hwfx_5f43;  // clk_sys: PICO-8 hardware FX state snapshot
-
-// Per-voice attack/release (samples)
-localparam [6:0] ADDR_NOTE_ATK      = 7'h08;
-localparam [6:0] ADDR_NOTE_REL      = 7'h09;
-reg [15:0] reg_note_atk;                // clk_sys: Note attack time (samples)
-reg [15:0] reg_note_rel;                // clk_sys: Note release time (samples)
 
 // SFX API
 localparam [6:0] ADDR_SFX_CMD       = 7'h0A;
@@ -111,7 +106,7 @@ localparam [6:0] ADDR_STAT54        = 7'h16;
 localparam [6:0] ADDR_STAT55        = 7'h17;
 localparam [6:0] ADDR_STAT56        = 7'h18;
 
-always @(posedge clk_sys or negedge resetn) begin
+always @(posedge clk_sys) begin
     if (!resetn) begin
         reg_ctrl        <= 0;
         reg_sfx_base    <= 0;
@@ -121,8 +116,6 @@ always @(posedge clk_sys or negedge resetn) begin
         reg_sfx_len     <= 0;
         reg_music_cmd   <= 0;
         reg_music_fade  <= DEFAULT_MUS_FADE;
-        reg_note_atk    <= DEFAULT_NOTE_ATK;
-        reg_note_rel    <= DEFAULT_NOTE_REL;
         hwfx_5f40       <= 0;
         hwfx_5f41       <= 0;
         hwfx_5f42       <= 0;
@@ -138,8 +131,6 @@ always @(posedge clk_sys or negedge resetn) begin
             ADDR_SFX_LEN:       reg_sfx_len             <= din;
             ADDR_MUSIC_CMD:     reg_music_cmd           <= din;
             ADDR_MUSIC_FADE:    reg_music_fade          <= din;
-            ADDR_NOTE_ATK:      reg_note_atk            <= din;
-            ADDR_NOTE_REL:      reg_note_rel            <= din;
             ADDR_HWFX_5F40: begin
                 if (!nUDS) hwfx_5f40 <= din[15:8];
                 if (!nLDS) hwfx_5f41 <= din[7:0];
@@ -156,31 +147,31 @@ always @(posedge clk_sys or negedge resetn) begin
 end
 
 //==============================================================
-// DMA arbiter (voices + sequencer) - clk_sys domain
+// DMA arbiter (core_mux + sequencer) - clk_sys domain
 //==============================================================
-wire [30:0] v_dma_addr [0:3];           // clk_sys: DMA address from each voice (word address)
-wire        v_dma_req  [0:3];           // clk_sys: DMA request from each voice (pulse)
-wire        v_dma_ack  [0:3];           // clk_sys: DMA acknowledge to each voice
+wire [30:0] core_mux_dma_addr;           // clk_sys: DMA address from core_mux
+wire        core_mux_dma_req;            // clk_sys: DMA request from core_mux
+wire        core_mux_dma_ack;            // clk_sys: DMA acknowledge to core_mux
 
 reg  [30:0] seq_dma_addr;               // clk_sys: DMA address from sequencer (word address)
 reg  [31:0] seq_dma_addr_temp;          // clk_sys: Temporary for DMA address calculations
 reg         seq_dma_req;                // clk_sys: DMA request from sequencer (pulse)
 wire        seq_dma_ack;                // clk_sys: DMA acknowledge to sequencer
 
-// DMA arbiter instance (5 managers: 4 voices + sequencer)
-// Priority: Voice 0 > Voice 1 > Voice 2 > Voice 3 > Sequencer (lowest index = highest priority)
+// DMA arbiter instance (2 managers: core_mux + sequencer)
+// Priority: core_mux > Sequencer (lowest index = highest priority)
 dma_arbiter #(
-    .NUM_MANAGERS(5),
+    .NUM_MANAGERS(2),
     .ADDR_WIDTH(31)
 ) u_dma_arbiter (
     .clk(clk_sys),
     .resetn(resetn),
-    // Concatenated addresses: {seq, v3, v2, v1, v0}
-    .mgr_dma_addr({seq_dma_addr, v_dma_addr[3], v_dma_addr[2], v_dma_addr[1], v_dma_addr[0]}),
-    // Concatenated requests: {seq, v3, v2, v1, v0}
-    .mgr_dma_req({seq_dma_req, v_dma_req[3], v_dma_req[2], v_dma_req[1], v_dma_req[0]}),
-    // Concatenated acks: {seq, v3, v2, v1, v0}
-    .mgr_dma_ack({seq_dma_ack, v_dma_ack[3], v_dma_ack[2], v_dma_ack[1], v_dma_ack[0]}),
+    // Concatenated addresses: {seq, core_mux}
+    .mgr_dma_addr({seq_dma_addr, core_mux_dma_addr}),
+    // Concatenated requests: {seq, core_mux}
+    .mgr_dma_req({seq_dma_req, core_mux_dma_req}),
+    // Concatenated acks: {seq, core_mux}
+    .mgr_dma_ack({seq_dma_ack, core_mux_dma_ack}),
     .sub_dma_addr(dma_addr),
     .sub_dma_req(dma_req),
     .sub_dma_ack(dma_ack)
@@ -190,12 +181,12 @@ dma_arbiter #(
 //==============================================================
 // Voices - Clock Domain: mixed (see comments)
 //==============================================================
-wire signed [15:0] voice_pcm [0:3];          // clk_pcm: PCM output per voice (zero when inactive)
-wire               voice_busy_pcm [0:3];     // clk_pcm: Voice active status (from p8sfx_voice)
-wire               voice_done_pcm [0:3];     // clk_pcm: Voice done pulse (from p8sfx_voice)
-wire               voice_looping_pcm[0:3];   // clk_pcm: Voice looping status (from p8sfx_voice)
-wire [5:0]         v_stat_sfx_index_pcm [0:3];   // clk_pcm: Current SFX index (from p8sfx_voice)
-wire [5:0]         v_stat_note_index_pcm[0:3];   // clk_pcm: Current note index (from p8sfx_voice)
+wire signed [7:0] voice_pcm [0:3];          // clk_pcm: S8F7 PCM output per voice (zero when inactive)
+wire [3:0]         voice_busy_pcm;          // clk_pcm_8x: Voice active status
+wire [3:0]         voice_done_pcm;          // clk_pcm_8x: Context done pulse
+wire [3:0]         voice_looping_pcm;       // clk_pcm_8x: Context looping status
+wire [5:0]         v_stat_sfx_index_pcm [0:3];   // clk_pcm_8x: Current SFX index
+wire [5:0]         v_stat_note_index_pcm[0:3];   // clk_pcm_8x: Current note index
 
 // CDC: Synchronize voice signals from clk_pcm to clk_sys domain
 reg [3:0] voice_busy_sys_d;                  // clk_sys: CDC stage 1
@@ -218,7 +209,7 @@ reg [5:0] v_stat_note_index [0:3];           // clk_sys: CDC stage 2 (stable)
 // Loop variable for CDC synchronizer
 integer k;
 
-always @(posedge clk_sys or negedge resetn) begin
+always @(posedge clk_sys) begin
     if (!resetn) begin
         voice_busy_sys_d <= 4'b0000;
         voice_busy_sys_q <= 4'b0000;
@@ -233,11 +224,11 @@ always @(posedge clk_sys or negedge resetn) begin
             v_stat_note_index[k] <= 6'd0;
         end
     end else begin
-        voice_busy_sys_d <= {voice_busy_pcm[3], voice_busy_pcm[2], voice_busy_pcm[1], voice_busy_pcm[0]};
+        voice_busy_sys_d <= voice_busy_pcm;
         voice_busy_sys_q <= voice_busy_sys_d;
-        voice_done_sys_d <= {voice_done_pcm[3], voice_done_pcm[2], voice_done_pcm[1], voice_done_pcm[0]};
+        voice_done_sys_d <= voice_done_pcm;
         voice_done_sys_q <= voice_done_sys_d;
-        voice_looping_sys_d <= {voice_looping_pcm[3], voice_looping_pcm[2], voice_looping_pcm[1], voice_looping_pcm[0]};
+        voice_looping_sys_d <= voice_looping_pcm;
         voice_looping_sys_q <= voice_looping_sys_d;
         for (k=0; k<NUM_VOICES; k=k+1) begin
             v_stat_sfx_index_sys_d[k] <= v_stat_sfx_index_pcm[k];
@@ -248,7 +239,9 @@ always @(posedge clk_sys or negedge resetn) begin
     end
 end
 
+//==============================================================
 // Voice control signals (clk_sys domain)
+//==============================================================
 reg  [3:0]  play_strobe_sys;      // clk_sys: One-cycle pulse to start SFX playback
 reg  [3:0]  sfx_strobe_mask;      // clk_sys: Tracks which strobes were set by SFX commands
 reg  [5:0]  play_sfx_index [0:3]; // clk_sys: SFX index to play (0-63)
@@ -257,104 +250,47 @@ reg  [5:0]  play_sfx_len   [0:3]; // clk_sys: Number of notes to play (0=full)
 reg  [3:0]  force_stop_sys;       // clk_sys: One-cycle pulse to stop voice immediately
 reg  [3:0]  force_release_sys;    // clk_sys: One-cycle pulse to release voice from looping
 
-  // ============ Per-voice half-rate clock selection ============
-  // CDC: Synchronize clk_sel_half from clk_sys to clk_pcm domain
-  reg [3:0] clk_sel_half_pcm_d, clk_sel_half_pcm_q;  // clk_pcm: CDC synchronizer stages
-  always @(posedge clk_pcm or negedge resetn) begin
-    if (!resetn) begin
-      clk_sel_half_pcm_d <= 4'b0000;
-      clk_sel_half_pcm_q <= 4'b0000;
-    end else begin
-      clk_sel_half_pcm_d <= hwfx_5f40[3:0];
-      clk_sel_half_pcm_q <= clk_sel_half_pcm_d;
-    end
-  end
-
-  // Half-rate divider (per-channel) from master 22.05kHz
-  reg [3:0] pcm_div_ff;  // clk_pcm: Toggle divider for half-rate clock generation
-  always @(posedge clk_pcm or negedge resetn) begin
-    if (!resetn) pcm_div_ff <= 4'b0000;
-    else         pcm_div_ff <= pcm_div_ff ^ 4'b1111;
-  end
-
-// ============ Global note tick generator (clk_pcm domain) ============
-// Generates note_tick pulse every NOTE_TICK_DIV samples for all voices
-reg [7:0] note_accum_global;        // clk_pcm: Sample counter for note tick
-reg        note_tick_pcm;           // clk_pcm: Note tick pulse output
-reg        note_tick_pre_pcm;       // clk_pcm: Note pre-tick pulse output
-reg        note_tick_toggle_pcm;    // clk_pcm: Toggle for CDC to clk_sys
-always @(posedge clk_pcm or negedge resetn) begin
-    if (!resetn) begin
-        note_accum_global <= 8'd0;
-        note_tick_pcm <= 1'b0;
-        note_tick_toggle_pcm <= 1'b0;
-    end else begin
-        // Use zero-extended comparison to match NOTE_TICK_DIV width and avoid warnings
-        if ((note_accum_global + 8'd1) >= NOTE_TICK_DIV) begin
-            note_accum_global <= 8'd0;
-            note_tick_pcm <= 1'b1;
-            // Flip the toggle to notify the clk_sys domain (CDC)
-            note_tick_toggle_pcm <= ~note_tick_toggle_pcm;
-        end else begin
-            note_accum_global <= note_accum_global + 8'd1;
-            note_tick_pcm <= 1'b0;
-            if ((note_accum_global + 8'd1) == NOTE_TICK_DIV - reg_note_rel)
-                note_tick_pre_pcm <= 1'b1;
-            else
-                note_tick_pre_pcm <= 1'b0;
-        end
-    end
-end
-
-wire clk_pcm_v[0:3];
-assign clk_pcm_v[0] = clk_sel_half_pcm_q[0] ? pcm_div_ff[0] : clk_pcm;
-assign clk_pcm_v[1] = clk_sel_half_pcm_q[1] ? pcm_div_ff[1] : clk_pcm;
-assign clk_pcm_v[2] = clk_sel_half_pcm_q[2] ? pcm_div_ff[2] : clk_pcm;
-assign clk_pcm_v[3] = clk_sel_half_pcm_q[3] ? pcm_div_ff[3] : clk_pcm;
-
-genvar vi;
-generate for (vi=0; vi<NUM_VOICES; vi=vi+1) begin : VOICES
-    p8sfx_voice voice_inst (
-        .clk_sys             (clk_sys),
-        .clk_pcm             (clk_pcm_v[vi]),
-        .resetn              (resetn),
-        .run                 (reg_ctrl[0]),
-        .note_tick           (note_tick_pcm),
-        .note_tick_pre       (note_tick_pre_pcm),
-        .base_addr           (reg_sfx_base),
-        .channel_id          (vi[1:0]),
-        .sfx_index_in        (play_sfx_index[vi]),
-        .sfx_offset          (play_sfx_off[vi]),
-        .sfx_length          (play_sfx_len[vi]),
-        .play_strobe         (play_strobe_sys[vi]),
-        .force_stop          (force_stop_sys[vi]),
-        .force_release       (force_release_sys[vi]),
-        .note_attack_samps   (reg_note_atk),
-        .note_release_samps  (reg_note_rel),
-        .voice_busy          (voice_busy_pcm[vi]),
-        .sfx_done            (voice_done_pcm[vi]),
-        .looping             (voice_looping_pcm[vi]),
-        // DMA client
-        .dma_addr            (v_dma_addr[vi]),
-        .dma_req             (v_dma_req[vi]),
-        .dma_rdata           (dma_rdata),
-        .dma_ack             (v_dma_ack[vi]),
-        // PCM
-        .pcm_out             (voice_pcm[vi]),
-        // stat
-        .stat_sfx_index      (v_stat_sfx_index_pcm[vi]),
-        .stat_note_index     (v_stat_note_index_pcm[vi]),
-        // hwfx
-        .hwfx_5f40           (hwfx_5f40),
-        .hwfx_5f41           (hwfx_5f41),
-        .hwfx_5f42           (hwfx_5f42),
-        .hwfx_5f43           (hwfx_5f43)
-    );
-end endgenerate
+//==============================================================
+// Time-multiplexed SFX core instance (clk_sys + clk_pcm_8x domains)
+//==============================================================
+p8sfx_core_mux core_mux_inst (
+    .clk_sys             (clk_sys),
+    .clk_pcm_8x          (clk_pcm_8x),
+    .resetn              (resetn),
+    .run                 (reg_ctrl[0]),
+    .base_addr           (reg_sfx_base),
+    .sfx_index_in        (play_sfx_index),
+    .sfx_offset          (play_sfx_off),
+    .sfx_length          (play_sfx_len),
+    .play_strobe         (play_strobe_sys),
+    .force_stop          (force_stop_sys),
+    .force_release       (force_release_sys),
+    .voice_busy          (voice_busy_pcm),
+    .sfx_done            (voice_done_pcm),
+    .looping             (voice_looping_pcm),
+    // DMA client
+    .dma_addr            (core_mux_dma_addr),
+    .dma_req             (core_mux_dma_req),
+    .dma_rdata           (dma_rdata),
+    .dma_ack             (core_mux_dma_ack),
+    // PCM
+    .pcm_out             (voice_pcm),
+    // stat
+    .stat_sfx_index      (v_stat_sfx_index_pcm),
+    .stat_note_index     (v_stat_note_index_pcm),
+    // hwfx
+    .hwfx_5f40           (hwfx_5f40),
+    .hwfx_5f41           (hwfx_5f41),
+    .hwfx_5f42           (hwfx_5f42),
+    .hwfx_5f43           (hwfx_5f43)
+);
 
 //==============================================================
-// Music fade (clk_sys domain)
+// Note tick generation and music fade (clk_pcm domain)
 //==============================================================
+reg note_tick_toggle_pcm;         // clk_pcm: Toggle on each note tick for CDC
+reg [7:0] note_tick_counter;      // clk_pcm: Counter for note tick timing (0-182)
+
 reg [15:0] music_fade_ctr_in;   // clk_sys: Fade-in frame counter
 reg [15:0] music_fade_ctr_out;  // clk_sys: Fade-out frame counter
 reg [15:0] music_fade_len;      // clk_sys: Music fade length (snapshot of reg_music_fade)
@@ -363,29 +299,61 @@ wire music_fade_in  = (music_fade_ctr_in  != 16'd0);
 wire music_fade_out = (music_fade_ctr_out != 16'd0);
 
 // CDC: Synchronize music fade parameters from clk_sys to clk_pcm domain
-reg [15:0] music_fade_ctr_in_pcm_d;   // clk_pcm: CDC stage 1
-reg [15:0] music_fade_ctr_in_pcm;     // clk_pcm: CDC stage 2 (stable)
-reg [15:0] music_fade_ctr_out_pcm_d;  // clk_pcm: CDC stage 1
-reg [15:0] music_fade_ctr_out_pcm;    // clk_pcm: CDC stage 2 (stable)
+reg [15:0] music_fade_ctr_in_pcm;     // clk_pcm: Fade-in counter (managed in clk_pcm)
+reg [15:0] music_fade_ctr_out_pcm;    // clk_pcm: Fade-out counter (managed in clk_pcm)
 reg [15:0] music_fade_len_pcm_d;      // clk_pcm: CDC stage 1
 reg [15:0] music_fade_len_pcm;        // clk_pcm: CDC stage 2 (stable)
-reg [31:0] music_fade_len_pcm_ext;    // clk_pcm: zero-extended helper for arithmetic
 
-always @(posedge clk_pcm or negedge resetn) begin
+// Synchronize fade counter initialization from clk_sys
+reg [15:0] music_fade_ctr_in_init_d;  // clk_pcm: CDC stage 1 for initialization
+reg [15:0] music_fade_ctr_in_init;    // clk_pcm: CDC stage 2 for initialization
+reg [15:0] music_fade_ctr_out_init_d; // clk_pcm: CDC stage 1 for initialization
+reg [15:0] music_fade_ctr_out_init;   // clk_pcm: CDC stage 2 for initialization
+
+always @(posedge clk_pcm) begin
     if (!resetn) begin
-        music_fade_ctr_in_pcm_d  <= 16'd0;
         music_fade_ctr_in_pcm    <= 16'd0;
-        music_fade_ctr_out_pcm_d <= 16'd0;
         music_fade_ctr_out_pcm   <= 16'd0;
         music_fade_len_pcm_d     <= 16'd0;
         music_fade_len_pcm       <= 16'd0;
+        music_fade_ctr_in_init_d <= 16'd0;
+        music_fade_ctr_in_init   <= 16'd0;
+        music_fade_ctr_out_init_d <= 16'd0;
+        music_fade_ctr_out_init  <= 16'd0;
+        note_tick_toggle_pcm <= 1'b0;
+        note_tick_counter <= 8'd0;
     end else begin
-        music_fade_ctr_in_pcm_d  <= music_fade_ctr_in;
-        music_fade_ctr_in_pcm    <= music_fade_ctr_in_pcm_d;
-        music_fade_ctr_out_pcm_d <= music_fade_ctr_out;
-        music_fade_ctr_out_pcm   <= music_fade_ctr_out_pcm_d;
-        music_fade_len_pcm_d     <= music_fade_len;
-        music_fade_len_pcm       <= music_fade_len_pcm_d;
+        // Synchronize fade parameters from clk_sys
+        music_fade_ctr_in_init_d  <= music_fade_ctr_in;
+        music_fade_ctr_in_init    <= music_fade_ctr_in_init_d;
+        music_fade_ctr_out_init_d <= music_fade_ctr_out;
+        music_fade_ctr_out_init   <= music_fade_ctr_out_init_d;
+        music_fade_len_pcm_d      <= music_fade_len;
+        music_fade_len_pcm        <= music_fade_len_pcm_d;
+
+        // Load new fade values when they change (edge detection)
+        if (music_fade_ctr_in_init != music_fade_ctr_in_pcm && music_fade_ctr_in_init != 16'd0) begin
+            music_fade_ctr_in_pcm <= music_fade_ctr_in_init;
+        end
+        if (music_fade_ctr_out_init != music_fade_ctr_out_pcm && music_fade_ctr_out_init != 16'd0) begin
+            music_fade_ctr_out_pcm <= music_fade_ctr_out_init;
+        end
+
+        // Note tick generation
+        if (note_tick_counter >= 8'd182) begin  // NOTE_TICK_DIV - 1 = 183 - 1 = 182
+            note_tick_counter <= 8'd0;
+            note_tick_toggle_pcm <= ~note_tick_toggle_pcm;
+
+            // Decrement fade counters on note tick (in clk_pcm domain)
+            if (music_fade_ctr_in_pcm != 16'd0) begin
+                music_fade_ctr_in_pcm <= music_fade_ctr_in_pcm - 16'd1;
+            end
+            if (music_fade_ctr_out_pcm != 16'd0) begin
+                music_fade_ctr_out_pcm <= music_fade_ctr_out_pcm - 16'd1;
+            end
+        end else begin
+            note_tick_counter <= note_tick_counter + 1;
+        end
     end
 end
 
@@ -398,35 +366,39 @@ wire music_fade_out_pcm = (music_fade_ctr_out_pcm != 16'd0);
 // Mix all 4 voices with saturation
 // Note: Voices output zero when inactive, so we can unconditionally add them
 
-// Mixer temporary variables
-integer sum;
-integer num;
-integer numo;
+// Mixer: S10F7 register for summing 4 S8F7 voices (range: -512 to +508)
+reg signed [9:0] sum;       // clk_pcm: S10F7 mixer sum (10 bits for arithmetic headroom)
+reg signed [31:0] num;      // clk_pcm: Signed numerator for fade calculation
+reg signed [31:0] numo;     // clk_pcm: Signed numerator for fade-out calculation
+reg signed [31:0] denom;    // clk_pcm: Signed denominator for fade calculation
 
-always @(posedge clk_pcm or negedge resetn) begin
+always @(posedge clk_pcm) begin
     if (!resetn || !reg_ctrl[0]) begin
         pcm_out<=0;
     end else begin
-        sum = 0;
-        // Add all voices (they're zero when inactive)
-        sum = sum + $signed({{16{voice_pcm[0][15]}}, voice_pcm[0]});
-        sum = sum + $signed({{16{voice_pcm[1][15]}}, voice_pcm[1]});
-        sum = sum + $signed({{16{voice_pcm[2][15]}}, voice_pcm[2]});
-        sum = sum + $signed({{16{voice_pcm[3][15]}}, voice_pcm[3]});
-        // Extend 16-bit CDC values to 32-bit for arithmetic to avoid width expansion warnings
-        music_fade_len_pcm_ext = {{16{1'b0}}, music_fade_len_pcm};
+        // Mix 4 voices: S8F7 + S8F7 + S8F7 + S8F7 = S10F7
+        sum = $signed({voice_pcm[0][7], voice_pcm[0][7], voice_pcm[0]})
+            + $signed({voice_pcm[1][7], voice_pcm[1][7], voice_pcm[1]})
+            + $signed({voice_pcm[2][7], voice_pcm[2][7], voice_pcm[2]})
+            + $signed({voice_pcm[3][7], voice_pcm[3][7], voice_pcm[3]});
+
+        // Apply fade effects
+        denom = $signed({{16{1'b0}}, music_fade_len_pcm == 16'd0 ? 32'd1 : music_fade_len_pcm});
         if (music_fade_in_pcm) begin
-            num = (music_fade_len_pcm_ext - {{16{1'b0}}, music_fade_ctr_in_pcm});
-            sum = (sum * num) / (music_fade_len_pcm_ext==32'd0 ? 32'd1 : music_fade_len_pcm_ext);
+            // Fade in: multiply by (len - ctr) / len
+            num = $signed(denom - music_fade_ctr_in_pcm);
+            sum = (sum * num) / denom;
         end
         if (music_fade_out_pcm) begin
-            numo = {{16{1'b0}}, music_fade_ctr_out_pcm};
-            sum = (sum * numo) / (music_fade_len_pcm_ext==32'd0 ? 32'd1 : music_fade_len_pcm_ext);
+            // Fade out: multiply by ctr / len
+            numo = $signed({{16{1'b0}}, music_fade_ctr_out_pcm});
+            sum = (sum * numo) / denom;
         end
-        // Saturation
-        if (sum > 32767) sum = 32767;
-        if (sum < -32768) sum = -32768;
-        pcm_out   <= sum[15:0];
+
+        // Saturation to S8F7 output (range: -128 to +127)
+        if (sum > 18'sd127) sum = 18'sd127;
+        if (sum < -18'sd128) sum = -18'sd128;
+        pcm_out <= sum[7:0];
     end
 end
 
@@ -499,7 +471,7 @@ reg [1:0] leftmost_nonloop;
 //==============================================================
 // SFX queueing + MUSIC sequencer + Note tick counter (clk_sys domain)
 //==============================================================
-always @(posedge clk_sys or negedge resetn) begin
+always @(posedge clk_sys) begin
     if (!resetn) begin
         // SFX queueing resets
         for (l=0;l<NUM_VOICES;l=l+1) begin
@@ -533,7 +505,7 @@ always @(posedge clk_sys or negedge resetn) begin
             end
             sfx_strobe_mask <= 4'b0000;
         end
-        
+
         force_stop_sys <= 4'b0000; force_release_sys <= 4'b0000;
 
         // SFX command handler
@@ -657,7 +629,7 @@ always @(posedge clk_sys or negedge resetn) begin
                 if (seq_played_mask[ch]) play_strobe_sys[ch] <= 1'b0;
             end
         end
-        
+
         // MUSIC sequencer DMA: Fetch 4 bytes per frame (2 DMA reads of 16 bits each)
         if (seq_dma_ack) begin
             // Unpack 16-bit DMA read into two consecutive bytes
@@ -711,7 +683,7 @@ always @(posedge clk_sys or negedge resetn) begin
             end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
                 leftmost_nonloop = 2'd3;
             end
-            
+
             // advance only if not waiting or if leftmost non-looping channel reports done
             if ((!seq_waiting || (seq_waiting && voice_done[leftmost_nonloop])) && !seq_dma_req) begin
                 if (loop_def && cur_frame==loop_end) begin
@@ -742,9 +714,6 @@ always @(posedge clk_sys or negedge resetn) begin
         note_tick_toggle_sys_q <= note_tick_toggle_sys_d;
         if (note_tick_toggle_sys_q != note_tick_toggle_sys_d) begin
             stat_music_tick_count <= stat_music_tick_count + 1;
-            // Decrement fade counters on note tick
-            if (music_fade_ctr_in != 0)  music_fade_ctr_in  <= music_fade_ctr_in - 1;
-            if (music_fade_ctr_out != 0) music_fade_ctr_out <= music_fade_ctr_out - 1;
         end
     end
 end
@@ -754,6 +723,7 @@ end
 //==============================================================
 always @(*) begin                       // clk_sys: Combinational read mux
     case(address)
+        ADDR_VERSION: dout = reg_version;
         // stat(46..49): sfx index per channel; FFFF if idle
         ADDR_STAT46: dout = voice_busy[0] ? {10'd0, v_stat_sfx_index[0]} : 16'hFFFF;
         ADDR_STAT47: dout = voice_busy[1] ? {10'd0, v_stat_sfx_index[1]} : 16'hFFFF;
