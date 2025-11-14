@@ -359,10 +359,10 @@ p8audio p8audio_inst (
     .nLDS       (p8audio_nLDS),
     .write_en   (p8audio_write_en),
     .read_en    (p8audio_read_en),
-    
+
     // PCM output
     .pcm_out    (p8audio_pcm_out),
-    
+
     // DMA interface
     .dma_addr   (p8audio_dma_addr),
     .dma_rdata  (p8audio_dma_rdata),
@@ -513,7 +513,7 @@ initial begin
 end
 
 // Select active palette based on vfront
-wire [79:0] screen_palette_active = vfront ? 
+wire [79:0] screen_palette_active = vfront ?
     {screen_palette0[0],  screen_palette0[1],  screen_palette0[2],  screen_palette0[3],
      screen_palette0[4],  screen_palette0[5],  screen_palette0[6],  screen_palette0[7],
      screen_palette0[8],  screen_palette0[9],  screen_palette0[10], screen_palette0[11],
@@ -641,7 +641,7 @@ always @(posedge mclk) begin
 		if (p8audio_dma_req) begin
 			p8audio_dma_req_latched <= 1'b1;
 			p8audio_dma_addr_latched <= p8audio_dma_addr;
-			$display("[nextp8_top] time=%0t DMA request captured: addr=0x%05h, estate=%b", 
+			$display("[nextp8_top] time=%0t DMA request captured: addr=0x%05h, estate=%b",
 			         $time, p8audio_dma_addr[19:0], estate);
 		end
 		// Clear latched request when FSM detects it in state 000
@@ -740,7 +740,7 @@ begin
 			 end
 		3'b011: begin
 			// DMA read cycle - data is valid on ram_data_io, ack asserted
-			$display("[nextp8_top] time=%0t State 011: raddr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
+			$display("[nextp8_top] time=%0t State 011: raddr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h",
 			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
             rdata <= ram_data_io;
 			ramce <= 1'b1;
@@ -748,13 +748,13 @@ begin
 			estate <= 3'b100;
 		end
         3'b100: begin
-			$display("[nextp8_top] time=%0t State 100: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
+			$display("[nextp8_top] time=%0t State 100: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h",
 			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
             // Complete DMA cycle
             estate <= 3'b000;
         end
 /*        3'b101: begin
-			$display("[nextp8_top] time=%0t State 101: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h", 
+			$display("[nextp8_top] time=%0t State 101: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h",
 			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
             // Complete DMA cycle
             estate <= 3'b000;s
