@@ -834,7 +834,7 @@ begin
 	if (memio_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out={7'b0, vfront, 7'b0, vfront}; //h80000E
+            if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
             //--------------- QLSD --------------------------------------------------
             if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data, qlsd_data }; //h800006
             if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
