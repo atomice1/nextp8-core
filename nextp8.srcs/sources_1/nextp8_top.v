@@ -289,6 +289,7 @@ reg da_playing=0;
 reg da_mono=0;
 reg [1:0] da_state=0;
 (* ram_style = "block" *) reg [15:0] da_memory [0:8191];
+reg [15:0] da_memory_cpu_rdata; // Registered BRAM read output for CPU access
 
 always @(posedge clk11)
 begin
@@ -298,7 +299,7 @@ begin
         da_cnt<=da_period;
         case (da_state)
 		2'd0: begin
-            da_data=da_memory[da_address];
+            da_data<=da_memory[da_address];
             if (da_playing) da_address<=da_address+13'd1;
             da_state<=3'd2;
             end
@@ -678,6 +679,10 @@ begin
 				memio_go<=1'b0;
 				if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
 				if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
+				// Start BRAM read for da_memory
+				if (da_mem && !cpu_wr) begin
+					da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
+				end
 				estate<=3'b001;
 			end
 		end
@@ -687,11 +692,13 @@ begin
 			if (!sys_wr) rdata <= ram_data_io;
 			if (da_mem) begin
 			     if (cpu_wr) begin
+			          // BRAM supports byte-enable writes
 			          if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0]<=cpu_dout[7:0];
 			          if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8]<=cpu_dout[15:8];
 			     end else begin
-			          if (~cpu_ds[0]) rdata[7:0] <= da_memory[cpu_addr[13:1]][7:0];
-			          if (~cpu_ds[1]) rdata[15:9] <= da_memory[cpu_addr[13:1]][15:8];
+			          // Use pre-registered read data and select bytes
+			          if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
+			          if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
 			     end
 			end
 			if (pal_mem) begin
