@@ -133,7 +133,7 @@ endfunction
 function [2:0] custom_from_main;
     input [2:0] main_ctx;
     begin
-        custom_from_main = main_ctx & 1'b0;
+        custom_from_main = {main_ctx[2:1], 1'b0};  // Clear LSB: 1→0, 3→2, 5→4, 7→6
     end
 endfunction
 
@@ -593,9 +593,11 @@ always @(posedge clk_sys) begin
                 pending_load_sys[ctx_from_voice(i, 1'b0)] <= 1'b1;
                 sfx_index_req_8x[ctx_from_voice(i, 1'b0)] <= {3'b0, custom_load_wave_pcm[i]};
                 sfx_offset_req_8x[ctx_from_voice(i, 1'b0)] <= 6'd0;
-                sfx_length_req_8x[ctx_from_voice(i, 1'b0)] <= 6'd0;
-                if (i == 0 && $time > 100000)
-                    $display("[%0t] clk_sys: Detected custom load toggle for voice %0d, loading SFX %0d into ctx %0d", $time, i, custom_load_wave_pcm[i], ctx_from_voice(i, 1'b0));
+                // Custom instruments should loop continuously (6'b111111 = continuous loop mode)
+                sfx_length_req_8x[ctx_from_voice(i, 1'b0)] <= 6'b111111;
+            end else if (dma_state == L_SCAN && ctx_to_load == ctx_from_voice(i, 1'b0)) begin
+                // Clear pending flag when load completes for CUSTOM contexts
+                pending_load_sys[ctx_from_voice(i, 1'b0)] <= 1'b0;
             end
         end
     end
@@ -738,8 +740,6 @@ always @(posedge clk_sys) begin
 
                 // Signal completion via toggle
                 load_done_toggle_sys[ctx_to_load] <= ~load_done_toggle_sys[ctx_to_load];
-                if (ctx_to_load == 3'd0)
-                    $display("[%0t] DMA: Load complete for CUSTOM ctx=%0d, SFX=%0d, is_waveform=%0d", $time, ctx_to_load, sfx_index_req_8x[ctx_to_load], (sfx_index_req_8x[ctx_to_load] <= 6'd7) && header_loopst_sys_8x[ctx_to_load][7]);
 
                 // Update round-robin pointer
                 last_served <= ctx_to_load;
@@ -901,7 +901,8 @@ task load_done;
         next_group_pos_8x[ctx_idx] <= 2'd0;
 
         // Waveform instrument gets special initialization
-        if (is_waveform_inst) begin
+        // Use is_waveform_inst_sys_8x directly since is_waveform_inst_8x was just updated above
+        if (is_waveform_inst_sys_8x[ctx_idx]) begin
             cur_custom_8x[ctx_idx] <= 1'd0;
             cur_eff_8x[ctx_idx] <= 3'd0;
             cur_vol_8x[ctx_idx] <= 3'd5;
@@ -987,7 +988,7 @@ task calculate_eff_inc;
         // Phase multiplier for custom instruments (CUSTOM->MAIN coupling)
         // MAIN contexts (ctx_idx[0]=1, odd) compute phase multiplier for output
         // CUSTOM contexts (ctx_idx[0]=0, even) will read from their paired MAIN (ctx_idx+1)
-        if (!is_main_context(ctx_idx) && cur_custom) begin
+        if (is_main_context(ctx_idx) && cur_custom) begin
             // MAIN context (odd) with custom instrument: compute pitch ratio relative to C2
             // U18F12 phase_mult = (U18F18 base_inc << 12) / U18F18 pitch_phase_inc[PITCH_REF_C2]
             phase_mult_8x[ctx_idx] = ($signed({base_inc, {12{1'b0}}}) / $signed({1'b0, pitch_phase_inc[PITCH_REF_C2]}));
@@ -998,7 +999,7 @@ task calculate_eff_inc;
         // CUSTOM instrument: apply phase multiplier from paired MAIN context
         // CUSTOM contexts (ctx_idx[0]=0, even) read phase_mult from their MAIN partner (ctx_idx+1)
         // MAIN contexts (ctx_idx[0]=1, odd) use base_inc directly
-        if (is_main_context(ctx_idx) && phase_mult_8x[ctx_idx + 1] != 18'd0) begin
+        if (!is_main_context(ctx_idx) && phase_mult_8x[ctx_idx + 1] != 18'd0) begin
             // CUSTOM context (even): multiply base_inc by phase multiplier from MAIN
             // U18F18 eff_inc = U18F18 base_inc * U18F12 phase_mult >> 12
             eff_inc_8x[ctx_idx] = ({{18'd0, base_inc}} * phase_mult_8x[ctx_idx + 1]) >> 12;
@@ -1117,8 +1118,6 @@ task decode_current_note;
 
         // Store current note parameters
         cur_custom_8x[ctx_idx] <= custom;
-        if (ctx_idx == 3'd1 && custom && $time > 100000)
-            $display("[%0t] decode_note: ctx=%0d setting cur_custom=1, wave=%0d, vol=%0d", $time, ctx_idx, wave, vol);
         cur_eff_8x[ctx_idx] <= eff;
         cur_vol_8x[ctx_idx] <= vol;
         cur_wave_8x[ctx_idx] <= wave;
@@ -1146,8 +1145,7 @@ task decode_current_note;
             if ((pcm_state[custom_from_main(ctx_idx)] == PCM_IDLE) || ((cur_wave != wave || pitch != cur_pitch || cur_vol == 3'd0) ^ (eff == 3'd3))) begin
                 custom_load_toggle_pcm[voice_from_ctx(ctx_idx)] <= ~custom_load_toggle_pcm[voice_from_ctx(ctx_idx)];
                 custom_load_wave_pcm[voice_from_ctx(ctx_idx)] <= wave;
-                if (ctx_idx == 3'd1 && $time > 100000)
-                    $display("[%0t] decode_note: MAIN ctx=%0d triggering custom load: wave=%0d, toggle voice %0d", $time, ctx_idx, wave, voice_from_ctx(ctx_idx));
+                pcm_state[custom_from_main(ctx_idx)] <= PCM_IDLE;
             end
         end else if (!custom && is_main_context(ctx_idx) && cur_custom) begin
             // Switching away from custom instrument: stop the paired CUSTOM context's SFX
@@ -1272,8 +1270,6 @@ task advance_note_timing;
                 end else begin
                     // Transition from warm-up to playing after first note decoded
                     pcm_state[ctx_idx] <= PCM_PLAYING;
-                    if (ctx_idx == 3'd0)
-                        $display("[%0t] CUSTOM ctx=%0d transitioning to PCM_PLAYING", $time, ctx_idx);
                 end
             end else begin
                 note_ctr_8x[ctx_idx] <= note_ctr + 1;
@@ -1303,8 +1299,6 @@ endtask
 // Tick one sample
 task sample_tick;
     begin
-        if (ctx_idx == 3'd0 && $time > 100000 && $time < 200000)
-            $display("[%0t] sample_tick: CUSTOM ctx=%0d called", $time, ctx_idx);
         // Update sample and note timing
         if (!is_waveform_inst) begin
             advance_note_timing();
@@ -1674,8 +1668,6 @@ task generate_waveform_sample;
             sample_out = sfx_byte_sel ? $signed(sfx_data[7:0]) : $signed(sfx_data[15:8]);
         end else if (cur_custom && is_main_context(ctx_idx)) begin
             sample_out = custom_pcm_out[voice_idx];
-            if (ctx_idx == 3'd1 && $time > 100000) 
-                $display("[%0t] MAIN ctx=%0d reading custom_pcm_out[%0d]=%0d", $time, ctx_idx, voice_idx, $signed(custom_pcm_out[voice_idx]));
         end else begin
             waveform_gen(phase_acc, base_sample);
 
@@ -1822,8 +1814,6 @@ task process_pcm_chain;
         end else begin
             // CUSTOM contexts (0,2,4,6) - store for use by paired MAIN contexts
             custom_pcm_out[voice_idx] <= s8_sample;
-            if (ctx_idx == 3'd0 && s8_sample != 0)
-                $display("[%0t] CUSTOM ctx=%0d writing custom_pcm_out[%0d]=%0d", $time, ctx_idx, voice_idx, $signed(s8_sample));
         end
     end
 endtask
@@ -1952,6 +1942,7 @@ always @(posedge clk_pcm_8x) begin
                     // Clear force_stop if it arrives while idle (no effect)
                     force_stop_pcm_sticky[ctx_idx] <= 1'b0;
                     if (is_main_context(ctx_idx)) begin
+                        // When idle force the associated CUSTOM context to idle too.
                         pcm_state[custom_from_main(ctx_idx)] <= PCM_IDLE;
                     end
                 end

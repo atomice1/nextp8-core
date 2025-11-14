@@ -353,7 +353,7 @@
         </FileInfo>
       </File>
       <File Path="$PSRCDIR/sources_1/p8audio.sv">
-        <FileInfo SFType="SVerilog">
+        <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -367,7 +367,7 @@
         </FileInfo>
       </File>
       <File Path="$PSRCDIR/sources_1/p8sfx_core_mux.sv">
-        <FileInfo SFType="SVerilog">
+        <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
