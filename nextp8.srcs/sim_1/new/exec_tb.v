@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 module exec_tb #(
-    parameter POST_TARGET = 3  // Target POST code for successful completion
+    parameter POST_TARGET = 5  // Target POST code for successful completion
 ) (
     );
 
