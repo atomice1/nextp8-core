@@ -1060,8 +1060,9 @@ task calculate_eff_vol;
         case (cur_eff)
             3'd1: begin  // Slide: interpolate volume
                 if (prev_vol > 3'd0) begin
+                    // U8F0 eff_vol = (U3F0 prev_vol << 5) + (((U3F0 cur_vol - U3F0 prev_vol) << 5) * U24F24 note_offset) >> 24
                     // U8F0 eff_vol = (U3F0 prev_vol << 5) + ((U3F0 cur_vol - U3F0 prev_vol) * U24F24 note_offset) >> 19
-                    vol_diff = $signed({1'b0, cur_vol}) - $signed({1'b0, prev_vol});
+                    vol_diff = ($signed({1'b0, cur_vol}) - $signed({1'b0, prev_vol})) <<< 5;
                     eff_vol_8x[ctx_idx] = (prev_vol << 5) + (({{24{vol_diff[3]}}, vol_diff} * $signed({{4'd0, note_offset}})) >> 19);
                 end else begin
                     eff_vol_8x[ctx_idx] = cur_vol << 5;
@@ -1069,14 +1070,16 @@ task calculate_eff_vol;
             end
 
             3'd4: begin  // Fade in: volume * note_offset
-                // U8F0 eff_vol = U3F0 cur_vol * U24F24 note_offset >> 24
-                eff_vol_8x[ctx_idx] = ({{24'd0, cur_vol}} * {{5'd0, note_offset}}) >> 24;
+                // U8F0 eff_vol = (U3F0 cur_vol << 5) * U24F24 note_offset >> 24
+                //              = U3F0 cur_vol * U24F24 note_offset >> 19
+                eff_vol_8x[ctx_idx] = ({{24'd0, cur_vol}} * {{5'd0, note_offset}}) >> 19;
             end
 
             3'd5: begin  // Fade out: volume * (1.0 - note_offset)
-                // U8F0 eff_vol = U3F0 cur_vol * (U24F24 1 - U24F24 note_offset) >> 24
-                // ~note_offset = 1-note_offset.
-                eff_vol_8x[ctx_idx] = ({{24'd0, cur_vol}} * {{5'd0, (~note_offset)}}) >>>24;
+                // U8F0 eff_vol = (U3F0 cur_vol << 5) * (U24F24 1 - U24F24 note_offset) >> 24
+                //              = (U3F0 cur_vol * (U24F24 1 - U24F24 note_offset) >> 19
+                //              = (U3F0 cur_vol * U24F24 ~note_offset) >> 19
+                eff_vol_8x[ctx_idx] = ({{24'd0, cur_vol}} * {{5'd0, (~note_offset)}}) >> 19;
             end
 
             default: begin  // No volume effect
@@ -1781,8 +1784,8 @@ task process_pcm_chain;
         generate_waveform_sample(s8_sample);
 
         // Volume scaling
-        // S8F7 s8_sample = S8F7 s8_sample * U8F0 eff_vol
-        s8_sample = (($signed({{8{s8_sample[7]}}, s8_sample}) * $signed({{8{1'b0}}, eff_vol}))) >>> 8;
+        // S8F7 s8_sample = S8F7 s8_sample * U8F0 eff_vol / 224
+        s8_sample = (($signed({{8{s8_sample[7]}}, s8_sample}) * $signed({{8{1'b0}}, eff_vol}))) / 9'sd224;
 
         // Attack ramp
         if (attack_ctr != 5'd0) begin
