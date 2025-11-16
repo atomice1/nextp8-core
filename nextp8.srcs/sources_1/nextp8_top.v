@@ -347,8 +347,8 @@ assign p8audio_read_en  = p8audio_mem && cpu_rd;
 p8audio p8audio_inst (
     // Clock and reset
     .clk_sys    (mclk),
-    .clk_pcm    (clk_pcm_pulse),    // 22.05 kHz sample clock
-    .clk_pcm_8x (clk_pcm_8x_pulse), // 176.4 kHz time-mux clock
+    .clk_pcm    (clk_pcm),          // 22.05 kHz sample clock (proper clock)
+    .clk_pcm_8x (clk_pcm_8x),       // 176.4 kHz time-mux clock (proper clock)
     .resetn     (~reset),           // Active-low reset
 
     // MMIO interface
@@ -569,33 +569,63 @@ assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
                    post_code_cpu;
 
 // -------------------------------------------------------------------------
-// ---------------------- Audio Subsystem Clock (22.05 kHz) ----------------
+// ---------------------- Audio Subsystem Clocks ----------------------------
 // -------------------------------------------------------------------------
-// Generate 22.05 kHz from 22 MHz using fractional-N divider (phase accumulator)
-// Required ratio: 22,050 / 22,000,000 = 0.0010022727...
-// Phase increment: 0.0010022727 × 2^32 = 4,304,728.585 ≈ 4,304,729
+// Generate 176.4 kHz (clk_pcm_8x) from 22 MHz using fractional-N divider
+// For a toggled clock: need 2x target frequency for toggle rate
+// Required toggle rate: 352,800 / 22,000,000 = 0.0160363636...
+// Phase increment: 0.0160363636 × 2^32 = 68,875,664
 
-reg [31:0] clk_pcm_phase = 32'd0;
-reg clk_pcm_pulse = 1'b0;
-
-// Generate 176.4 kHz (8× PCM rate) for time-multiplexing
-// Phase increment: 8 × 4,304,729 = 34,437,832
 reg [31:0] clk_pcm_8x_phase = 32'd0;
 reg clk_pcm_8x_pulse = 1'b0;
+reg clk_pcm_8x_div = 1'b0;
 
 always @(posedge clk22 or posedge reset)
 begin
     if (reset) begin
-        clk_pcm_phase <= 32'd0;
-        clk_pcm_pulse <= 1'b0;
         clk_pcm_8x_phase <= 32'd0;
         clk_pcm_8x_pulse <= 1'b0;
+        clk_pcm_8x_div <= 1'b0;
     end else begin
         // Add fractional increment, pulse on overflow
-        {clk_pcm_pulse, clk_pcm_phase} <= {1'b0, clk_pcm_phase} + 33'd4304729;
-        {clk_pcm_8x_pulse, clk_pcm_8x_phase} <= {1'b0, clk_pcm_8x_phase} + 33'd34437832;
+        // Toggle rate = 2x desired clock frequency (352.8 kHz for 176.4 kHz clock)
+        {clk_pcm_8x_pulse, clk_pcm_8x_phase} <= {1'b0, clk_pcm_8x_phase} + 33'd68875664;
+        
+        // Toggle clk_pcm_8x_div to create proper 50% duty cycle clock
+        if (clk_pcm_8x_pulse) begin
+            clk_pcm_8x_div <= ~clk_pcm_8x_div;
+        end
     end
 end
+
+// Route clk_pcm_8x through global clock buffer
+wire clk_pcm_8x;
+BUFG BUFG_clk_pcm_8x (.I(clk_pcm_8x_div), .O(clk_pcm_8x));
+
+// Derive clk_pcm from clk_pcm_8x at 1:8 ratio (22.05 kHz from 176.4 kHz)
+// For toggled clock: need to toggle every 4 cycles to get 1:8 frequency division
+reg [1:0] clk_pcm_div_counter = 2'd0;
+reg clk_pcm_div = 1'b0;
+
+always @(posedge clk_pcm_8x or posedge reset)
+begin
+    if (reset) begin
+        clk_pcm_div_counter <= 2'd0;
+        clk_pcm_div <= 1'b0;
+    end else begin
+        clk_pcm_div_counter <= clk_pcm_div_counter + 2'd1;
+        
+        // Toggle every 4 clk_pcm_8x cycles (when 2-bit counter wraps)
+        // This creates 1:8 frequency division (4 toggles = 8 clk_pcm_8x edges)
+        if (clk_pcm_div_counter == 2'd3) begin
+            clk_pcm_div <= ~clk_pcm_div;
+        end
+    end
+end
+
+// Route clk_pcm through global clock buffer
+wire clk_pcm;
+BUFG BUFG_clk_pcm (.I(clk_pcm_div), .O(clk_pcm));
 
 // -------------------------------------------------------------------------
 // --------- memory/io access and rom initialization ----------

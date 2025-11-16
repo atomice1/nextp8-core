@@ -11,6 +11,21 @@
 ## Additional derived clocks are defined here, but some may not be visible
 ## during synthesis and should be applied during implementation instead.
 
+## Audio clocks generated from clk22 via phase accumulator and division
+## clk_pcm_8x: 176.4 kHz audio processing clock (8x sample rate)
+## Fractional-N divider: 22 MHz / 124.7166... ≈ 176.4 kHz
+## For constraints, we approximate as  / 125 which gives 176 kHz
+create_generated_clock -name clk_pcm_8x \
+    -source [get_pins pll/inst/plle2_adv_inst/CLKOUT0] \
+    -divide_by 125 \
+    [get_pins BUFG_clk_pcm_8x/O]
+
+## clk_pcm: 22.05 kHz audio sample clock (derived from clk_pcm_8x via /8 divider)
+create_generated_clock -name clk_pcm \
+    -source [get_pins BUFG_clk_pcm_8x/O] \
+    -divide_by 8 \
+    [get_pins BUFG_clk_pcm/O]
+
 ## These generated clock definitions commented out as they reference design
 ## registers that may not be visible during synthesis. The timing engine
 ## will automatically propagate clock relationships through the design.
@@ -19,7 +34,7 @@
 ## clk2i: derived from mclk (CLKOUT5), divided by 3
 # create_generated_clock -name clk2i -source [get_pins pll/clk_out5] -divide_by 3 [get_pins clk2i_reg/Q]
 
-## clk_pcm_pulse: derived from clk22 (CLKOUT1), divided by 998 for 22.05 kHz audio sample rate
+## Old clk_pcm_pulse constraint (now replaced by proper clocks above)
 # create_generated_clock -name clk_pcm_pulse -source [get_pins pll/clk_out1] -divide_by 998 [get_pins clk_pcm_pulse_reg/Q]
 
 ## joy_clock: derived from clk2i, divided by 2048 for joystick polling
@@ -63,7 +78,9 @@ set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_pins pll/clk_out4]] \
     -group [get_clocks -of_objects [get_pins pll/clk_out5]] \
     -group [get_clocks -of_objects [get_pins pl2/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins pl2/clk_out2]]
+    -group [get_clocks -of_objects [get_pins pl2/clk_out2]] \
+    -group [get_clocks clk_pcm_8x] \
+    -group [get_clocks clk_pcm]
 
 ## Old clock constraints from previous design - commented out as these clocks don't exist
 ## set_clock_groups -logically_exclusive -group [get_clocks -include_generated_clocks clk_pcm_pulse_Gen] -group [get_clocks -include_generated_clocks {p8audio_inst/pcm_div_ff[0]_Gen}]
