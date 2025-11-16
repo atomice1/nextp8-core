@@ -515,6 +515,9 @@ always @(posedge clk_sys) begin
                 idx_f = din[5:0];
                 off_f = din[11:6];
                 len_f = reg_sfx_len[5:0];
+                if (len_f == 6'd0) begin
+                    len_f = 6'd32 - off_f;
+                end
 
                 if (idx_f==6'h3f) begin  // N=-1: Stop command (all ones in 6 bits)
                     if (ch_f==3'b111 || ch_f[2]) begin  // All channels if ch < 0
@@ -593,17 +596,19 @@ always @(posedge clk_sys) begin
 
         // MUSIC command handler
         if (write_en && address==ADDR_MUSIC_CMD) begin
+            // PICO-8 API: music(n, fade_len, channel_mask)
+            // n = -1 (0x3f in 6-bit) stops music
+            // n = 0..63 starts music from pattern n
             pat = din[12:7];
             msk = din[6:3];
-            start = din[13];
-            stop  = din[14];
-            if (stop) begin
+            if (pat == 6'h3f) begin
+                // Stop music (pattern = -1)
                 music_active<=0; seq_dma_req<=0;
                 music_fade_ctr_in <= 0;
                 music_fade_ctr_out <= reg_music_fade;
                 music_fade_len <= reg_music_fade;
-            end
-            if (start) begin
+            end else begin
+                // Start music from pattern n
                 music_mask <= (msk==4'b0000) ? 4'b1111 : msk;
                 music_fade_len     <= reg_music_fade;
                 music_fade_ctr_in  <= reg_music_fade;
