@@ -23,20 +23,29 @@ module tb_p8audio_sfx;
     //====================
     // Clocks & Reset
     //====================
-    reg clk_sys = 1'b0;     // 33 MHz system clock
-    reg clk_pcm = 1'b0;     // ~22.05 kHz PCM sample clock
+    reg clk_sys = 1'b0;
+    reg clk_pcm = 1'b0;
     reg clk_pcm_8x = 1'b0;  // 8× PCM sample clock for time-multiplexing
     reg resetn  = 1'b0;
 
-    // 33MHz: 30ns period
-    always #15 clk_sys = ~clk_sys;
-    // 22.05kHz: ~45.351us period
-    //localparam integer PCM_HALF_NS = 1000000000/22050/2; // 22.675us ~ 44.101kHz
-    // Note: the test bench runs the PCM clock at 1000x to reduce simulation time.
-    localparam integer PCM_HALF_NS = 1000000/22050/2; // 22.675ns ~ 44.101MHz
-    always #(PCM_HALF_NS) clk_pcm = ~clk_pcm;
-    // 8× PCM rate: ~352.8MHz, period ~2.835ns
-    always #(PCM_HALF_NS/8) clk_pcm_8x = ~clk_pcm_8x;
+    // Relatively prime clocks to provoke CDC issues.
+    // The clock ratios don't match the implementation - clk_pcm_8x runs much
+    // faster to reduce simulation time.
+    always #7 clk_sys = ~clk_sys;
+    always #4 clk_pcm_8x = ~clk_pcm_8x;
+
+    // Derive clk_pcm from clk_pcm_8x using a counter to ensure exact 8:1 ratio
+    reg [1:0] pcm_div_counter = 2'd0;
+    always @(posedge clk_pcm_8x or negedge resetn) begin
+        if (!resetn) begin
+            pcm_div_counter <= 2'd0;
+            clk_pcm <= 1'b0;
+        end else begin
+            pcm_div_counter <= pcm_div_counter + 1;
+            if (pcm_div_counter == 2'd3)  // Toggle every 4 cycles for 8:1 ratio
+                clk_pcm <= ~clk_pcm;
+        end
+    end
 
     //====================
     // MMIO signals
