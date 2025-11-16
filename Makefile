@@ -17,7 +17,7 @@
 # Project settings
 PROJECT = nextp8
 PROJECT_FILE = $(PROJECT).xpr
-PART = xc7a15tcsg324-1
+PART = xc7a35tcsg324-1
 TOP_MODULE = nextp8
 
 # Vivado settings
