@@ -2,31 +2,9 @@
 """
 compare_audio.py - Compare reference and output WAV files for PICO-8 audio analysis
 
-Compares two sets of WAV files (referenc    # Reference PCM
-    ax = ax_row[0]
-    if ref_samples is not None and len(ref_samples) > 0:
-        ax.plot(ref_samples, color='blue', linewidth=0.5, alpha=1.0/16.0, linestyle='-', marker='.', markersize=1)
-        ax.set_ylim(-1.0, 1.0)
-     overall_amp_diffs = []
-    overall_spec_diffs = []
-    overall_amp_diffs_nonzero = []
-    overall_spec_diffs_nonzero = []
-    sfx_with_data = []
-
-    # Second pass: plot the data
-    for plot_row, (sfx_idx, ref_samples, ref_amps, ref_specs, out_samples, out_amps, out_specs,
-                   amp_diffs, spec_diffs, mean_amp_diff, mean_spec_diff, mean_amp_diff_nonzero, mean_spec_diff_nonzero) in enumerate(sfx_data):
-
-        overall_amp_diffs.append(mean_amp_diff)
-        overall_spec_diffs.append(mean_spec_diff)
-        overall_amp_diffs_nonzero.append(mean_amp_diff_nonzero)
-        overall_spec_diffs_nonzero.append(mean_spec_diff_nonzero)
-        sfx_with_data.append(sfx_idx)label(f'SFX {sfx_idx}\nPCM', fontsize=6)
-    ax.tick_params(labelsize=5)
-    ax.grid(True, alpha=0.3, axis='y')
-    if is_first:
-        ax.set_title('Reference', fontsize=7)t) and generates a contact sheet
-showing amplitude and frequency spectrum analysis for each SFX (0-63).
+Compares two sets of WAV files (reference and RTL output) and generates a
+contact sheet showing amplitude and frequency spectrum analysis for each SFX
+(0-63).
 
 Usage:
     python compare_audio.py "reference_sfx_%d.wav" "output_sfx_%d.wav"
@@ -82,8 +60,10 @@ def read_wav(filename):
         return None, None
 
 def calculate_frame_amplitude(frame):
-    """Calculate RMS amplitude of a frame"""
-    return np.sqrt(np.mean(frame ** 2))
+    """Calculate RMS amplitude of a frame (DC-removed)"""
+    # Remove DC offset by subtracting mean
+    frame_centered = frame - np.mean(frame)
+    return np.sqrt(np.mean(frame_centered ** 2))
 
 def calculate_frame_spectrum(frame, sample_rate):
     """
@@ -184,13 +164,14 @@ def calculate_differences(ref_amps, ref_specs, out_amps, out_specs):
 
 def plot_sfx_comparison(ax_row, sfx_idx, ref_samples, ref_amps, ref_specs, out_samples, out_amps, out_specs,
                         amp_diffs, spec_diffs, mean_amp_diff, mean_spec_diff,
+                        global_spec_max, global_diff_max,
                         is_first=False, is_last=False):
     """Plot one row of comparison (8 plots: PCM, amplitude, spectrum for ref/out, then differences)"""
 
     # Reference PCM
     ax = ax_row[0]
     if ref_samples is not None and len(ref_samples) > 0:
-        ax.plot(ref_samples, color='blue', linewidth=0.5/16.0, linestyle='-', marker=' ')
+        ax.plot(ref_samples, color='blue', linewidth=0.5, linestyle='-', marker=' ')
         ax.set_ylim(-1.0, 1.0)
     ax.set_ylabel(f'SFX {sfx_idx}\nPCM', fontsize=6)
     ax.tick_params(labelsize=5)
@@ -212,9 +193,9 @@ def plot_sfx_comparison(ax_row, sfx_idx, ref_samples, ref_amps, ref_specs, out_s
     # Reference spectrum
     ax = ax_row[2]
     if ref_specs.size > 0:
-        # Transpose so frequency is on Y axis
+        # Transpose so frequency is on Y axis, use global scale
         ax.imshow(ref_specs.T, aspect='auto', origin='lower', cmap='hot',
-                 interpolation='nearest', vmin=0, vmax=np.max(ref_specs) if np.max(ref_specs) > 0 else 1)
+                 interpolation='nearest', vmin=0, vmax=global_spec_max)
     ax.set_ylabel('Freq', fontsize=6)
     ax.tick_params(labelsize=5)
     if is_first:
@@ -223,7 +204,7 @@ def plot_sfx_comparison(ax_row, sfx_idx, ref_samples, ref_amps, ref_specs, out_s
     # Output PCM
     ax = ax_row[3]
     if out_samples is not None and len(out_samples) > 0:
-        ax.plot(out_samples, color='green', linewidth=0.5/16.0, linestyle='-', marker=' ')
+        ax.plot(out_samples, color='green', linewidth=0.5, linestyle='-', marker=' ')
         ax.set_ylim(-1.0, 1.0)
     ax.set_ylabel('PCM', fontsize=6)
     ax.tick_params(labelsize=5)
@@ -246,7 +227,7 @@ def plot_sfx_comparison(ax_row, sfx_idx, ref_samples, ref_amps, ref_specs, out_s
     ax = ax_row[5]
     if out_specs.size > 0:
         ax.imshow(out_specs.T, aspect='auto', origin='lower', cmap='hot',
-                 interpolation='nearest', vmin=0, vmax=np.max(out_specs) if np.max(out_specs) > 0 else 1)
+                 interpolation='nearest', vmin=0, vmax=global_spec_max)
     ax.set_ylabel('Freq', fontsize=6)
     ax.tick_params(labelsize=5)
     if is_first:
@@ -266,9 +247,8 @@ def plot_sfx_comparison(ax_row, sfx_idx, ref_samples, ref_amps, ref_specs, out_s
     # Difference spectrum
     ax = ax_row[7]
     if spec_diffs.size > 0:
-        max_diff = np.max(spec_diffs) if np.max(spec_diffs) > 0 else 1
         ax.imshow(spec_diffs.T, aspect='auto', origin='lower', cmap='hot',
-                 interpolation='nearest', vmin=0, vmax=max_diff)
+                 interpolation='nearest', vmin=0, vmax=global_diff_max)
     ax.set_ylabel(f'Freq Δ\n{mean_spec_diff:.3f}', fontsize=6)
     ax.tick_params(labelsize=5)
     if is_first:
@@ -368,32 +348,6 @@ def main():
             ref_amps, ref_specs, out_amps, out_specs
         )
 
-        # Debug output for SFX 8
-        if sfx_idx == 8:
-            print(f"\n=== DEBUG OUTPUT FOR SFX {sfx_idx} ===")
-            print(f"Reference amplitudes ({len(ref_amps)} frames): {ref_amps}")
-            print(f"Output amplitudes ({len(out_amps)} frames): {out_amps}")
-            print(f"Amplitude differences: {amp_diffs}")
-            print(f"Mean amplitude difference: {mean_amp_diff:.6f}")
-            print(f"Mean amplitude difference (non-zero ref only): {mean_amp_diff_nonzero:.6f}")
-            print(f"Reference spectra shape: {ref_specs.shape}")
-            print(f"Output spectra shape: {out_specs.shape}")
-            if ref_specs.size > 0:
-                print(f"Reference spectra (first few frames, first 10 frequencies):")
-                for frame_idx in range(min(3, ref_specs.shape[0])):
-                    print(f"  Frame {frame_idx}: {ref_specs[frame_idx][:10]}")
-            if out_specs.size > 0:
-                print(f"Output spectra (first few frames, first 10 frequencies):")
-                for frame_idx in range(min(3, out_specs.shape[0])):
-                    print(f"  Frame {frame_idx}: {out_specs[frame_idx][:10]}")
-            if spec_diffs.size > 0:
-                print(f"Spectrum differences (first few frames, first 10 frequencies):")
-                for frame_idx in range(min(3, spec_diffs.shape[0])):
-                    print(f"  Frame {frame_idx}: {spec_diffs[frame_idx][:10]}")
-            print(f"Mean spectrum difference: {mean_spec_diff:.6f}")
-            print(f"Mean spectrum difference (non-zero ref only): {mean_spec_diff_nonzero:.6f}")
-            print(f"=== END DEBUG OUTPUT FOR SFX {sfx_idx} ===\n")
-
         # Store data for this SFX
         sfx_data.append((sfx_idx, ref_samples, ref_amps, ref_specs, out_samples, out_amps, out_specs,
                         amp_diffs, spec_diffs, mean_amp_diff, mean_spec_diff, mean_amp_diff_nonzero, mean_spec_diff_nonzero))
@@ -402,10 +356,24 @@ def main():
         print("\nNo data was compared (all files missing)")
         return
 
+    # Calculate global maximum values for spectrum scaling
+    global_spec_max = 1.0  # Default minimum
+    global_diff_max = 1.0  # Default minimum
+
+    for (sfx_idx, ref_samples, ref_amps, ref_specs, out_samples, out_amps, out_specs,
+         amp_diffs, spec_diffs, mean_amp_diff, mean_spec_diff, mean_amp_diff_nonzero, mean_spec_diff_nonzero) in sfx_data:
+        if ref_specs.size > 0:
+            global_spec_max = max(global_spec_max, np.max(ref_specs))
+        if out_specs.size > 0:
+            global_spec_max = max(global_spec_max, np.max(out_specs))
+        if spec_diffs.size > 0:
+            global_diff_max = max(global_diff_max, np.max(spec_diffs))
+
     # Create figure with grid layout based on actual number of SFX
     num_sfx_to_plot = len(sfx_data)
-    fig = plt.figure(figsize=(32, num_sfx_to_plot * 1.7 + 2.5))  # Adjusted height to maintain chart sizes with space for title
-    gs = gridspec.GridSpec(num_sfx_to_plot, 8, figure=fig, hspace=0.3, wspace=0.3, top=0.75)  # Leave more space at top for title
+    fig = plt.figure(figsize=(32, num_sfx_to_plot * 1.7 + 2.5), constrained_layout=True)
+    # Use GridSpec with constrained_layout
+    gs = gridspec.GridSpec(num_sfx_to_plot, 8, figure=fig, hspace=0.3, wspace=0.3)
 
     overall_amp_diffs = []
     overall_spec_diffs = []
@@ -429,6 +397,7 @@ def main():
         # Plot (use plot_row for position, sfx_idx for labeling)
         plot_sfx_comparison(ax_row, sfx_idx, ref_samples, ref_amps, ref_specs, out_samples, out_amps, out_specs,
                           amp_diffs, spec_diffs, mean_amp_diff, mean_spec_diff,
+                          global_spec_max, global_diff_max,
                           is_first=(plot_row == 0), is_last=(plot_row == num_sfx_to_plot - 1))
 
     # Add overall statistics as title
@@ -443,7 +412,7 @@ def main():
                 f'Mean Spectrum Difference: {mean_overall_spec:.4f}\n'
                 f'Mean Amplitude Difference (non-zero): {mean_overall_amp_nonzero:.4f}  |  '
                 f'Mean Spectrum Difference (non-zero): {mean_overall_spec_nonzero:.4f}',
-                fontsize=10, fontweight='bold', y=0.95, va='top')
+                fontsize=10, fontweight='bold')
 
     # Save
     output_file = 'audio_comparison.png'
