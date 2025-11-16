@@ -1751,9 +1751,10 @@ task apply_dampen;
 
         // Apply dampen filter (IIR lowpass)
         if (damp_alpha != 8'd0) begin
+            // Compute error: S9F7 s9_err = S8F7 s8_sample - S8F7 damp_state
             s9_err = $signed({s8_sample[7], s8_sample}) - $signed({damp_state[7], damp_state});
-            // S8F7 damp_state = S8F7 damp_state + S9F8 s9_err * U8F0 damp_alpha
-            damp_state_8x[ctx_idx] <= damp_state + $signed({{8{s9_err[7]}}, s9_err[7:0]}) * $signed({{8{1'b0}}, damp_alpha});
+            // Update state: S8F7 damp_state = S8F7 damp_state + (S9F7 s9_err * U8F8 damp_alpha) >>> 8
+            damp_state_8x[ctx_idx] <= damp_state + ((($signed({{8{s9_err[8]}}, s9_err})) * {{9{1'b0}}, damp_alpha}) >>> 8);
             s8_sample = damp_state;
         end
     end
