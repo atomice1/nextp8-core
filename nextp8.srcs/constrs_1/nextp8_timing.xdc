@@ -26,22 +26,30 @@ create_generated_clock -name clk_pcm \
     -divide_by 8 \
     [get_pins BUFG_clk_pcm/O]
 
-## These generated clock definitions commented out as they reference design
-## registers that may not be visible during synthesis. The timing engine
-## will automatically propagate clock relationships through the design.
-## If needed for implementation, these can be moved to an impl-only XDC file.
+## CPU and peripheral clocks derived from mclk (CLKOUT5 = 30.556 MHz)
+## clk2i: CPU clock, approximately /3 from mclk via state machine gating
+## Note: This is not a true periodic clock but a gated clock from state machine
+## The /3 approximation helps timing analysis understand the relationship
+create_generated_clock -name clk2i \
+    -source [get_pins pll/clk_out5] \
+    -divide_by 3 \
+    [get_pins BUFG_inst2/O]
 
-## clk2i: derived from mclk (CLKOUT5), divided by 3
-# create_generated_clock -name clk2i -source [get_pins pll/clk_out5] -divide_by 3 [get_pins clk2i_reg/Q]
+## memio_go: Memory I/O control signal, similar pattern to clk2i
+create_generated_clock -name memio_go \
+    -source [get_pins pll/clk_out5] \
+    -divide_by 3 \
+    [get_pins memio_go_reg/Q]
 
 ## Old clk_pcm_pulse constraint (now replaced by proper clocks above)
 # create_generated_clock -name clk_pcm_pulse -source [get_pins pll/clk_out1] -divide_by 998 [get_pins clk_pcm_pulse_reg/Q]
 
-## joy_clock: derived from clk2i, divided by 2048 for joystick polling
-# create_generated_clock -name joy_clock -source [get_pins clk2i_reg/Q] -divide_by 2048 [get_pins {joy_clk_div_reg[11]/Q}]
-
-## memio_go__0: derived from mclk (CLKOUT5), divided by 3
-# create_generated_clock -name memio_go__0 -source [get_pins pll/clk_out5] -divide_by 3 [get_pins memio_go_reg/Q]
+## joy_clock: Joystick polling clock, derived from clk2i via /2048 divider
+## joy_clk_div is a 12-bit counter on clk2, joy_clock uses bit [11] as clock
+create_generated_clock -name joy_clock \
+    -source [get_pins BUFG_inst2/O] \
+    -divide_by 2048 \
+    [get_pins {joy_clk_div_reg[11]/Q}]
 
 ## Old audio clock divider constraints - commented out as implementation may have changed
 ## create_generated_clock -name {p8audio_inst/pcm_div_ff[0]} -source [get_pins clk_pcm_pulse_reg/Q] -divide_by 2 [get_pins {p8audio_inst/pcm_div_ff_reg[0]/Q}]
@@ -80,7 +88,10 @@ set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_pins pl2/clk_out1]] \
     -group [get_clocks -of_objects [get_pins pl2/clk_out2]] \
     -group [get_clocks clk_pcm_8x] \
-    -group [get_clocks clk_pcm]
+    -group [get_clocks clk_pcm] \
+    -group [get_clocks clk2i] \
+    -group [get_clocks memio_go] \
+    -group [get_clocks joy_clock]
 
 ## Old clock constraints from previous design - commented out as these clocks don't exist
 ## set_clock_groups -logically_exclusive -group [get_clocks -include_generated_clocks clk_pcm_pulse_Gen] -group [get_clocks -include_generated_clocks {p8audio_inst/pcm_div_ff[0]_Gen}]
