@@ -144,10 +144,15 @@ set_input_delay -clock [get_clocks clock_50_i] -max 10.0 [get_ports btn_*]
 ## set_input_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports uart_rx]
 ## set_output_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports uart_tx]
 
-## SD Card SPI - runs at ~400kHz during init, up to 25MHz high-speed mode
-set_input_delay -clock [get_clocks clock_50_i] -max 30.0 [get_ports sd_miso_i]
-set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports sd_miso_i]
-set_output_delay -clock [get_clocks clock_50_i] -max 30.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
+## SD Card SPI - BSP driver sets the SPI divider at 1 MHz (1000ns period)
+## Driven by clk325n (32.35 MHz) clock domain via SPI module with programmable divider
+## SPI frequency = clk325n / (2 * divider), typically divider=16 for 1 MHz
+## NOTE: SPI module handles all timing via the divider. These are just basic I/O constraints.
+## Very relaxed timing since actual SPI clock is much slower than clk325n
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out4]] -max 5.0 [get_ports sd_miso_i]
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out4]] -min 0.0 [get_ports sd_miso_i]
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out4]] -max 5.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out4]] -min 0.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
 
 ## Audio DAC - I2S, synchronous to audio clock (clk22)
 set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -max 22.0 [get_ports {audioext_l_o audioext_r_o}]
@@ -160,9 +165,10 @@ set_output_delay -clock [get_clocks -of_objects [get_pins pl2/clk_out2]] -min -1
 
 ## Keyboard Matrix - Not timing critical (scanned at ~1kHz)
 ## Rows driven by FPGA, columns sensed with pullups
-set_output_delay -clock [get_clocks clock_50_i] -max 15.0 [get_ports keyb_row_o[*]]
-set_input_delay -clock [get_clocks clock_50_i] -max 15.0 [get_ports keyb_col_i[*]]
-set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports keyb_col_i[*]]
+## Driven by clk11 (11 MHz) clock domain
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -max 50.0 [get_ports keyb_row_o[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -max 50.0 [get_ports keyb_col_i[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -min 0.0 [get_ports keyb_col_i[*]]
 
 ## External SRAM (Asynchronous) - Timing relative to memory clock (mclk)
 ## Typical async SRAM: 10ns access time, but we use 30.56MHz mclk = 32.7ns period
@@ -187,18 +193,20 @@ set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out5]] -min 0.0
 
 # ESP WiFi Module UART - Very relaxed timing (115200 baud = 8.68us/bit)
 ## UART is asynchronous, no tight timing requirements
-set_input_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports esp_rx_i]
-set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports esp_rx_i]
-set_output_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports esp_tx_o]
-set_output_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports esp_tx_o]
+## Driven by clk22 (22 MHz) clock domain
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -max 50.0 [get_ports esp_rx_i]
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -min 0.0 [get_ports esp_rx_i]
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -max 50.0 [get_ports esp_tx_o]
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -min 0.0 [get_ports esp_tx_o]
 
 ## I2C Bus (SCL/SDA) - Very relaxed timing (typically 100-400 kHz)
 ## I2C is open-drain with pullups, no tight timing requirements
 ## Even at Fast-Mode Plus (1 MHz), bit time is 1000ns
-set_input_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
-set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
-set_output_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
-set_output_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
+## Driven by clk11 (11 MHz) clock domain
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
+set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
+set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
 
 ## Note: set_max_input_transition not supported in XDC constraint files
 ## Signal integrity should be handled via PCB design and pullup resistors
@@ -242,6 +250,30 @@ set_false_path -to [get_pins -hierarchical *rst*/CLR]
 set_false_path -from [get_ports btn_*] -to [get_pins -hierarchical *sync*/D]
 ## Note: gpio_* ports currently not used in design, commented out
 # set_false_path -from [get_ports gpio_*] -to [get_pins -hierarchical *sync*/D]
+
+## Asynchronous button inputs crossing clock domains
+## Reset button is async - human press, goes to clk2i domain via reset_cnt registers
+set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks clk2i]
+
+## PS/2 keyboard inputs are asynchronous (self-clocked protocol)
+## PS/2 data/clock go through synchronizer chain before use
+set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}] -to [get_clocks clk_out2_pll]
+
+## Joystick control outputs driven by very slow joy_clock (5 Hz)
+## No meaningful timing relationship to clock_50_i
+set_false_path -from [get_clocks joy_clock] -to [get_ports joysel_o]
+
+## POST code debug outputs (accel_io[27:22]) are asynchronous
+## These are driven by internal clocks (clk2i, memio_go, joy_clock) but constrained to clock_50_i
+## They are debug status outputs with no external timing requirements
+set_false_path -from [get_clocks {clk2i memio_go joy_clock}] -to [get_ports accel_io[*]]
+
+## Expansion bus lower bits may be driven by various internal clocks
+## Relax timing since actual usage depends on external expansion cards
+set_false_path -from [get_clocks {clk2i memio_go}] -to [get_ports accel_io[*]]
+
+## Input paths from expansion bus to internal clocks
+set_false_path -from [get_ports accel_io[*]] -to [get_clocks {clk2i clk_out2_pll}]
 
 ## ============================================================================
 ## End of nextp8 Timing Constraints

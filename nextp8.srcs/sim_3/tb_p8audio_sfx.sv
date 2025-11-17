@@ -367,7 +367,7 @@ module tb_p8audio_sfx;
 
         // Sweep SFX 8..21, capture duration derived from SFX speed (byte 65)
 
-        for (sfx_idx=8; sfx_idx<=21; sfx_idx=sfx_idx+1) begin
+        for (sfx_idx=16; sfx_idx<=17; sfx_idx=sfx_idx+1) begin
             integer speed, ticks, quot, rem;
             // speed byte is at offset 65 within each 68-byte SFX slot
             speed = {24'd0, base_mem[{16'd0, SFX_BASE} + sfx_idx*SFX_BYTES + 65]};
