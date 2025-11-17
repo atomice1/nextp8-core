@@ -7,12 +7,12 @@ module exec_tb #(
 ) (
     );
 
-//Clock
+//Clock - 50 MHz (20 ns period)
 reg clock_50_i = 0;
-always #1 clock_50_i = ~clock_50_i;
+always #10 clock_50_i = ~clock_50_i;
 
-//SRAM (AS7C34096)
-wire [19:0] ram_addr_o;
+//SRAM
+wire [20:0] ram_addr_o;
 wire [15:0] ram_data_io;
 wire ram_lb_n_o;
 wire ram_ub_n_o;
@@ -90,13 +90,18 @@ wire bus_busreq_n_i;
 wire bus_busack_n_o;
 wire bus_iorqula_n_i;
 wire bus_y_o;
+wire bus_p3_mtr_n_o;
+wire bus_p3_drd_n_o;
+wire bus_p3_dwr_n_o;
 
 // VGA
-wire [2:0] rgb_r_o;
-wire [2:0] rgb_g_o;
-wire [2:0] rgb_b_o;
+wire [3:0] rgb_r_o;
+wire [3:0] rgb_g_o;
+wire [3:0] rgb_b_o;
 wire hsync_o;
 wire vsync_o;
+wire vgaclk_o;
+wire vgaclkn_o;
 //wwire csync_o,
 
 // HDMI
@@ -174,8 +179,8 @@ sram sram2(sram_clk_i,
     data_in2_i,
     data_out2_o);
 
-assign addr1_i = ~ram_cs_n_o ? ram_addr_o : 20'h0;
-assign addr2_i = ram_cs_n_o ? ram_addr_o : 20'h0;
+assign addr1_i = ~ram_cs_n_o ? ram_addr_o : 21'h0;
+assign addr2_i = ram_cs_n_o ? ram_addr_o : 21'h0;
 assign data_in1_i = (~ram_cs_n_o && ~ram_we_n_o) ? ram_data_io : 16'h0;
 assign data_in2_i = (ram_cs_n_o && ~ram_we_n_o) ? ram_data_io : 16'h0;
 assign ram_data_io = ram_we_n_o ? (~ram_cs_n_o ? data_in1_i : data_in2_i) : 16'bZZZZZZZZZZZZZZZZ;
@@ -191,7 +196,7 @@ assign write_en2_i =~ram_cs_n_o ? ~ram_we_n_o : 1'b0;
 
 wire read_en_i;
 wire write_en_i;
-wire [19:0] addr_i;
+wire [20:0] addr_i;
 wire lb_i;
 wire ub_i;
 wire [15:0] data_in_i;
@@ -216,133 +221,134 @@ assign write_en_i = ~ram_we_n_o && ~ram_cs_n_o;
 
 nextp8 nextp8(
     // Clock
-    clock_50_i,
+    .clock_50_i(clock_50_i),
     
-    //SRAM (AS7C34096)
-    ram_addr_o,
-    ram_data_io,
-    ram_lb_n_o,
-    ram_ub_n_o,
-    ram_oe_n_o,
-    ram_we_n_o,
-    ram_cs_n_o,
+    //SRAM
+    .ram_addr_o(ram_addr_o),
+    .ram_data_io(ram_data_io),
+    .ram_lb_n_o(ram_lb_n_o),
+    .ram_ub_n_o(ram_ub_n_o),
+    .ram_oe_n_o(ram_oe_n_o),
+    .ram_we_n_o(ram_we_n_o),
+    .ram_cs_n_o(ram_cs_n_o),
 
     // PS2
-    ps2_clk_io,
-    ps2_data_io,
-    ps2_pin6_io,
-    ps2_pin2_io,
+    .ps2_clk_io(ps2_clk_io),
+    .ps2_data_io(ps2_data_io),
+    .ps2_pin6_io(ps2_pin6_io),
+    .ps2_pin2_io(ps2_pin2_io),
 
     // SD Card
-    sd_cs0_n_o,
-    sd_cs1_n_o,
-    sd_sclk_o,
-    sd_mosi_o,
-    sd_miso_i,
+    .sd_cs0_n_o(sd_cs0_n_o),
+    .sd_cs1_n_o(sd_cs1_n_o),
+    .sd_sclk_o(sd_sclk_o),
+    .sd_mosi_o(sd_mosi_o),
+    .sd_miso_i(sd_miso_i),
 
     // Flash
-    flash_cs_n_o,
-    flash_sclk_o,
-    flash_mosi_o,
-    flash_miso_i,
-    flash_wp_o,
-    flash_hold_o,
+    .flash_cs_n_o(flash_cs_n_o),
+    .flash_sclk_o(flash_sclk_o),
+    .flash_mosi_o(flash_mosi_o),
+    .flash_miso_i(flash_miso_i),
+    .flash_wp_o(flash_wp_o),
+    .flash_hold_o(flash_hold_o),
 
     // Joystick
-    joyp1_i,
-    joyp2_i,
-    joyp3_i,
-    joyp4_i,
-    joyp6_i,
-    joyp7_o,
-    joyp9_i,
-    joysel_o,
+    .joyp1_i(joyp1_i),
+    .joyp2_i(joyp2_i),
+    .joyp3_i(joyp3_i),
+    .joyp4_i(joyp4_i),
+    .joyp6_i(joyp6_i),
+    .joyp7_o(joyp7_o),
+    .joyp9_i(joyp9_i),
+    .joysel_o(joysel_o),
 
     // Audio
-    audioext_l_o,
-    audioext_r_o,
-    audioint_o,
+    .audioext_l_o(audioext_l_o),
+    .audioext_r_o(audioext_r_o),
+    .audioint_o(audioint_o),
 
     // K7
-    ear_port_i,
-    mic_port_o,
+    .ear_port_i(ear_port_i),
+    .mic_port_o(mic_port_o),
 
     // Buttons
-    btn_divmmc_n_i,
-    btn_multiface_n_i,
-    btn_reset_n_i,
+    .btn_divmmc_n_i(btn_divmmc_n_i),
+    .btn_multiface_n_i(btn_multiface_n_i),
+    .btn_reset_n_i(btn_reset_n_i),
 
     // Matrix keyboard
-    keyb_row_o,
-    keyb_col_i,
+    .keyb_row_o(keyb_row_o),
+    .keyb_col_i(keyb_col_i),
 
     // Bus
-    bus_rst_n_io,
-    bus_clk35_o,
-    bus_addr_o,
-    bus_data_io,
-    bus_int_n_io,
-    bus_nmi_n_i,
-    bus_ramcs_i,
-    bus_romcs_i,
-    bus_wait_n_i,
-    bus_halt_n_o,
-    bus_iorq_n_o,
-    bus_m1_n_o,
-    bus_mreq_n_o,
-    bus_rd_n_io,
-    bus_wr_n_o,
-    bus_rfsh_n_o,
-    bus_busreq_n_i,
-    bus_busack_n_o,
-    bus_iorqula_n_i,
-    bus_y_o,
+    .bus_rst_n_io(bus_rst_n_io),
+    .bus_clk35_o(bus_clk35_o),
+    .bus_addr_o(bus_addr_o),
+    .bus_data_io(bus_data_io),
+    .bus_int_n_io(bus_int_n_io),
+    .bus_nmi_n_i(bus_nmi_n_i),
+    .bus_ramcs_i(bus_ramcs_i),
+    .bus_romcs_i(bus_romcs_i),
+    .bus_wait_n_i(bus_wait_n_i),
+    .bus_halt_n_o(bus_halt_n_o),
+    .bus_iorq_n_o(bus_iorq_n_o),
+    .bus_m1_n_o(bus_m1_n_o),
+    .bus_mreq_n_o(bus_mreq_n_o),
+    .bus_rd_n_io(bus_rd_n_io),
+    .bus_wr_n_o(bus_wr_n_o),
+    .bus_rfsh_n_o(bus_rfsh_n_o),
+    .bus_busreq_n_i(bus_busreq_n_i),
+    .bus_busack_n_o(bus_busack_n_o),
+    .bus_iorqula_n_i(bus_iorqula_n_i),
+    .bus_y_o(bus_y_o),
+
+    // Issue 5 expansion bus
+    .bus_p3_mtr_n_o(bus_p3_mtr_n_o),
+    .bus_p3_drd_n_o(bus_p3_drd_n_o),
+    .bus_p3_dwr_n_o(bus_p3_dwr_n_o),
 
     // VGA
-    rgb_r_o,
-    rgb_g_o,
-    rgb_b_o,
-    hsync_o,
-    vsync_o,
-    //output     csync_o,
+    .rgb_r_o(rgb_r_o),
+    .rgb_g_o(rgb_g_o),
+    .rgb_b_o(rgb_b_o),
+    .hsync_o(hsync_o),
+    .vsync_o(vsync_o),
+    .vgaclk_o(vgaclk_o),
+    .vgaclkn_o(vgaclkn_o),
 
     // HDMI
-    hdmi_p_o,
-    hdmi_n_o,
+    .hdmi_p_o(hdmi_p_o),
+    .hdmi_n_o(hdmi_n_o),
 
     // I2C (RTC and HDMI)
-    i2c_scl_io,
-    i2c_sda_io,
+    .i2c_scl_io(i2c_scl_io),
+    .i2c_sda_io(i2c_sda_io),
 
     // ESP
-    esp_gpio0_io,
-    esp_gpio2_io,
-    esp_rx_i,
-    esp_tx_o,
-    esp_rtr_n_i,
-    esp_cts_n_o,
+    .esp_gpio0_io(esp_gpio0_io),
+    .esp_gpio2_io(esp_gpio2_io),
+    .esp_rx_i(esp_rx_i),
+    .esp_tx_o(esp_tx_o),
+    .esp_rtr_n_i(esp_rtr_n_i),
+    .esp_cts_n_o(esp_cts_n_o),
 
     // PI GPIO
-    accel_io,
+    .accel_io(accel_io),
 
     // XADC Analog to Digital Conversion
-
-    XADC_VP,
-    XADC_VN,
-
-    XADC_15P,
-    XADC_15N,
-
-    XADC_7P,
-    XADC_7N,
-
-    adc_control_o,
-
+    .XADC_VP(XADC_VP),
+    .XADC_VN(XADC_VN),
+    .XADC_15P(XADC_15P),
+    .XADC_15N(XADC_15N),
+    .XADC_7P(XADC_7P),
+    .XADC_7N(XADC_7N),
+    .adc_control_o(adc_control_o),
 
     // Vacant pins
-    extras_o,
-    extras_2_io,
-    extras_3_io
+    .extras_o(extras_o),
+    .extras_2_io(extras_2_io),
+    .extras_3_io(extras_3_io)
 );
 
 wire [5:0] post_code;
@@ -368,7 +374,7 @@ end
 endmodule
 
 module sram #(
-    parameter ADDR_WIDTH = 20,
+    parameter ADDR_WIDTH = 21,
     parameter DATA_WIDTH = 16
 ) (
     input  wire                       clk_i,
@@ -395,14 +401,12 @@ module sram #(
         end
     end
 
-    // Read operation (combinational or sequential)
-    always @(*) begin
+    // Read operation (combinational) - triggered by addr_i or read_en_i changes
+    always @(addr_i or read_en_i or write_en_i) begin
         if (read_en_i && ~write_en_i) begin
-            //$displayh(addr_i);
-            //$displayh(mem[addr_i]);
             data_out_o = mem[addr_i];
         end else begin
-            data_out_o = 'bz; // High impedance
+            data_out_o = 16'h0000; // Drive zero when not reading
         end
     end
 

@@ -29,7 +29,7 @@ module tb_nextp8_p8audio;
     //====================
     // SRAM interface signals
     //====================
-    wire [19:0] ram_addr_o;
+    wire [20:0] ram_addr_o;
     wire [15:0] ram_data_io;
     wire ram_lb_n_o;
     wire ram_ub_n_o;
@@ -108,12 +108,18 @@ module tb_nextp8_p8audio;
     wire bus_iorqula_n_i;
     wire bus_y_o;
 
+    wire bus_p3_mtr_n_o;
+    wire bus_p3_drd_n_o;
+    wire bus_p3_dwr_n_o;
+
     // VGA
-    wire [2:0] rgb_r_o;
-    wire [2:0] rgb_g_o;
-    wire [2:0] rgb_b_o;
+    wire [3:0] rgb_r_o;
+    wire [3:0] rgb_g_o;
+    wire [3:0] rgb_b_o;
     wire hsync_o;
     wire vsync_o;
+    wire vgaclk_o;
+    wire vgaclkn_o;
 
     // HDMI
     wire [3:0] hdmi_p_o;
@@ -267,6 +273,9 @@ module tb_nextp8_p8audio;
         .bus_busack_n_o(bus_busack_n_o),
         .bus_iorqula_n_i(bus_iorqula_n_i),
         .bus_y_o(bus_y_o),
+        .bus_p3_mtr_n_o(bus_p3_mtr_n_o),
+        .bus_p3_drd_n_o(bus_p3_drd_n_o),
+        .bus_p3_dwr_n_o(bus_p3_dwr_n_o),
 
         // VGA
         .rgb_r_o(rgb_r_o),
@@ -274,6 +283,8 @@ module tb_nextp8_p8audio;
         .rgb_b_o(rgb_b_o),
         .hsync_o(hsync_o),
         .vsync_o(vsync_o),
+        .vgaclk_o(vgaclk_o),
+        .vgaclkn_o(vgaclkn_o),
 
         // HDMI
         .hdmi_p_o(hdmi_p_o),
@@ -367,7 +378,7 @@ module tb_nextp8_p8audio;
         // Monitor the clk_pcm_pulse signal from nextp8_inst
         sample_count = 0;
         while (sample_count < TEST_DURATION_SAMPLES) begin
-            @(posedge nextp8_inst.clk_pcm_pulse);
+            @(posedge nextp8_inst.clk_pcm);
             // Write little-endian PCM samples as bytes
             $fwrite(wav_file, "%c%c", pcm_out[7:0], pcm_out[15:8]);
             sample_count = sample_count + 1;
@@ -394,7 +405,7 @@ endmodule
 // SRAM model (from sim_1)
 //====================
 module sram #(
-    parameter ADDR_WIDTH = 20,
+    parameter ADDR_WIDTH = 21,
     parameter DATA_WIDTH = 16
 ) (
     input  wire                       clk_i,

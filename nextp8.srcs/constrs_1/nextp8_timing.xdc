@@ -15,16 +15,17 @@
 ## clk_pcm_8x: 176.4 kHz audio processing clock (8x sample rate)
 ## Fractional-N divider: 22 MHz / 124.7166... ≈ 176.4 kHz
 ## For constraints, we approximate as  / 125 which gives 176 kHz
+## Note: BUFGs not in netlist during synthesis - warnings expected but harmless
 create_generated_clock -name clk_pcm_8x \
-    -source [get_pins pll/inst/plle2_adv_inst/CLKOUT0] \
+    -source [get_pins -quiet pll/inst/plle2_adv_inst/CLKOUT0] \
     -divide_by 125 \
-    [get_pins BUFG_clk_pcm_8x/O]
+    [get_pins -quiet BUFG_clk_pcm_8x/O]
 
 ## clk_pcm: 22.05 kHz audio sample clock (derived from clk_pcm_8x via /8 divider)
 create_generated_clock -name clk_pcm \
-    -source [get_pins BUFG_clk_pcm_8x/O] \
+    -source [get_pins -quiet BUFG_clk_pcm_8x/O] \
     -divide_by 8 \
-    [get_pins BUFG_clk_pcm/O]
+    [get_pins -quiet BUFG_clk_pcm/O]
 
 ## CPU and peripheral clocks derived from mclk (CLKOUT5 = 30.556 MHz)
 ## clk2i: CPU clock, approximately /3 from mclk via state machine gating
@@ -44,12 +45,11 @@ create_generated_clock -name memio_go \
 ## Old clk_pcm_pulse constraint (now replaced by proper clocks above)
 # create_generated_clock -name clk_pcm_pulse -source [get_pins pll/clk_out1] -divide_by 998 [get_pins clk_pcm_pulse_reg/Q]
 
-## joy_clock: Joystick polling clock, derived from clk2i via /2048 divider
-## joy_clk_div is a 12-bit counter on clk2, joy_clock uses bit [11] as clock
+## joy_clock: ~84 Hz joystick polling clock derived from clk2
 create_generated_clock -name joy_clock \
     -source [get_pins BUFG_inst2/O] \
-    -divide_by 2048 \
-    [get_pins {joy_clk_div_reg[11]/Q}]
+    -divide_by 131072 \
+    [get_pins BUFG_joy_clock/O]
 
 ## Old audio clock divider constraints - commented out as implementation may have changed
 ## create_generated_clock -name {p8audio_inst/pcm_div_ff[0]} -source [get_pins clk_pcm_pulse_reg/Q] -divide_by 2 [get_pins {p8audio_inst/pcm_div_ff_reg[0]/Q}]
@@ -87,8 +87,8 @@ set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_pins pll/clk_out5]] \
     -group [get_clocks -of_objects [get_pins pl2/clk_out1]] \
     -group [get_clocks -of_objects [get_pins pl2/clk_out2]] \
-    -group [get_clocks clk_pcm_8x] \
-    -group [get_clocks clk_pcm] \
+    -group [get_clocks -quiet clk_pcm_8x] \
+    -group [get_clocks -quiet clk_pcm] \
     -group [get_clocks clk2i] \
     -group [get_clocks memio_go] \
     -group [get_clocks joy_clock]
@@ -260,8 +260,8 @@ set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks clk2i]
 ## PS/2 data/clock go through synchronizer chain before use
 set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}] -to [get_clocks clk_out2_pll]
 
-## Joystick control outputs driven by very slow joy_clock (5 Hz)
-## No meaningful timing relationship to clock_50_i
+## Joystick control outputs driven by very slow joy_clock (~1220 Hz)
+## No meaningful timing relationship to other clock domains
 set_false_path -from [get_clocks joy_clock] -to [get_ports joysel_o]
 
 ## ESP UART is asynchronous serial (115200 baud = 8.68us bit period)
@@ -270,8 +270,7 @@ set_false_path -from [get_ports esp_rx_i]
 set_false_path -to [get_ports esp_tx_o]
 
 ## POST code debug outputs (accel_io[27:22]) are asynchronous
-## These are driven by internal clocks (clk2i, memio_go, joy_clock) but constrained to clock_50_i
-## They are debug status outputs with no external timing requirements
+## These are driven by internal clocks (clk2i, memio_go, joy_clock) with no external timing requirements
 set_false_path -from [get_clocks {clk2i memio_go joy_clock}] -to [get_ports accel_io[*]]
 
 ## Expansion bus lower bits may be driven by various internal clocks

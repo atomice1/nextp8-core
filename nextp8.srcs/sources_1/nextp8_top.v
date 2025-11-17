@@ -29,8 +29,8 @@
     // Clocks
     input  wire clock_50_i,
 
-    //SRAM (AS7C34096)
-    output wire [19:0] ram_addr_o,
+    //SRAM (IS61WV204816BLL-10BLI)
+    output wire [20:0] ram_addr_o,
     inout  wire [15:0] ram_data_io,
     output wire        ram_lb_n_o,
     output wire        ram_ub_n_o,
@@ -108,13 +108,18 @@
     output wire bus_busack_n_o,
     input  wire bus_iorqula_n_i,
     output wire bus_y_o,
+    output wire bus_p3_mtr_n_o,
+    output wire bus_p3_drd_n_o,
+    output wire bus_p3_dwr_n_o,
 
     // VGA
-    output wire [2:0] rgb_r_o,
-    output wire [2:0] rgb_g_o,
-    output wire [2:0] rgb_b_o,
+    output wire [3:0] rgb_r_o,
+    output wire [3:0] rgb_g_o,
+    output wire [3:0] rgb_b_o,
     output wire hsync_o,
     output wire vsync_o,
+    output wire vgaclk_o,
+    output wire vgaclkn_o,
     //output wire csync_o,
 
     // HDMI
@@ -191,6 +196,28 @@ wire clk2;
 BUFG  BUFG_inst2 (.I (clk2i), .O (clk2));
 
 // ---------------------------------------------------------------------------------
+// -------------------------------------- reset ------------------------------------
+// ---------------------------------------------------------------------------------
+
+parameter RESET_CNT = 15'h0003;
+reg [14:0] reset_cnt = RESET_CNT;
+wire reset = (reset_cnt != 15'h0);
+
+always @(posedge clk2) begin
+    if (!pll_locked  || !btn_reset_n_i)
+        reset_cnt <= RESET_CNT;
+    else if(reset_cnt != 15'h0)
+        reset_cnt <= reset_cnt - 15'h1;
+end
+
+// Post code priority: system status overrides CPU value when active
+wire [5:0] post_code;
+assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
+                   reset ? 6'd2 :             // in reset
+                   post_code_cpu;
+
+
+// ---------------------------------------------------------------------------------
 // -------------------------------------- CPU --------------------------------------
 // ---------------------------------------------------------------------------------
 
@@ -207,7 +234,7 @@ wire cpu_idle = (cpu_busstate == 2'b01);
 // address decoding
 wire cpu_act = cpu_rd || cpu_wr;
 
-wire cpu_ram = cpu_addr[23:21] == 3'b000;
+wire cpu_ram = cpu_addr[23:22] == 2'b00;
 wire cpu_rom = 1'b0;
 wire cpu_mem = cpu_ram || cpu_rom;
 wire memio_rd = cpu_act && (cpu_addr[23:20] == 4'b1000);
@@ -435,11 +462,25 @@ wire [63:0] kbd_matrix;
 assign kbd_matrix = ps2_kbd_matrix | meb_kbd_matrix;
 
 // ----------- Joystick ---------------
+// Generate ~84 Hz clock for joystick polling from clk2 (11 MHz)
+reg [15:0] joy_clk_div;
+reg joy_clk_toggle = 1'b0;
 
-reg [11:0] joy_clk_div;
-always @(posedge clk2)
-    joy_clk_div <= joy_clk_div + 12'd1;
-wire joy_clock = joy_clk_div[11];
+always @(posedge clk2 or posedge reset)
+begin
+    if (reset) begin
+        joy_clk_div <= 16'd0;
+        joy_clk_toggle <= 1'b0;
+    end else begin
+        joy_clk_div <= joy_clk_div + 16'd1;
+        if (joy_clk_div == 16'hFFFF) begin
+            joy_clk_toggle <= ~joy_clk_toggle;
+        end
+    end
+end
+
+wire joy_clock;
+BUFG BUFG_joy_clock (.I(joy_clk_toggle), .O(joy_clock));
 
 reg [7:0] js1 = 7'd0;
 reg [7:0] js0 = 7'd0;
@@ -543,30 +584,15 @@ assign vsync_o = video_vs;
 assign hsync_o = video_hs;
 //assign csync_o = vga_csync;
 
-assign rgb_r_o = video_r[7:5];
-assign rgb_g_o = video_g[7:5];
-assign rgb_b_o = video_b[7:5];
+assign rgb_r_o = video_r[7:4];
+assign rgb_g_o = video_g[7:4];
+assign rgb_b_o = video_b[7:4];
 
-// ---------------------------------------------------------------------------------
-// -------------------------------------- reset ------------------------------------
-// ---------------------------------------------------------------------------------
-
-parameter RESET_CNT = 15'h0003;
-reg [14:0] reset_cnt = RESET_CNT;
-wire reset = (reset_cnt != 15'h0);
-
-always @(posedge clk2) begin
-    if (!pll_locked  || !btn_reset_n_i)
-        reset_cnt <= RESET_CNT;
-    else if(reset_cnt != 15'h0)
-        reset_cnt <= reset_cnt - 15'h1;
-end
-
-// Post code priority: system status overrides CPU value when active
-wire [5:0] post_code;
-assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
-                   reset ? 6'd2 :             // in reset
-                   post_code_cpu;
+// VGA clocks to latch RGB data in external DACs
+// vgaclk_o clocks ADV7125 (highest 4 bits), vgaclkn_o clocks 74ALVC574 (lowest 4 bits)
+// Use pixel clock for synchronous data transfer
+assign vgaclk_o = clk65;
+assign vgaclkn_o = ~clk65;
 
 // -------------------------------------------------------------------------
 // ---------------------- Audio Subsystem Clocks ----------------------------
@@ -639,7 +665,6 @@ reg ramwe=1'b1;
 reg ramoe=1'b1;
 reg [1:0] rds;
 
-wire [24:0] sys_addr =  { 4'd0, cpu_addr[20:1]};
 wire [ 1:0] sys_ds   =  ~cpu_ds;
 wire [15:0] sys_dout =  cpu_dout;
 wire        sys_wr   =  (cpu_wr && cpu_ram);
@@ -671,8 +696,6 @@ always @(posedge mclk) begin
 		if (p8audio_dma_req) begin
 			p8audio_dma_req_latched <= 1'b1;
 			p8audio_dma_addr_latched <= p8audio_dma_addr;
-			$display("[nextp8_top] time=%0t DMA request captured: addr=0x%05h, estate=%b",
-			         $time, p8audio_dma_addr[19:0], estate);
 		end
 		// Clear latched request when FSM detects it in state 000
 		// Non-blocking assignment ensures FSM sees old value before it changes
@@ -691,12 +714,11 @@ begin
 		3'b000: begin
 			// P8 Audio DMA has priority - if requesting, service it first
 			if (p8audio_dma_req_latched) begin
-				$display("[nextp8_top] time=%0t DMA servicing in state 000: addr=0x%05h, setting up read", $time, p8audio_dma_addr_latched[19:0]);
 				cpu_enable <= 1'b0;  // Stall CPU
 				ramce <= 1'b0;
 				ramoe <= 1'b0;  // Enable read
 				ramwe <= 1'b1;  // DMA is read-only
-				raddr <= p8audio_dma_addr_latched[19:0];  // DMA address (word-addressed)
+				raddr <= p8audio_dma_addr_latched[20:0];  // DMA address (word-addressed)
 				rds <= 2'b00;   // Both bytes enabled
 				clk2i <= 1'b0;
 				memio_go <= 1'b0;
@@ -706,7 +728,7 @@ begin
 				cpu_enable <= 1'b1;
 				ramce <= 1'b0;
 				ramoe <= ~sys_oe;
-				raddr <= sys_addr[19:0];
+				raddr <= cpu_addr[21:1];
 				clk2i<=1'b0;
 				if (back_mem)
 					vaddr1 <= {^vfront, cpu_addr[12:1]};
@@ -770,25 +792,15 @@ begin
 			 end
 		3'b011: begin
 			// DMA read cycle - data is valid on ram_data_io, ack asserted
-			$display("[nextp8_top] time=%0t State 011: raddr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h",
-			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
-            rdata <= ram_data_io;
+			rdata <= ram_data_io;
 			ramce <= 1'b1;
 			ramoe <= 1'b1;
 			estate <= 3'b100;
 		end
         3'b100: begin
-			$display("[nextp8_top] time=%0t State 100: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h",
-			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
-            // Complete DMA cycle
+			// Complete DMA cycle
             estate <= 3'b000;
         end
-/*        3'b101: begin
-			$display("[nextp8_top] time=%0t State 101: addr=0x%05h, ramce=%b, ramoe=%b, ramwe=%b, ram_data_io=0x%04h, ack=%b, addr=0x%05h",
-			         $time, raddr, ramce, ramoe, ramwe, ram_data_io, p8audio_dma_ack, p8audio_dma_addr[19:0]);
-            // Complete DMA cycle
-            estate <= 3'b000;s
-        end*/
 		endcase
 	end
 	else	begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk2i<=1'b0; ramoe <= 1'b1; end
@@ -1013,6 +1025,9 @@ assign bus_wr_n_o     = 1'bz;
 assign bus_int_n_io   = 1'bz;
 //assign bus_romcs_i    = 1'bZ;
 assign bus_y_o        = 1'bz;
+assign bus_p3_mtr_n_o = 1'b1;
+assign bus_p3_drd_n_o = 1'b1;
+assign bus_p3_dwr_n_o = 1'b1;
 
 //-- ESP 8266 module
 assign esp_gpio0_io   = 1'bZ;

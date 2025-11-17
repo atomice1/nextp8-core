@@ -30,7 +30,7 @@ VERILOG_SOURCES = \
 IP_SOURCES = \
 	$(IP_GEN_DIR)/pll_1/pll_sim_netlist.v \
 	$(IP_GEN_DIR)/pll_hdmi_1/pll_hdmi_sim_netlist.v \
-	$(IP_GEN_DIR)/vram_1/sim/vram.v
+	$(IP_GEN_DIR)/vram_1/vram_sim_netlist.v
 
 # SystemVerilog source files
 SYSTEMVERILOG_SOURCES = \

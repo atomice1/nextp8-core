@@ -1,5 +1,6 @@
-set_property CLOCK_DEDICATED_ROUTE ANY_CMT_COLUMN [get_nets CLK_i0]
-set_property CLOCK_DEDICATED_ROUTE ANY_CMT_COLUMN [get_nets CLK_i1]
+## Clock routing constraints - commented out as CLK_i0/CLK_i1 nets don't exist in current design
+# set_property CLOCK_DEDICATED_ROUTE ANY_CMT_COLUMN [get_nets CLK_i0]
+# set_property CLOCK_DEDICATED_ROUTE ANY_CMT_COLUMN [get_nets CLK_i1]
 
 set_property CFGBVS VCCO [current_design]
 set_property CONFIG_VOLTAGE 3.3 [current_design]
@@ -459,7 +460,7 @@ set_property DRIVE 8 [get_ports vgaclk_o]
 set_property IOSTANDARD LVCMOS33 [get_ports vgaclkn_o]
 set_property DRIVE 8 [get_ports vgaclkn_o]
 
-create_clock -period 16.900 [get_ports clock_50_i]
+create_clock -period 20.00 -waveform {0.000 10.000} [get_ports clock_50_i]
 
 
 set_property IOSTANDARD LVCMOS33 [get_ports XADC_7N]
