@@ -95,7 +95,7 @@ begin
 process (clk325)
     variable screen_index: integer;
     variable system_index: integer;
-    variable vdata: Std_logic_vector(23 downto 0);    
+    variable vdata: Std_logic_vector(23 downto 0);
 begin
 if rising_edge(clk325) then
 	if reset='1' then
@@ -118,7 +118,7 @@ if rising_edge(clk325) then
 			pixel:=pixel+2;
 		end if;
 	
-        if pixel>=p1-6 and pixel<p2+6 and lin>=l1 and lin<l2	then
+        if pixel>=p1-6 and pixel<p2+6 and lin>=l1 and lin<l2 then
             px:=(pixel-p1)/6; ln:=(lin-l1)/6;
             px_next:=(pixel+2-p1)/6;
             vaddress<=vfront & std_logic_vector(to_unsigned(32*ln + (px_next)/4, 12));

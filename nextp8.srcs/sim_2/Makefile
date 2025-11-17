@@ -7,8 +7,12 @@
 
 # Paths
 SRC_DIR = ../sources_1
+IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
 IP_DIR = $(SRC_DIR)/ip
 TB_DIR = new
+
+# IP Core simulation files
+IP_VRAM = $(IP_GEN_DIR)/vram_1/vram_sim_netlist.v
 
 # IP Core (vram - video RAM)
 # Note: vram is an IP core that needs to be generated first
@@ -47,8 +51,14 @@ compile_vhdl:
 	$(XVHDL) $(P8VIDEO_SRCS)
 	@echo ""
 
+# Compile IP cores (Verilog)
+compile_ip:
+	@echo "=== Compiling IP cores ==="
+	$(XVLOG) $(IP_VRAM)
+	@echo ""
+
 # Compile SystemVerilog testbench
-compile_sv: compile_vhdl
+compile_sv: compile_vhdl compile_ip
 	@echo "=== Compiling SystemVerilog testbench ==="
 	$(XVLOG) --sv $(TB_SRCS)
 	@echo ""
@@ -58,7 +68,11 @@ elaborate: compile_sv
 	@echo "=== Elaborating design ==="
 	@echo "NOTE: This testbench requires the vram IP core to be generated"
 	@echo "      If you see errors about missing 'vram', generate it in Vivado GUI first"
-	$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical
+	$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
+		--timescale 1ns/1ps \
+		-L unisims_ver -L unimacro_ver -L secureip \
+		-L blk_mem_gen_v8_4_11 -L xpm \
+		glbl
 	@echo ""
 
 # Run simulation
