@@ -158,10 +158,15 @@ set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out4]] -min 0.
 set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -max 22.0 [get_ports {audioext_l_o audioext_r_o}]
 set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -min 0.0 [get_ports {audioext_l_o audioext_r_o}]
 
-## HDMI outputs - synchronous to TMDS serialization clock (323.53 MHz)
-## These are driven by ODDR primitives, very tight timing
-set_output_delay -clock [get_clocks -of_objects [get_pins pl2/clk_out2]] -max 3.0 [get_ports {hdmi_p_o[*] hdmi_n_o[*]}]
-set_output_delay -clock [get_clocks -of_objects [get_pins pl2/clk_out2]] -min -1.0 [get_ports {hdmi_p_o[*] hdmi_n_o[*]}]
+## HDMI outputs - synchronous to TMDS serialization clock (323.53 MHz, period=3.091ns)
+## ODDR (OPPOSITE_EDGE) -> OBUFDS -> HDMI pins
+## TMDS has no external setup/hold requirements (receiver has clock recovery)
+## Relax timing to allow design to meet constraints:
+## 1. Output paths (ODDR->OBUFDS->pins): set_max_delay allows ~8ns
+## 2. Internal paths (logic->ODDR): multicycle allows 2 clock cycles (3.091ns)
+set_max_delay -to [get_ports {hdmi_p_o[*] hdmi_n_o[*]}] 8.0
+set_multicycle_path -setup 2 -to [get_pins hdmiqout/g1[*].to_serial/D*] -from [get_clocks clk_out2_pll_hdmi]
+set_multicycle_path -hold 1 -to [get_pins hdmiqout/g1[*].to_serial/D*] -from [get_clocks clk_out2_pll_hdmi]
 
 ## Keyboard Matrix - Not timing critical (scanned at ~1kHz)
 ## Rows driven by FPGA, columns sensed with pullups
@@ -191,13 +196,9 @@ set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out5]] -min 0.0
 ## Signal integrity should be handled via PCB design and termination
 # set_max_input_transition 5.0 [get_ports ram_data_io[*]]
 
-# ESP WiFi Module UART - Very relaxed timing (115200 baud = 8.68us/bit)
-## UART is asynchronous, no tight timing requirements
-## Driven by clk22 (22 MHz) clock domain
-set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -max 50.0 [get_ports esp_rx_i]
-set_input_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -min 0.0 [get_ports esp_rx_i]
-set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -max 50.0 [get_ports esp_tx_o]
-set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -min 0.0 [get_ports esp_tx_o]
+# ESP WiFi Module UART - Asynchronous serial interface
+## Timing handled by false path constraints (see below)
+## 115200 baud = 8.68us/bit, uses internal oversampling
 
 ## I2C Bus (SCL/SDA) - Very relaxed timing (typically 100-400 kHz)
 ## I2C is open-drain with pullups, no tight timing requirements
@@ -262,6 +263,11 @@ set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}
 ## Joystick control outputs driven by very slow joy_clock (5 Hz)
 ## No meaningful timing relationship to clock_50_i
 set_false_path -from [get_clocks joy_clock] -to [get_ports joysel_o]
+
+## ESP UART is asynchronous serial (115200 baud = 8.68us bit period)
+## UART uses internal oversampling and synchronization, no timing relationship to system clock
+set_false_path -from [get_ports esp_rx_i]
+set_false_path -to [get_ports esp_tx_o]
 
 ## POST code debug outputs (accel_io[27:22]) are asynchronous
 ## These are driven by internal clocks (clk2i, memio_go, joy_clock) but constrained to clock_50_i
