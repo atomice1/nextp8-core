@@ -71,10 +71,6 @@ constant p2:natural:=p1+pno;
 constant l2:natural:=l1+lno;  --
 constant xdim:natural:=1343; --pixels-1
 constant ydim:natural:=806; --lines
-shared variable px,px_next,pixel: natural range 0 to 2047:=0;
-shared variable ln,lin: natural range 0 to 1023:=0;
-shared variable vbuffer: Std_logic_vector(15 downto 0);
-shared variable vfront: Std_logic:='0';
 
 type PaletteArray is array(0 to 31) of Std_logic_vector(23 downto 0);
 CONSTANT SystemPalette : PaletteArray := (
@@ -96,6 +92,10 @@ process (clk325)
     variable screen_index: integer;
     variable system_index: integer;
     variable vdata: Std_logic_vector(23 downto 0);
+    variable px,px_next,pixel: natural range 0 to 2047:=0;
+    variable ln,lin: natural range 0 to 1023:=0;
+    variable vbuffer: Std_logic_vector(15 downto 0);
+    variable vfront: Std_logic:='0';
 begin
 if rising_edge(clk325) then
 	if reset='1' then

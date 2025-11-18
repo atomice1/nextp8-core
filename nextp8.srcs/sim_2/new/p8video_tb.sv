@@ -72,6 +72,9 @@ reg init_done = 0;
 
 initial begin
     @(posedge clk325);
+    @(posedge clk325);
+    @(posedge clk325);
+    // Write test pattern to vram
     for (y = 0; y < 128; y = y + 1) begin
         for (x = 0; x < 128; x = x + 4) begin
             vw1 <= 2'b11;
@@ -81,6 +84,8 @@ initial begin
         end
     end
     vw1 <= 0;
+    // Wait a bit before starting validation
+    repeat(10) @(posedge clk325);
     init_done <= 1;
 end
 
