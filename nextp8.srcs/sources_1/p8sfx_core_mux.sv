@@ -265,8 +265,10 @@ reg [17:0] phase_mult_8x [0:7];      // U18F12 0.25-60.40795601
 reg [17:0] detune_inc_8x [0:7];      // U18F18
 
 // Noise generators
-reg [7:0]         lfsr_8x [0:7];         // U8F8
-reg signed [7:0]  brown_state_8x [0:7];  // S8F7
+reg [15:0]        lfsr_8x [0:7];         // U16F16
+reg signed [18:0] brown_state_8x [0:7];  // S19F18
+reg [5:0]         lfsr_repeat_counter_8x [0:7];  // 0-63 sample-and-hold counter
+reg signed [7:0]  lfsr_sample_8x [0:7];  // S8F7 held LFSR sample
 
 // Filter state
 reg signed [7:0] damp_state_8x [0:7];  // S8F7
@@ -373,8 +375,10 @@ wire [15:0] phase_mult = phase_mult_8x[ctx_idx];
 wire [17:0] detune_inc = detune_inc_8x[ctx_idx];
 
 // Noise generators
-wire [7:0]         lfsr = lfsr_8x[ctx_idx];
-wire signed [7:0]  brown_state = brown_state_8x[ctx_idx];
+wire [15:0]        lfsr = lfsr_8x[ctx_idx];
+wire signed [18:0] brown_state = brown_state_8x[ctx_idx];  // S19F18
+wire [5:0]         lfsr_repeat_counter = lfsr_repeat_counter_8x[ctx_idx]; // 0-63
+wire signed [7:0]  lfsr_sample = lfsr_sample_8x[ctx_idx];  // S8F7
 
 // Filter state
 wire signed [7:0] damp_state = damp_state_8x[ctx_idx];
@@ -402,56 +406,40 @@ wire [7:0] hwfx_5f43_val = hwfx_5f43_pcm_q;
 //==============================================================
 // 18-bits gives max frequency error of 0.10%. A 0.3%-0.5% error
 // is the typical threshold for sounding out of tune.
-reg [17:0] pitch_phase_inc [0:95]; // U18F18
+reg [14:0] pitch_phase_inc [0:63]; // U15F18
 initial begin
-    pitch_phase_inc[ 0] = 18'h0309; pitch_phase_inc[ 1] = 18'h0337;
-    pitch_phase_inc[ 2] = 18'h0368; pitch_phase_inc[ 3] = 18'h039c;
-    pitch_phase_inc[ 4] = 18'h03d3; pitch_phase_inc[ 5] = 18'h040d;
-    pitch_phase_inc[ 6] = 18'h044b; pitch_phase_inc[ 7] = 18'h048d;
-    pitch_phase_inc[ 8] = 18'h04d2; pitch_phase_inc[ 9] = 18'h051b;
-    pitch_phase_inc[10] = 18'h0569; pitch_phase_inc[11] = 18'h05bb;
-    pitch_phase_inc[12] = 18'h0613; pitch_phase_inc[13] = 18'h066f;
-    pitch_phase_inc[14] = 18'h06d1; pitch_phase_inc[15] = 18'h0739;
-    pitch_phase_inc[16] = 18'h07a7; pitch_phase_inc[17] = 18'h081b;
-    pitch_phase_inc[18] = 18'h0897; pitch_phase_inc[19] = 18'h091a;
-    pitch_phase_inc[20] = 18'h09a4; pitch_phase_inc[21] = 18'h0a37;
-    pitch_phase_inc[22] = 18'h0ad3; pitch_phase_inc[23] = 18'h0b77;
-    pitch_phase_inc[24] = 18'h0c26; pitch_phase_inc[25] = 18'h0cdf;
-    pitch_phase_inc[26] = 18'h0da3; pitch_phase_inc[27] = 18'h0e72;
-    pitch_phase_inc[28] = 18'h0f4e; pitch_phase_inc[29] = 18'h1037;
-    pitch_phase_inc[30] = 18'h112e; pitch_phase_inc[31] = 18'h1234;
-    pitch_phase_inc[32] = 18'h1349; pitch_phase_inc[33] = 18'h146e;
-    pitch_phase_inc[34] = 18'h15a6; pitch_phase_inc[35] = 18'h16ef;
-    pitch_phase_inc[36] = 18'h184c; pitch_phase_inc[37] = 18'h19be;
-    pitch_phase_inc[38] = 18'h1b46; pitch_phase_inc[39] = 18'h1ce5;
-    pitch_phase_inc[40] = 18'h1e9d; pitch_phase_inc[41] = 18'h206f;
-    pitch_phase_inc[42] = 18'h225d; pitch_phase_inc[43] = 18'h2468;
-    pitch_phase_inc[44] = 18'h2692; pitch_phase_inc[45] = 18'h28dd;
-    pitch_phase_inc[46] = 18'h2b4c; pitch_phase_inc[47] = 18'h2ddf;
-    pitch_phase_inc[48] = 18'h3099; pitch_phase_inc[49] = 18'h337d;
-    pitch_phase_inc[50] = 18'h368d; pitch_phase_inc[51] = 18'h39cb;
-    pitch_phase_inc[52] = 18'h3d3b; pitch_phase_inc[53] = 18'h40df;
-    pitch_phase_inc[54] = 18'h44ba; pitch_phase_inc[55] = 18'h48d1;
-    pitch_phase_inc[56] = 18'h4d25; pitch_phase_inc[57] = 18'h51bb;
-    pitch_phase_inc[58] = 18'h5698; pitch_phase_inc[59] = 18'h5bbe;
-    pitch_phase_inc[60] = 18'h6132; pitch_phase_inc[61] = 18'h66fa;
-    pitch_phase_inc[62] = 18'h6d1a; pitch_phase_inc[63] = 18'h7396;
-    pitch_phase_inc[64] = 18'h7a76; pitch_phase_inc[65] = 18'h81be;
-    pitch_phase_inc[66] = 18'h8975; pitch_phase_inc[67] = 18'h91a2;
-    pitch_phase_inc[68] = 18'h9a4b; pitch_phase_inc[69] = 18'ha377;
-    pitch_phase_inc[70] = 18'had30; pitch_phase_inc[71] = 18'hb77c;
-    pitch_phase_inc[72] = 18'hc265; pitch_phase_inc[73] = 18'hcdf5;
-    pitch_phase_inc[74] = 18'hda34; pitch_phase_inc[75] = 18'he72d;
-    pitch_phase_inc[76] = 18'hf4ed; pitch_phase_inc[77] = 18'h1037d;
-    pitch_phase_inc[78] = 18'h112eb; pitch_phase_inc[79] = 18'h12344;
-    pitch_phase_inc[80] = 18'h13496; pitch_phase_inc[81] = 18'h146ef;
-    pitch_phase_inc[82] = 18'h15a60; pitch_phase_inc[83] = 18'h16ef9;
-    pitch_phase_inc[84] = 18'h184cb; pitch_phase_inc[85] = 18'h19bea;
-    pitch_phase_inc[86] = 18'h1b468; pitch_phase_inc[87] = 18'h1ce5b;
-    pitch_phase_inc[88] = 18'h1e9da; pitch_phase_inc[89] = 18'h206fa;
-    pitch_phase_inc[90] = 18'h225d7; pitch_phase_inc[91] = 18'h24689;
-    pitch_phase_inc[92] = 18'h2692c; pitch_phase_inc[93] = 18'h28ddf;
-    pitch_phase_inc[94] = 18'h2b4c1; pitch_phase_inc[95] = 18'h2ddf2;
+    pitch_phase_inc[ 0] = 15'h0309; pitch_phase_inc[ 1] = 15'h0337;
+    pitch_phase_inc[ 2] = 15'h0368; pitch_phase_inc[ 3] = 15'h039c;
+    pitch_phase_inc[ 4] = 15'h03d3; pitch_phase_inc[ 5] = 15'h040d;
+    pitch_phase_inc[ 6] = 15'h044b; pitch_phase_inc[ 7] = 15'h048d;
+    pitch_phase_inc[ 8] = 15'h04d2; pitch_phase_inc[ 9] = 15'h051b;
+    pitch_phase_inc[10] = 15'h0569; pitch_phase_inc[11] = 15'h05bb;
+    pitch_phase_inc[12] = 15'h0613; pitch_phase_inc[13] = 15'h066f;
+    pitch_phase_inc[14] = 15'h06d1; pitch_phase_inc[15] = 15'h0739;
+    pitch_phase_inc[16] = 15'h07a7; pitch_phase_inc[17] = 15'h081b;
+    pitch_phase_inc[18] = 15'h0897; pitch_phase_inc[19] = 15'h091a;
+    pitch_phase_inc[20] = 15'h09a4; pitch_phase_inc[21] = 15'h0a37;
+    pitch_phase_inc[22] = 15'h0ad3; pitch_phase_inc[23] = 15'h0b77;
+    pitch_phase_inc[24] = 15'h0c26; pitch_phase_inc[25] = 15'h0cdf;
+    pitch_phase_inc[26] = 15'h0da3; pitch_phase_inc[27] = 15'h0e72;
+    pitch_phase_inc[28] = 15'h0f4e; pitch_phase_inc[29] = 15'h1037;
+    pitch_phase_inc[30] = 15'h112e; pitch_phase_inc[31] = 15'h1234;
+    pitch_phase_inc[32] = 15'h1349; pitch_phase_inc[33] = 15'h146e;
+    pitch_phase_inc[34] = 15'h15a6; pitch_phase_inc[35] = 15'h16ef;
+    pitch_phase_inc[36] = 15'h184c; pitch_phase_inc[37] = 15'h19be;
+    pitch_phase_inc[38] = 15'h1b46; pitch_phase_inc[39] = 15'h1ce5;
+    pitch_phase_inc[40] = 15'h1e9d; pitch_phase_inc[41] = 15'h206f;
+    pitch_phase_inc[42] = 15'h225d; pitch_phase_inc[43] = 15'h2468;
+    pitch_phase_inc[44] = 15'h2692; pitch_phase_inc[45] = 15'h28dd;
+    pitch_phase_inc[46] = 15'h2b4c; pitch_phase_inc[47] = 15'h2ddf;
+    pitch_phase_inc[48] = 15'h3099; pitch_phase_inc[49] = 15'h337d;
+    pitch_phase_inc[50] = 15'h368d; pitch_phase_inc[51] = 15'h39cb;
+    pitch_phase_inc[52] = 15'h3d3b; pitch_phase_inc[53] = 15'h40df;
+    pitch_phase_inc[54] = 15'h44ba; pitch_phase_inc[55] = 15'h48d1;
+    pitch_phase_inc[56] = 15'h4d25; pitch_phase_inc[57] = 15'h51bb;
+    pitch_phase_inc[58] = 15'h5698; pitch_phase_inc[59] = 15'h5bbe;
+    pitch_phase_inc[60] = 15'h6132; pitch_phase_inc[61] = 15'h66fa;
+    pitch_phase_inc[62] = 15'h6d1a; pitch_phase_inc[63] = 18'h7396;
 end
 
 reg [16:0] note_offset_lut [0:255];  // U17F24
@@ -1285,17 +1273,27 @@ endtask
 
 // Noise state update task
 task update_noise_state;
-    reg signed [8:0]  brown_err;    // S9F8
-    reg [7:0]         brown_alpha;  // U8F8
     begin
         // LFSR for noise
-        lfsr_8x[ctx_idx] <= {lfsr[6:0], lfsr[7]^lfsr[5]^lfsr[1]^lfsr[0]};
-
-        // Brown noise IIR
-        brown_alpha = eff_inc[17:10];
-        brown_err = $signed(lfsr) - brown_state;
-        // S8F7 brown_state = S8F7 brown_state + ((S9F8 brown_err * U8F8 brown_alpha * 8) >>> 8)
-        brown_state_8x[ctx_idx] <= brown_state + (($signed({{11{brown_err[8]}}, brown_err}) * $signed({{9{1'b0}}, {brown_alpha, {3{1'b0}}}})) >>> 8);
+        lfsr_8x[ctx_idx] <= {lfsr[14:0], lfsr[15]^lfsr[13]^lfsr[9]^lfsr[8]};
+ 
+        if (filt_noiz) begin
+            // Sample-and-hold LFSR update
+            if (lfsr_repeat_counter == 6'd0) begin
+                // Capture new sample: lfsr[7:0] as S8F7
+                lfsr_sample_8x[ctx_idx] <= $signed(lfsr[7:0]);
+                // Reset counter
+                lfsr_repeat_counter_8x[ctx_idx] <= ~cur_pitch;
+            end else begin
+                // Hold current sample, decrement counter
+                lfsr_repeat_counter_8x[ctx_idx] <= lfsr_repeat_counter - 6'd1;
+            end
+        end else begin
+            // S19F18 brown_state = S19F18 brown_state - (S19F18 brown_state * U18F18 eff_inc * 8) >>> 18
+            //                    = S19F18 brown_state - (S19F18 brown_state * U18F18 eff_inc) >>> (18-3)
+            // S19F18 brown_state = S19F18 brown_state + (lfsr < 0) ? S19F18 -1/32 : S19F18 1/32
+            brown_state_8x[ctx_idx] <= brown_state - (($signed({{18{brown_state[18]}}, brown_state}) * $signed({1'b0, eff_inc})) >>> 15) + (lfsr[7] ? -14'sd8192 : 14'sd8192);
+        end
     end
 endtask
 
@@ -1389,9 +1387,6 @@ task waveform_gen;
     reg [21:0] temp5;              // U22F18
     // Specialized wide temporaries - different bit widths
     reg signed [38:0] div6_temp;     // Temporary for divide-by-6 (phaser_temp * 43691)
-    reg signed [29:0] noise_mult1_temp;  // Temporary for brown_state * saw_base (8-bit × 22-bit)
-    reg signed [43:0] noise_mult2_temp;  // Temporary for temp4 * temp0 (22-bit × 22-bit)
-    reg signed [43:0] noise_scale_temp;  // Temporary for scale calculations in NOISE
     reg [43:0] phaser_mult_temp;   // U44F36 temporary for phaser multiplication
     reg signed [44:0] organ_temp;  // S45F36 temporary for organ calculations
     reg signed [26:0] organ_abs;   // S27F18 after shift, for abs operation
@@ -1552,55 +1547,12 @@ task waveform_gen;
             end
 
             3'd6: begin // NOISE: white (LFSR) or brown (filtered)
-                // Apply pitch-dependent scaling
-                // Calculate factor = 1 - cur_pitch / 63
-                // U22F18 pitch_scaled = (cur_pitch << 18) / 63
-                // S22F18 factor = S22F18_ONE - pitch_scaled
-                // Need 40-bit intermediate for (cur_pitch << 18) to avoid truncation
-                temp2 = S22F18_ONE - ((40'd0 + cur_pitch) <<< 18) / 40'd63;
-
-                // S22F18 factor_sq = (S22F18 factor * S22F18 factor) >>> 18
-                // 22-bit × 22-bit = 44 bits, must use temp to avoid truncation
-                noise_scale_temp = $signed({{22{temp2[21]}}, temp2}) * $signed({{22{temp2[21]}}, temp2});
-                temp3 = $signed(noise_scale_temp[39:18]);
-
-                // S22F18 scale = S22F18 1.0 + S22F18 factor_sq
-                temp0 = S22F18_ONE + temp3;
-
-                // S22F18 scale = S22F18 scale * S22F18 1.5
-                // 22-bit × 22-bit = 44 bits, must use temp to avoid truncation
-                noise_scale_temp = $signed({{22{temp0[21]}}, temp0}) * $signed({{22{1'b0}}, S22F18_1_5});
-                temp0 = $signed(noise_scale_temp[39:18]);
-
                 if (filt_noiz) begin
-                    // Multiply brown_state by SAW waveform
-                    // S22F18 saw_wave = t < 0.5 ? S22F18 t : S22F18 t - S22F18 1
-                    temp1 = (t < S22F18_HALF) ? t : (t - S22F18_ONE);
-                    // S22F18 saw_wave = S22F18 saw_wave * S22F18 2
-                    temp1 = temp1 <<< 1;
-
-                    // S22F18 noise_temp = (S8F7 brown_state * S22F18 saw_wave) >>> 7
-                    // 8-bit × 22-bit = 30 bits, must use temp to avoid truncation
-                    noise_mult1_temp = $signed({{15{brown_state[7]}}, brown_state}) * $signed({{22{temp1[21]}}, temp1});
-                    temp4 = $signed(noise_mult1_temp[28:7]);
-
-                    // S22F18 temp0 = (S22F18 noise_temp * S22F18 scale) >>> 18
-                    // 22-bit × 22-bit = 44 bits, must use temp to avoid truncation
-                    noise_mult2_temp = $signed({{22{temp4[21]}}, temp4}) * $signed({{22{temp0[21]}}, temp0});
-                    temp0 = $signed(noise_mult2_temp[39:18]);
-
-                    // S8F7 sample_out = S22F18 temp0[18:11]
-                    sample_out = temp0[18:11];
+                    sample_out = lfsr_sample;
                 end else begin
-                    // Brown noise: just brown_state scaled by pitch factor
-                    // S22F18 noise_temp = S8F7 brown_state extended to S22F18
-                    temp4 = $signed({{15{brown_state[7]}}, brown_state});
-                    // S22F18 temp0 = (S22F18 noise_temp * S22F18 scale) >>> 7
-                    // 22-bit × 22-bit = 44 bits, must use temp to avoid truncation
-                    noise_mult2_temp = $signed({{22{temp4[21]}}, temp4}) * $signed({{22{temp0[21]}}, temp0});
-                    temp0 = $signed(noise_mult2_temp[28:7]);
-                    // S8F7 sample_out = S22F18 temp0[18:11]
-                    sample_out = temp0[18:11];
+                    // S9F8 sample_out = (S19F18 brown_state * (128 * U18F18 eff_inc + U18F18 0.7588)) >>> 28
+                    //                 = (S19F18 brown_state * (U18F18 eff_inc + U18F18 (0.7588/128))) >>> (28-7)
+                    sample_out = ($signed({{18{brown_state[18]}}, brown_state}) * ($signed({1'b0, eff_inc}) + 11'sd1554)) >>> 21;
                 end
             end
 
@@ -1900,10 +1852,12 @@ always @(posedge clk_pcm_8x) begin
             next_group_pos_8x[i] <= 2'd0;
             arp_speed_8x[i] <= 8'd0;
             eff_vib_phase_8x[i] <= 11'd0;
-            lfsr_8x[i] <= 8'hA5;  // Non-zero seed
-            brown_state_8x[i] <= 8'sd0;
-            damp_state_8x[i] <= 8'sd0;
+            lfsr_8x[i] <= 16'hACE1;  // Non-zero seed
+            brown_state_8x[i] <= 19'sd0;  // S19F18
+            lfsr_repeat_counter_8x[i] <= 6'd0;
+            lfsr_sample_8x[i] <= 8'sd0;  // S8F7
             damp_alpha_8x[i] <= 8'd0;
+            damp_state_8x[i] <= 8'sd0;
             rev_idx2_8x[i] <= 9'd0;
             rev_idx4_8x[i] <= 10'd0;
             rev_idx2_valid_8x[i] <= 9'd0;
