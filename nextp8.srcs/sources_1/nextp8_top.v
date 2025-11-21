@@ -164,6 +164,12 @@
 
 //-------------- parameters --------------------
 
+parameter API_VERSION = 8'h00;
+parameter MAJOR_VERSION = 8'h00;
+parameter MINOR_VERSION = 8'h01;
+parameter PATCH_VERSION = 8'h00;
+parameter VERSION = {API_VERSION, MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION};
+
 reg [15:0] params = 16'd0;
 reg [5:0] post_code_cpu = 6'd0;
 
@@ -216,6 +222,13 @@ assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
                    reset ? 6'd2 :             // in reset
                    post_code_cpu;
 
+wire [31:0] build_timestamp;
+wire data_valid; 
+USR_ACCESSE2 USR_ACCESS (
+    CFGCLK(clk2),
+    DATA(build_timestamp),
+    DATAVALID(data_valid)
+);
 
 // ---------------------------------------------------------------------------------
 // -------------------------------------- CPU --------------------------------------
@@ -889,7 +902,12 @@ begin
             //--------------- QLSD --------------------------------------------------
             if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data, qlsd_data }; //h800006
             if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
-            //------------- RTC -------------------------------------------------------
+            //--------------- Build Info --------------------------------------------------
+            if (cpu_addr[6:1]==6'b001010 && cpu_rd) memio_out = build_timestamp[31:16]; // h800014
+            if (cpu_addr[6:1]==6'b001011 && cpu_rd) memio_out = build_timestamp[15:0]; // h800016
+            if (cpu_addr[6:1]==6'b001100 && cpu_rd) memio_out = VERSION[31:16]; // h800018
+            if (cpu_addr[6:1]==6'b001101 && cpu_rd) memio_out = VERSION[15:0]; // h80001a
+            //--------------- I2C --------------------------------------------------
             if (cpu_addr[6:1]==6'b010000 && cpu_rd ) memio_out <= {i2c_din,i2c_din}; //h800021
             if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
             //-------------- ESP UART ----------------------------------------------------------
