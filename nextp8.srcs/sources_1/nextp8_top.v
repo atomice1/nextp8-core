@@ -223,11 +223,12 @@ assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
                    post_code_cpu;
 
 wire [31:0] build_timestamp;
+wire cfgclk;
 wire data_valid; 
 USR_ACCESSE2 USR_ACCESS (
-    CFGCLK(clk2),
-    DATA(build_timestamp),
-    DATAVALID(data_valid)
+    .CFGCLK(cfgclk),
+    .DATA(build_timestamp),
+    .DATAVALID(data_valid)
 );
 
 // ---------------------------------------------------------------------------------

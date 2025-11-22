@@ -1546,7 +1546,7 @@ task waveform_gen;
                 sample_out = temp0[18:11];
             end
 
-            3'd6: begin // NOISE: white (LFSR) or brown (filtered)
+            3'd6: begin // NOISE
                 if (filt_noiz) begin
                     sample_out = lfsr_sample;
                 end else begin
