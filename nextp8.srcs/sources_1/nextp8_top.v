@@ -92,9 +92,10 @@
     output wire bus_clk35_o,
     output wire [15:0] bus_addr_o,
     inout  wire [7:0] bus_data_io,
-    inout  wire bus_int_n_io,
+    input  wire bus_int_in_i,
+    output wire bus_int_n_o,
     input  wire bus_nmi_n_i,
-    input  wire bus_ramcs_i,
+    inout  wire bus_ramcs_io,
     input  wire bus_romcs_i,
     input  wire bus_wait_n_i,
     output wire bus_halt_n_o,
@@ -904,10 +905,10 @@ begin
             if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data, qlsd_data }; //h800006
             if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
             //--------------- Build Info --------------------------------------------------
-            if (cpu_addr[6:1]==6'b001010 && cpu_rd) memio_out = build_timestamp[31:16]; // h800014
-            if (cpu_addr[6:1]==6'b001011 && cpu_rd) memio_out = build_timestamp[15:0]; // h800016
-            if (cpu_addr[6:1]==6'b001100 && cpu_rd) memio_out = VERSION[31:16]; // h800018
-            if (cpu_addr[6:1]==6'b001101 && cpu_rd) memio_out = VERSION[15:0]; // h80001a
+            if (cpu_addr[6:1]==6'b001010 && cpu_rd) memio_out <= build_timestamp[31:16]; // h800014
+            if (cpu_addr[6:1]==6'b001011 && cpu_rd) memio_out <= build_timestamp[15:0]; // h800016
+            if (cpu_addr[6:1]==6'b001100 && cpu_rd) memio_out <= VERSION[31:16]; // h800018
+            if (cpu_addr[6:1]==6'b001101 && cpu_rd) memio_out <= VERSION[15:0]; // h80001a
             //--------------- I2C --------------------------------------------------
             if (cpu_addr[6:1]==6'b010000 && cpu_rd ) memio_out <= {i2c_din,i2c_din}; //h800021
             if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
@@ -1041,7 +1042,8 @@ assign bus_rd_n_io     = 1'bz;
 assign bus_rfsh_n_o   = 1'bz;
 assign bus_rst_n_io   = 1'bz;
 assign bus_wr_n_o     = 1'bz;
-assign bus_int_n_io   = 1'bz;
+assign bus_int_n_o    = 1'bz;  // Output interrupt signal
+assign bus_ramcs_io   = 1'bz;  // Bidirectional RAMCS signal
 //assign bus_romcs_i    = 1'bZ;
 assign bus_y_o        = 1'bz;
 assign bus_p3_mtr_n_o = 1'b1;

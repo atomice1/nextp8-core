@@ -460,7 +460,8 @@ set_property DRIVE 8 [get_ports vgaclk_o]
 set_property IOSTANDARD LVCMOS33 [get_ports vgaclkn_o]
 set_property DRIVE 8 [get_ports vgaclkn_o]
 
-create_clock -period 20.00 -waveform {0.000 10.000} [get_ports clock_50_i]
+# Clock constraint already defined in PLL IP XDC, commenting out to avoid duplicate
+#create_clock -period 20.00 -waveform {0.000 10.000} [get_ports clock_50_i]
 
 
 set_property IOSTANDARD LVCMOS33 [get_ports XADC_7N]
