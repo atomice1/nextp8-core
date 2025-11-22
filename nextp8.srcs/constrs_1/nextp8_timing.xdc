@@ -87,8 +87,41 @@ set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_pins pll/clk_out5]] \
     -group [get_clocks -of_objects [get_pins pl2/clk_out1]] \
     -group [get_clocks -of_objects [get_pins pl2/clk_out2]] \
-    -group [get_clocks -quiet clk_pcm_8x] \
-    -group [get_clocks -quiet clk_pcm] \
+    -group [get_clocks clk2i] \
+    -group [get_clocks memio_go] \
+    -group [get_clocks joy_clock]
+
+## Audio clocks - mark as asynchronous to all other domains
+## These clocks may not exist during synthesis, only during implementation when BUFGs are inferred
+## The -quiet flag suppresses warnings if clocks don't exist yet
+## CDC crossings to/from clk22 (clk_out1) are handled via toggle synchronizers in p8audio.v
+set clk_pcm_8x_clocks [get_clocks -quiet clk_pcm_8x]
+set clk_pcm_clocks [get_clocks -quiet clk_pcm]
+
+## Only create clock groups if the audio clocks exist
+## During synthesis these may be empty lists, during implementation they will be populated
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
+    -group [get_clocks -of_objects [get_pins pll/clk_out1]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out2]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out3]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out4]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out5]] \
+    -group [get_clocks -of_objects [get_pins pl2/clk_out1]] \
+    -group [get_clocks -of_objects [get_pins pl2/clk_out2]] \
+    -group [get_clocks clk2i] \
+    -group [get_clocks memio_go] \
+    -group [get_clocks joy_clock]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_clocks \
+    -group [get_clocks -of_objects [get_pins pll/clk_out1]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out2]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out3]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out4]] \
+    -group [get_clocks -of_objects [get_pins pll/clk_out5]] \
+    -group [get_clocks -of_objects [get_pins pl2/clk_out1]] \
+    -group [get_clocks -of_objects [get_pins pl2/clk_out2]] \
     -group [get_clocks clk2i] \
     -group [get_clocks memio_go] \
     -group [get_clocks joy_clock]
@@ -165,8 +198,8 @@ set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out1]] -min 0.
 ## 1. Output paths (ODDR->OBUFDS->pins): set_max_delay allows ~8ns
 ## 2. Internal paths (logic->ODDR): multicycle allows 2 clock cycles (3.091ns)
 set_max_delay -to [get_ports {hdmi_p_o[*] hdmi_n_o[*]}] 8.0
-set_multicycle_path -setup 2 -to [get_pins hdmiqout/g1[*].to_serial/D*] -from [get_clocks clk_out2_pll_hdmi]
-set_multicycle_path -hold 1 -to [get_pins hdmiqout/g1[*].to_serial/D*] -from [get_clocks clk_out2_pll_hdmi]
+set_multicycle_path -setup 2 -to [get_pins hdmiqout/g1[*].to_serial/D*] -from [get_clocks -of_objects [get_pins pl2/clk_out2]]
+set_multicycle_path -hold 1 -to [get_pins hdmiqout/g1[*].to_serial/D*] -from [get_clocks -of_objects [get_pins pl2/clk_out2]]
 
 ## Keyboard Matrix - Not timing critical (scanned at ~1kHz)
 ## Rows driven by FPGA, columns sensed with pullups
@@ -258,7 +291,7 @@ set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks clk2i]
 
 ## PS/2 keyboard inputs are asynchronous (self-clocked protocol)
 ## PS/2 data/clock go through synchronizer chain before use
-set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}] -to [get_clocks clk_out2_pll]
+set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}] -to [get_clocks -of_objects [get_pins pll/clk_out2]]
 
 ## Joystick control outputs driven by very slow joy_clock (~1220 Hz)
 ## No meaningful timing relationship to other clock domains
@@ -278,7 +311,7 @@ set_false_path -from [get_clocks {clk2i memio_go joy_clock}] -to [get_ports acce
 set_false_path -from [get_clocks {clk2i memio_go}] -to [get_ports accel_io[*]]
 
 ## Input paths from expansion bus to internal clocks
-set_false_path -from [get_ports accel_io[*]] -to [get_clocks {clk2i clk_out2_pll}]
+set_false_path -from [get_ports accel_io[*]] -to [get_clocks -of_objects [get_pins {BUFG_inst2/O pll/clk_out2}]]
 
 ## ============================================================================
 ## End of nextp8 Timing Constraints
