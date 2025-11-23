@@ -1115,11 +1115,6 @@ task decode_current_note;
         cur_wave_8x[ctx_idx] <= wave;
         cur_pitch_8x[ctx_idx] <= pitch;
 
-        // Arpeggio speed calculation
-        arp_speed_8x[ctx_idx] <= (eff == 3'd6) ? ((speed_byte <= 8) ? 8'd2 : 8'd4) :
-                                 (eff == 3'd7) ? ((speed_byte <= 8) ? 8'd4 : 8'd8) :
-                                 8'd0;
-
         // Check if attack is needed
         should_attack = (eff != 3'd1) &&
                         (custom != 1'b1 ||
@@ -1224,7 +1219,7 @@ task advance_note_timing;
         // Start releasing 16 samples before the next note or arpeggio advance
         // Check if we're close to advancing
         if (sample_ctr == NOTE_TICK_DIV - 16) begin
-            if (note_ctr >= speed_byte - 1 ||
+            if ((!arp_active && note_ctr >= speed_byte - 1) ||
                 (arp_active && (arp_accum + 1 >= arp_speed))) begin
                 // About to advance to next note
                 releasing_8x[ctx_idx] <= 1'b1;
@@ -1797,19 +1792,22 @@ reg [8:0] next_idx2;
 reg [9:0] next_idx4;
 reg ignore;
 reg [4:0] sfx_read_addr;
+reg [2:0] next_eff;
 
 // Combinatorial wires for timing conditions
 wire is_two_samples_before_main_note_tick;
+wire is_two_samples_before_arp_note_tick;
 wire is_one_sample_before_main_note_tick;
 wire is_one_sample_before_arp_note_tick;
 wire should_check_arpeggio_effect;
 wire should_decode_note;
 
 assign is_two_samples_before_main_note_tick = (sample_ctr == NOTE_TICK_DIV - 2) && (note_ctr >= speed_byte - 1);
+assign is_two_samples_before_arp_note_tick = (sample_ctr == NOTE_TICK_DIV - 2) && arp_active && (arp_accum >= arp_speed - 1);
 assign is_one_sample_before_main_note_tick = (sample_ctr == NOTE_TICK_DIV - 1) && (note_ctr >= speed_byte - 1);
 assign is_one_sample_before_arp_note_tick = (sample_ctr == NOTE_TICK_DIV - 1) && arp_active && (arp_accum >= arp_speed - 1);
 assign should_check_arpeggio_effect = !is_waveform_inst && is_two_samples_before_main_note_tick;
-assign should_decode_note = !is_waveform_inst && (is_one_sample_before_main_note_tick || is_one_sample_before_arp_note_tick);
+assign should_decode_note = !is_waveform_inst && ((!arp_active && is_one_sample_before_main_note_tick) || is_one_sample_before_arp_note_tick);
 
 always @(posedge clk_pcm_8x) begin
     if (!resetn) begin
@@ -1961,18 +1959,28 @@ always @(posedge clk_pcm_8x) begin
                             if (should_check_arpeggio_effect) begin
                                 // sfx_data contains note_idx data from previous reads
                                 // Check effect field: sfx_data[7:0] is byte1, bits [6:4] are effect
-                                if ((sfx_data[6:4] == 3'd6 || sfx_data[6:4] == 3'd7) && note_idx <= NOTE_MAX_INDEX) begin
+                                next_eff = sfx_data[6:4];
+                                if ((next_eff == 3'd6 || next_eff == 3'd7) && note_idx <= NOTE_MAX_INDEX) begin
                                     // Arpeggio effect detected! Read arpeggio note instead.
                                     sfx_read_addr = ({note_idx[5:2], next_group_pos} <= NOTE_MAX_INDEX) ? {note_idx[5:2], next_group_pos} : 5'd0;
                                     arp_active_8x[ctx_idx] <= 1'b1;
+                                    // Arpeggio speed calculation
+                                    arp_speed_8x[ctx_idx] <= (next_eff == 3'd6) ? ((speed_byte <= 8) ? 8'd2 : 8'd4) :
+                                                             (next_eff == 3'd7) ? ((speed_byte <= 8) ? 8'd4 : 8'd8) :
+                                                            8'd0;
                                     // Initialize arpeggio state
                                     if (!arp_active) begin
-                                        arp_accum_8x[ctx_idx] <= 3'd0;
+                                        arp_accum_8x[ctx_idx] <= 3'd7; // Will trigger decode_current_note and then become 0 on next sample tick
                                     end
                                 end else begin
                                     // No arpeggio effect
+                                    // TODO: If the end of the main note does not along with the end of the arpeggio note it's envelope won't be released properly.
                                     arp_active_8x[ctx_idx] <= 1'b0;
                                 end
+                            end
+                            else if (is_two_samples_before_arp_note_tick) begin
+                                // Arpeggio active. Read arpeggio note instead.
+                                sfx_read_addr = ({note_idx[5:2], next_group_pos} <= NOTE_MAX_INDEX) ? {note_idx[5:2], next_group_pos} : 5'd0;
                             end
                             // 1 sample before note tick: decode the note
                             else if (should_decode_note) begin
