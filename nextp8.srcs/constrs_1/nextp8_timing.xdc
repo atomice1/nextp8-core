@@ -247,9 +247,10 @@ set_output_delay -clock [get_clocks -of_objects [get_pins pll/clk_out2]] -min 0.
 # set_max_input_transition 10.0 [get_ports {i2c_scl_io i2c_sda_io}]
 
 ## Joystick interface (human input, not timing critical)
-set_input_delay -clock [get_clocks clock_50_i] -max 15.0 [get_ports {joyp1_i joyp2_i joyp3_i joyp4_i joyp6_i joyp9_i}]
-set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports {joyp1_i joyp2_i joyp3_i joyp4_i joyp6_i joyp9_i}]
-set_output_delay -clock [get_clocks clock_50_i] -max 15.0 [get_ports {joyp7_o joysel_o}]
+## Sampled by joy_clock (~84 Hz), so use that clock domain for I/O delays
+set_input_delay -clock [get_clocks joy_clock] -max 15.0 [get_ports {joyp1_i joyp2_i joyp3_i joyp4_i joyp6_i joyp9_i}]
+set_input_delay -clock [get_clocks joy_clock] -min 0.0 [get_ports {joyp1_i joyp2_i joyp3_i joyp4_i joyp6_i joyp9_i}]
+set_output_delay -clock [get_clocks joy_clock] -max 15.0 [get_ports {joyp7_o joysel_o}]
 
 ## PS/2 interface (keyboard/mouse, 10-16 kHz clock, very slow)
 set_input_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports {ps2_clk_io ps2_data_io ps2_pin2_io ps2_pin6_io}]

@@ -189,21 +189,21 @@ wire [5:0]         v_stat_sfx_index_pcm [0:3];   // clk_pcm_8x: Current SFX inde
 wire [5:0]         v_stat_note_index_pcm[0:3];   // clk_pcm_8x: Current note index
 
 // CDC: Synchronize voice signals from clk_pcm to clk_sys domain
-reg [3:0] voice_busy_sys_d;                  // clk_sys: CDC stage 1
-reg [3:0] voice_busy_sys_q;                  // clk_sys: CDC stage 2 (stable)
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_busy_sys_d;                  // clk_sys: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_busy_sys_q;                  // clk_sys: CDC stage 2 (stable)
 wire [3:0] voice_busy = voice_busy_sys_q;    // clk_sys: Synchronized voice busy status
 
-reg [3:0] voice_done_sys_d;                  // clk_sys: CDC stage 1
-reg [3:0] voice_done_sys_q;                  // clk_sys: CDC stage 2 (stable)
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_done_sys_d;                  // clk_sys: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_done_sys_q;                  // clk_sys: CDC stage 2 (stable)
 wire [3:0] voice_done = voice_done_sys_q;    // clk_sys: Synchronized voice done pulses
 
-reg [3:0] voice_looping_sys_d;               // clk_sys: CDC stage 1
-reg [3:0] voice_looping_sys_q;               // clk_sys: CDC stage 2 (stable)
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_looping_sys_d;               // clk_sys: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_looping_sys_q;               // clk_sys: CDC stage 2 (stable)
 
-reg [5:0] v_stat_sfx_index_sys_d [0:3];      // clk_sys: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [5:0] v_stat_sfx_index_sys_d [0:3];      // clk_sys: CDC stage 1
 reg [5:0] v_stat_sfx_index [0:3];            // clk_sys: CDC stage 2 (stable)
 
-reg [5:0] v_stat_note_index_sys_d [0:3];     // clk_sys: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [5:0] v_stat_note_index_sys_d [0:3];     // clk_sys: CDC stage 1
 reg [5:0] v_stat_note_index [0:3];           // clk_sys: CDC stage 2 (stable)
 
 // Loop variable for CDC synchronizer
@@ -301,13 +301,13 @@ wire music_fade_out = (music_fade_ctr_out != 16'd0);
 // CDC: Synchronize music fade parameters from clk_sys to clk_pcm domain
 reg [15:0] music_fade_ctr_in_pcm;     // clk_pcm: Fade-in counter (managed in clk_pcm)
 reg [15:0] music_fade_ctr_out_pcm;    // clk_pcm: Fade-out counter (managed in clk_pcm)
-reg [15:0] music_fade_len_pcm_d;      // clk_pcm: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_len_pcm_d;      // clk_pcm: CDC stage 1
 reg [15:0] music_fade_len_pcm;        // clk_pcm: CDC stage 2 (stable)
 
 // Synchronize fade counter initialization from clk_sys
-reg [15:0] music_fade_ctr_in_init_d;  // clk_pcm: CDC stage 1 for initialization
+(* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_ctr_in_init_d;  // clk_pcm: CDC stage 1 for initialization
 reg [15:0] music_fade_ctr_in_init;    // clk_pcm: CDC stage 2 for initialization
-reg [15:0] music_fade_ctr_out_init_d; // clk_pcm: CDC stage 1 for initialization
+(* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_ctr_out_init_d; // clk_pcm: CDC stage 1 for initialization
 reg [15:0] music_fade_ctr_out_init;   // clk_pcm: CDC stage 2 for initialization
 
 always @(posedge clk_pcm) begin
@@ -422,12 +422,12 @@ reg [15:0] stat_music_pattern_count;      // clk_sys: Pattern loop count (stat 5
 reg [15:0] stat_music_tick_count;         // clk_sys: Note tick count (stat 56)
 
 // CDC: note_tick toggle synchronizer from clk_pcm to clk_sys
-reg note_tick_toggle_sys_d;               // clk_sys: CDC stage 1
-reg note_tick_toggle_sys_q;               // clk_sys: CDC stage 2
+(* ASYNC_REG = "TRUE" *) reg note_tick_toggle_sys_d;               // clk_sys: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg note_tick_toggle_sys_q;               // clk_sys: CDC stage 2
 
 // CDC: Reserved for future use
-reg frame_toggle_sys_d;                   // clk_sys: CDC stage 1 (unused)
-reg frame_toggle_sys_q;                   // clk_sys: CDC stage 2 (unused)
+(* ASYNC_REG = "TRUE" *) reg frame_toggle_sys_d;                   // clk_sys: CDC stage 1 (unused)
+(* ASYNC_REG = "TRUE" *) reg frame_toggle_sys_q;                   // clk_sys: CDC stage 2 (unused)
 
 //==============================================================
 // SFX API queueing (clk_sys domain)
