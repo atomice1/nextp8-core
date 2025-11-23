@@ -256,7 +256,7 @@ reg [4:0]  sfx_read_addr_8x [0:7];   // Read address (0-31 for 32 16-bit words)
 reg        sfx_byte_sel_8x [0:7];    // Byte select bit for waveform mode
 
 // DSP state
-reg [10:0] eff_vib_phase_8x [0:10];  // U11F11
+reg [10:0] eff_vib_phase_8x [0:7];   // U11F11
 reg [21:0] phase_acc_8x [0:7];       // U22F18
 reg [21:0] detune_acc_8x [0:7];      // U22F18
 reg [17:0] eff_inc_8x [0:7];         // U18F18
@@ -366,7 +366,7 @@ wire [15:0] sfx_data = sfx_data_8x[ctx_idx];
 wire        sfx_byte_sel = sfx_byte_sel_8x[ctx_idx];
 
 // DSP state
-wire [11:0]  eff_vib_phase = eff_vib_phase_8x[ctx_idx];
+wire [10:0]  eff_vib_phase = eff_vib_phase_8x[ctx_idx];
 wire [21:0] phase_acc = phase_acc_8x[ctx_idx];
 wire [21:0] detune_acc = detune_acc_8x[ctx_idx];
 wire [17:0] eff_inc = eff_inc_8x[ctx_idx];
@@ -930,6 +930,7 @@ task calculate_eff_inc;
     reg signed [11:0] vib_temp;         // U12F12
     reg signed [18:0] slide_diff;       // S19F18 slide difference
     reg signed [11:0] vibrato_alpha;    // S12F11 vibrato multiplier
+
     localparam S12F11_0_5 = 12'sd1024;  // S12F11 representation of 0.5
     localparam S12F11_0_25 = 12'sd512;  // S12F11 representation of 0.25
     begin
@@ -949,12 +950,12 @@ task calculate_eff_inc;
 
             3'd2: begin  // Vibrato: ~7.5 Hz (10.77Hz), +/-~0.5 (0.53) semitone
                 base_inc = (pitch_phase_inc[cur_pitch] >> (bass_flag ? 1 : 0));
-                // S12F11 vibrato_alpha = abs(U11F11 eff_vib_phase - S12F11 0.5) - S12F11 0.25
+                // S1F11 vibrato_alpha = abs(U11F11 eff_vib_phase - S12F11 0.5) - S12F11 0.25
                 vib_temp = $signed({1'b0, eff_vib_phase}) - S12F11_0_5;
                 vibrato_alpha = $signed((vib_temp < 0 ? -vib_temp : vib_temp) - S12F11_0_25);
-                // U18F18 base_inc = U18F18 base_inc + ((U18F18 base_inc / S6F0 32) * S12F11 vibrato_alpha) >>> 11
-                //                 = U18F18 base_inc + (U18F18 base_inc * S12F11 vibrato_alpha) >>> 16
-                base_inc = base_inc + ($signed({{12'd0, base_inc}}) * $signed({{18{vibrato_alpha[11]}}, vibrato_alpha})) >> 16;
+                // U18F18 base_inc = U18F18 base_inc + ((U18F18 base_inc / S6F0 16) * S12F11 vibrato_alpha) >>> 11
+                //                 = U18F18 base_inc + (U18F18 base_inc * S12F11 vibrato_alpha) >>> 15
+                base_inc = $unsigned($signed({1'b0, base_inc}) + (($signed({12'd0, base_inc}) * vibrato_alpha) >>> 15));
             end
 
             3'd3: begin  // Drop: freq *= (1.0 - note_offset)
