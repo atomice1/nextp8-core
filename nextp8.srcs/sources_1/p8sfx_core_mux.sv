@@ -1128,8 +1128,11 @@ task decode_current_note;
                             cur_vol == 3'd0) ^ (vol == 3'd3)));
         if (should_attack) begin
             attack_ctr_8x[ctx_idx] <= 5'd16;
+        end else begin
+            attack_ctr_8x[ctx_idx] <= 5'd0;
         end
         releasing_8x[ctx_idx] <= 1'b0;
+        note_offset_8x[ctx_idx] <= 24'd0;
 
         // Handle custom instruments: when cur_custom is set, trigger SFX loading on paired CUSTOM context
         if (custom && is_main_context(ctx_idx)) begin
