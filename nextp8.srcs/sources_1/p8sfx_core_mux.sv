@@ -1547,7 +1547,7 @@ task waveform_gen;
 
             3'd6: begin // NOISE
                 if (filt_noiz) begin
-                    sample_out = lfsr_sample;
+                    sample_out = lfsr_sample >>> 2;
                 end else begin
                     // S9F8 sample_out = (S19F18 brown_state * (128 * U18F18 eff_inc + U18F18 0.7588)) >>> 28
                     //                 = (S19F18 brown_state * (U18F18 eff_inc + U18F18 (0.7588/128))) >>> (28-7)
