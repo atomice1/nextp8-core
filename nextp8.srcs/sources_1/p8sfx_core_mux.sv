@@ -273,7 +273,6 @@ reg signed [7:0]  lfsr_sample_8x [0:7];  // S8F7 held LFSR sample
 // Filter state
 reg signed [7:0] damp_state_8x [0:7];  // S8F7
 reg [7:0]        damp_alpha_8x [0:7];  // U8F8
-reg [1:0]        eff_reverb_8x [0:7];  // 0-2
 
 // Reverb indices (per-context)
 reg [8:0] rev_idx2_8x [0:7];        // 0-(REVERB_TAPS_SHORT-1) - current write position
@@ -286,7 +285,7 @@ reg signed [7:0] reverb_2_rdata_8x [0:7];  // Read data from reverb_2
 reg signed [7:0] reverb_4_rdata_8x [0:7];  // Read data from reverb_4
 
 // Pre-reverb sample (saved before reverb is mixed, for writing to delay line)
-reg [7:0] pre_reverb_sample_8x [0:7];  // S8F7 sample before reverb mixing
+reg [7:0] pre_reverb_sample;  // S8F7 sample before reverb mixing
 
 // HWFX bytes (CDC'd from clk_sys)
 reg [7:0] hwfx_5f40_sys;
@@ -383,7 +382,6 @@ wire signed [7:0]  lfsr_sample = lfsr_sample_8x[ctx_idx];  // S8F7
 // Filter state
 wire signed [7:0] damp_state = damp_state_8x[ctx_idx];
 wire [7:0]        damp_alpha = damp_alpha_8x[ctx_idx];
-wire [1:0]        eff_reverb = eff_reverb_8x[ctx_idx];
 
 // Reverb indices
 wire [8:0] rev_idx2 = rev_idx2_8x[ctx_idx];
@@ -1656,14 +1654,15 @@ task apply_reverb_mix;
     inout [7:0] s8_sample;         // S8F7 input/output sample
 
     reg signed [8:0] s9_temp;      // S9F8 temporary for additions
+    reg [1:0] eff_reverb;          // Effective reverb level after HWFX overrides
     begin
         // Calculate effective reverb with HWFX overrides
         if (hw_low_rev) begin
-            eff_reverb_8x[ctx_idx] = 2'd2;
+            eff_reverb = 2'd2;
         end else if (hw_high_rev && (filt_reverb < 2'd2)) begin
-            eff_reverb_8x[ctx_idx] = 2'd1;
+            eff_reverb = 2'd1;
         end else begin
-            eff_reverb_8x[ctx_idx] = filt_reverb;
+            eff_reverb = filt_reverb;
         end
 
         // Mix reverb data (from previous cycle's read) with current sample
@@ -1759,7 +1758,7 @@ task process_pcm_chain;
         end
 
         // Save pre-reverb sample (for delay line write in main always block)
-        pre_reverb_sample_8x[ctx_idx] = s8_sample;
+        pre_reverb_sample = s8_sample;
 
         // Apply reverb (add delayed sample with saturation)
         apply_reverb_mix(s8_sample);
@@ -1946,6 +1945,8 @@ always @(posedge clk_pcm_8x) begin
                         // Process PCM output chain (only if playing, not during warm-up)
                         if (pcm_state[ctx_idx] == PCM_PLAYING) begin
                             process_pcm_chain();
+                        end else begin
+                            pre_reverb_sample = 8'd0;
                         end
 
                         // SFX RAM access logic
@@ -2010,50 +2011,50 @@ always @(posedge clk_pcm_8x) begin
                             3'd0: begin
                                 reverb_2_rdata_8x[0] <= reverb_2_8x_0[next_idx2];
                                 reverb_4_rdata_8x[0] <= reverb_4_8x_0[next_idx4];
-                                reverb_2_8x_0[rev_idx2] <= pre_reverb_sample_8x[0];
-                                reverb_4_8x_0[rev_idx4] <= pre_reverb_sample_8x[0];
+                                reverb_2_8x_0[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_0[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd1: begin
                                 reverb_2_rdata_8x[1] <= reverb_2_8x_1[next_idx2];
                                 reverb_4_rdata_8x[1] <= reverb_4_8x_1[next_idx4];
-                                reverb_2_8x_1[rev_idx2] <= pre_reverb_sample_8x[1];
-                                reverb_4_8x_1[rev_idx4] <= pre_reverb_sample_8x[1];
+                                reverb_2_8x_1[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_1[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd2: begin
                                 reverb_2_rdata_8x[2] <= reverb_2_8x_2[next_idx2];
                                 reverb_4_rdata_8x[2] <= reverb_4_8x_2[next_idx4];
-                                reverb_2_8x_2[rev_idx2] <= pre_reverb_sample_8x[2];
-                                reverb_4_8x_2[rev_idx4] <= pre_reverb_sample_8x[2];
+                                reverb_2_8x_2[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_2[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd3: begin
                                 reverb_2_rdata_8x[3] <= reverb_2_8x_3[next_idx2];
                                 reverb_4_rdata_8x[3] <= reverb_4_8x_3[next_idx4];
-                                reverb_2_8x_3[rev_idx2] <= pre_reverb_sample_8x[3];
-                                reverb_4_8x_3[rev_idx4] <= pre_reverb_sample_8x[3];
+                                reverb_2_8x_3[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_3[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd4: begin
                                 reverb_2_rdata_8x[4] <= reverb_2_8x_4[next_idx2];
                                 reverb_4_rdata_8x[4] <= reverb_4_8x_4[next_idx4];
-                                reverb_2_8x_4[rev_idx2] <= pre_reverb_sample_8x[4];
-                                reverb_4_8x_4[rev_idx4] <= pre_reverb_sample_8x[4];
+                                reverb_2_8x_4[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_4[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd5: begin
                                 reverb_2_rdata_8x[5] <= reverb_2_8x_5[next_idx2];
                                 reverb_4_rdata_8x[5] <= reverb_4_8x_5[next_idx4];
-                                reverb_2_8x_5[rev_idx2] <= pre_reverb_sample_8x[5];
-                                reverb_4_8x_5[rev_idx4] <= pre_reverb_sample_8x[5];
+                                reverb_2_8x_5[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_5[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd6: begin
                                 reverb_2_rdata_8x[6] <= reverb_2_8x_6[next_idx2];
                                 reverb_4_rdata_8x[6] <= reverb_4_8x_6[next_idx4];
-                                reverb_2_8x_6[rev_idx2] <= pre_reverb_sample_8x[6];
-                                reverb_4_8x_6[rev_idx4] <= pre_reverb_sample_8x[6];
+                                reverb_2_8x_6[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_6[rev_idx4] <= pre_reverb_sample;
                             end
                             3'd7: begin
                                 reverb_2_rdata_8x[7] <= reverb_2_8x_7[next_idx2];
                                 reverb_4_rdata_8x[7] <= reverb_4_8x_7[next_idx4];
-                                reverb_2_8x_7[rev_idx2] <= pre_reverb_sample_8x[7];
-                                reverb_4_8x_7[rev_idx4] <= pre_reverb_sample_8x[7];
+                                reverb_2_8x_7[rev_idx2] <= pre_reverb_sample;
+                                reverb_4_8x_7[rev_idx4] <= pre_reverb_sample;
                             end
                         endcase
 
