@@ -1368,9 +1368,11 @@ task waveform_gen;
     localparam signed [21:0] S22F18_0_83     = 22'sd217579;   // 0.83
     localparam signed [21:0] S22F18_0_085    = 22'sd22282;    // 0.085
     localparam signed [21:0] S22F18_NEG_1_875= -22'sd491520;  // -1.875
+    localparam signed [21:0] S22F18_NEG_2_4375 = -22'sd638976; // -2.4375
     localparam signed [21:0] S22F18_0_125    = 22'sd32768;    // 0.0125
     localparam signed [21:0] S22F18_0_2      = 22'sd52429;    // 0.2
     localparam signed [21:0] S22F18_1_5      = 22'sd393216;   // 1.5 (for NOISE scaling)
+    localparam signed [21:0] S22F18_0_3      = 22'sd78643;    // 0.3
     localparam [21:0] U22F18_109_110         = 22'd259770;    // 109/110 ≈ 0.990909 (for PHASER)
 
     // S8F7 fixed-point constants for waveform output
@@ -1525,14 +1527,19 @@ task waveform_gen;
 
                 // Buzz processing
                 if (filt_buzz) begin
-                    if (t < S22F18_HALF) begin
-                        // S22F18 temp1 = (S22F18 temp1 * 2) + S22F18 3.0
-                        temp1 = (temp1 <<< 1) + S22F18_THREE;
-                    end
-                    if (t < S22F18_HALF && temp1 > S22F18_NEG_1_875) begin
-                        // S22F18 temp1 = (S22F18 temp1 * S22F18 0.2) >>> 18 - S22F18 1.0
-                        temp1 = (($signed({{22{temp1[21]}}, temp1}) * $signed({{22{1'b0}}, S22F18_0_2})) >>> 18) - S22F18_ONE;
+                    // temp1 * 2 + 3 > -1.875
+                    // temp1 * 2 > -1.875 - 3 = -4.875
+                    // temp1 > -4.875 / 2 = -2.4375
+                    if (t < S22F18_HALF && temp1 > S22F18_NEG_2_4375) begin
+                        // S22F18 temp1 = ((S22F18 temp1 * 2 + S22F18 3.0) * S22F18 0.2) >>> 18 - S22F18 1.0
+                        //              = (S22F18 temp1 * 2 * S22F18 0.2 + S22F18 0.6) >>> 18 - S22F18 1.0
+                        //              = (S22F18 temp1 * S22F18 0.2 + S22F18 0.3) >>> 17 - S22F18 1.0
+                        temp1 = ((($signed({{22{temp1[21]}}, temp1}) * $signed({{22{1'b0}}, S22F18_0_2})) + S22F18_0_3) >>> 17) - S22F18_ONE;
                     end else begin
+                        if (t < S22F18_HALF) begin
+                            // S22F18 temp1 = (S22F18 temp1 * 2) + S22F18 3.0
+                            temp1 = (temp1 <<< 1) + S22F18_THREE;
+                        end
                         // S22F18 temp1 = S22F18 temp1 + S22F18 0.5
                         temp1 = temp1 + S22F18_HALF;
                     end
