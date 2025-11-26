@@ -168,6 +168,10 @@ architecture rtl of nextp8_top_issue4 is
    signal pi_gpio_i           : std_logic_vector(21 downto 0);
    signal pi_gpio_o           : std_logic_vector(21 downto 0);
    signal pi_gpio_en          : std_logic_vector(5 downto 0);
+   
+   -- Pi UART signals (via GPIO pins 14/15)
+   signal pi_uart_rx          : std_logic;
+   signal pi_uart_tx          : std_logic;
 
    -- Component declaration for nextp8 core
    component nextp8
@@ -218,6 +222,8 @@ architecture rtl of nextp8_top_issue4 is
       hdmi_n_o          : out   std_logic_vector(3 downto 0);
       esp_rx_i          : in    std_logic;
       esp_tx_o          : out   std_logic;
+      pi_uart_rx_i      : in    std_logic;
+      pi_uart_tx_o      : out   std_logic;
       XADC_VP           : in    std_logic;
       XADC_VN           : in    std_logic;
       XADC_15P          : in    std_logic;
@@ -272,11 +278,20 @@ begin
    extras_3_io       <= 'Z';
    adc_control_o     <= 'Z';
 
-   -- PI GPIO: bits [21:0] are inputs (read from accel_io), bits [27:22] output postcode
+   -- PI GPIO: 
+   -- bits [27:22] output postcode
+   -- bits [21:16] unused inputs
+   -- bit  [15] Pi UART TX output
+   -- bit  [14] Pi UART RX input
+   -- bits [13:0] unused inputs
    pi_gpio_i <= accel_io(21 downto 0);
+   pi_uart_rx <= accel_io(14);  -- Read UART RX from GPIO pin 14
    
    accel_io(27 downto 22) <= postcode_o;
-   accel_io(21 downto 0)  <= (others => 'Z');
+   accel_io(21 downto 16) <= (others => 'Z');
+   accel_io(15)           <= pi_uart_tx;  -- Drive UART TX to GPIO pin 15
+   accel_io(14)           <= 'Z';  -- Input (Pi UART RX)
+   accel_io(13 downto 0)  <= (others => 'Z');
 
    ------------------------------------------------------------
    -- NEXTP8 CORE ---------------------------------------------
@@ -330,8 +345,10 @@ begin
       hdmi_n_o          => hdmi_n_o,
       esp_rx_i          => esp_rx_i,
       esp_tx_o          => esp_tx_o,
+      pi_uart_rx_i      => pi_uart_rx,
+      pi_uart_tx_o      => pi_uart_tx,
       XADC_VP           => XADC_VP,
-      XADC_VN           => XADC_VN,
+      XADC_VN           => XADC_VN;
       XADC_15P          => XADC_15P,
       XADC_15N          => XADC_15N,
       XADC_7P           => XADC_7P,

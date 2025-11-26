@@ -101,6 +101,10 @@
     input  wire esp_rx_i,
     output wire esp_tx_o,
 
+    // Pi UART (via GPIO pins 14/15)
+    input  wire pi_uart_rx_i,
+    output wire pi_uart_tx_o,
+
     // XADC Analog to Digital Conversion
 
     input wire XADC_VP,
@@ -818,6 +822,28 @@ UART esp_uart (
 		.speed (esp_div) // 191 = 115200 bps
 	);
 
+//------------------- Pi UART -----------------------------------------
+
+reg  [7:0] uart_din;
+wire [7:0] uart_dout;
+reg uart_r, uart_w;
+wire uart_rd,uart_dr;
+reg  [14:0] uart_div=15'd191;  // 191 = 115200 bps
+
+UART uart (
+		.Tx  (pi_uart_tx_o),
+		.Rx  (pi_uart_rx_i),
+		.clk (clk22),
+		.reset (reset),
+		.r (uart_r),
+		.w (uart_w),
+		.data_ready (uart_dr),
+		.ready (uart_rd),
+		.data_in (uart_din),
+		.data_out (uart_dout),
+		.speed (uart_div) // 191 = 115200 bps
+	);
+
 //------------- SD card -------------------------------------
 
 wire ql_sd_ready;
@@ -870,8 +896,11 @@ begin
             if (cpu_addr[6:1]==6'b010000 && cpu_rd ) memio_out <= {i2c_din,i2c_din}; //h800021
             if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
             //-------------- ESP UART ----------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout,esp_dout}; //h800025
-            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,esp_rd,esp_dr, 6'b0,esp_rd,esp_dr}; //h800024
+            if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout,esp_dout}; //h800029
+            if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,esp_rd,esp_dr, 6'b0,esp_rd,esp_dr}; //h800028
+            //-------------- Pi UART ----------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[0]) memio_out <= {uart_dout,uart_dout}; //h800025
+            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,uart_rd,uart_dr, 6'b0,uart_rd,uart_dr}; //h800024
             //------------- User timers -------------------------
             if (cpu_addr[6:1]==6'b010111 && cpu_rd) memio_out <= utimer_1mhz[31:16]; utbuf_1mhz<=utimer_1mhz[15:0];  //h80002E
             if (cpu_addr[6:1]==6'b011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
@@ -912,10 +941,15 @@ begin
             if (cpu_addr[6:1]==6'b010000 && cpu_wr ) i2c_dout <= cpu_dout[7:0]; //h800021
             if (cpu_addr[6:1]==6'b010001 && cpu_wr ) begin i2c_rw <= cpu_dout[1];  i2c_ena <= cpu_dout[0]; end //h800023
             //-------------- UART ------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end //h800024
-            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end //h800025
+            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[1]) begin uart_r <= cpu_dout[9]; uart_w <= cpu_dout[8]; end //h800024
+            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[0]) begin uart_din <= cpu_dout[7:0]; end //h800025
+            // ---------- UART baud rate divider  ------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010011 && cpu_wr ) begin uart_div <= cpu_dout[14:0]; end //h800026
+            //-------------- ESP UART ------------------------------------------------------
+            if (cpu_addr[6:1]==6'b010100 && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end //h800028
+            if (cpu_addr[6:1]==6'b010100 && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end //h800029
             // ---------- esp baud rate divider  ------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010110 && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end //h80002C   8388652
+            if (cpu_addr[6:1]==6'b010101 && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end //h80002a
             // --------------- digital audio -----------------------------------------------------------
             if (cpu_addr[6:1]==6'b011011 && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end //h800036
             if (cpu_addr[6:1]==6'b011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
