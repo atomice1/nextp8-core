@@ -173,6 +173,16 @@ architecture rtl of nextp8_top_issue4 is
    signal pi_uart_rx          : std_logic;
    signal pi_uart_tx          : std_logic;
 
+   -- IOBUF component for bidirectional I/O
+   component IOBUF
+   port (
+      O  : out std_logic;
+      IO : inout std_logic;
+      I  : in std_logic;
+      T  : in std_logic
+   );
+   end component;
+
    -- Component declaration for nextp8 core
    component nextp8
    port (
@@ -284,14 +294,59 @@ begin
    -- bit  [15] Pi UART TX output
    -- bit  [14] Pi UART RX input
    -- bits [13:0] unused inputs
-   pi_gpio_i <= accel_io(21 downto 0);
-   pi_uart_rx <= accel_io(14);  -- Read UART RX from GPIO pin 14
    
-   accel_io(27 downto 22) <= postcode_o;
-   accel_io(21 downto 16) <= (others => 'Z');
-   accel_io(15)           <= pi_uart_tx;  -- Drive UART TX to GPIO pin 15
-   accel_io(14)           <= 'Z';  -- Input (Pi UART RX)
-   accel_io(13 downto 0)  <= (others => 'Z');
+   -- IOBUF for lower bits [13:0] - unused inputs (tri-stated)
+   gen_gpio_lower: for gpio_idx in 0 to 13 generate
+      iobuf_gpio_lower : IOBUF
+      port map (
+         O  => pi_gpio_i(gpio_idx),
+         IO => accel_io(gpio_idx),
+         I  => '0',
+         T  => '1'  -- Tri-stated (input)
+      );
+   end generate;
+
+   -- IOBUF for Pi UART RX (GPIO pin 14) - input
+   iobuf_uart_rx : IOBUF
+   port map (
+      O  => pi_uart_rx,
+      IO => accel_io(14),
+      I  => '0',
+      T  => '1'  -- Tri-stated (input)
+   );
+   pi_gpio_i(14) <= pi_uart_rx;
+
+   -- IOBUF for Pi UART TX (GPIO pin 15) - output
+   iobuf_uart_tx : IOBUF
+   port map (
+      O  => open,
+      IO => accel_io(15),
+      I  => pi_uart_tx,
+      T  => '0'  -- Output enabled
+   );
+   pi_gpio_i(15) <= '0';
+
+   -- IOBUF for upper unused bits [21:16] - inputs (tri-stated)
+   gen_gpio_upper: for gpio_idx in 16 to 21 generate
+      iobuf_gpio_upper : IOBUF
+      port map (
+         O  => pi_gpio_i(gpio_idx),
+         IO => accel_io(gpio_idx),
+         I  => '0',
+         T  => '1'  -- Tri-stated (input)
+      );
+   end generate;
+
+   -- IOBUF for postcode bits [27:22] - outputs
+   gen_postcode: for gpio_idx in 22 to 27 generate
+      iobuf_postcode : IOBUF
+      port map (
+         O  => open,
+         IO => accel_io(gpio_idx),
+         I  => postcode_o(gpio_idx - 22),
+         T  => '0'  -- Output enabled
+      );
+   end generate;
 
    ------------------------------------------------------------
    -- NEXTP8 CORE ---------------------------------------------
