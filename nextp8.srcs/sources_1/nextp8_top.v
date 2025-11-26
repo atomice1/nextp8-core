@@ -1,3 +1,4 @@
+
 //
 // nextp8 core for the ZX Spectrum Next
 //
@@ -36,7 +37,8 @@
     output wire        ram_ub_n_o,
     output wire        ram_oe_n_o,
     output wire        ram_we_n_o,
-    output wire        ram_cs_n_o, // output wire [ 3:0] ram_ce_n_o,
+    output wire        ram_cs_n_o,
+    // output wire [ 3:0] ram_ce_n_o,
 
     // PS2
     inout wire ps2_clk_io,
@@ -51,14 +53,6 @@
     output wire sd_mosi_o,
     input  wire sd_miso_i,
 
-    // Flash
-    output wire flash_cs_n_o,
-    output wire flash_sclk_o,
-    output wire flash_mosi_o,
-    input  wire flash_miso_i,
-    output wire flash_wp_o,
-    output wire flash_hold_o,
-
     // Joystick
     input  wire joyp1_i,
     input  wire joyp2_i,
@@ -72,11 +66,9 @@
     // Audio
     output wire audioext_l_o,
     output wire audioext_r_o,
-    output wire audioint_o,
 
     // K7
     input  wire ear_port_i,
-    output wire mic_port_o,
 
     // Buttons
     input  wire btn_divmmc_n_i,
@@ -87,31 +79,9 @@
     output wire [7:0] keyb_row_o,
     input  wire [6:0] keyb_col_i,
 
-    // Bus
-    inout  wire bus_rst_n_io,
-    output wire bus_clk35_o,
-    output wire [15:0] bus_addr_o,
-    inout  wire [7:0] bus_data_io,
-    input  wire bus_int_in_i,
-    output wire bus_int_n_o,
-    input  wire bus_nmi_n_i,
-    inout  wire bus_ramcs_io,
-    input  wire bus_romcs_i,
-    input  wire bus_wait_n_i,
-    output wire bus_halt_n_o,
-    output wire bus_iorq_n_o,
-    output wire bus_m1_n_o,
-    output wire bus_mreq_n_o,
-    inout  wire bus_rd_n_io,
-    output wire bus_wr_n_o,
-    output wire bus_rfsh_n_o,
-    input  wire bus_busreq_n_i,
-    output wire bus_busack_n_o,
-    input  wire bus_iorqula_n_i,
-    output wire bus_y_o,
-    output wire bus_p3_mtr_n_o,
-    output wire bus_p3_drd_n_o,
-    output wire bus_p3_dwr_n_o,
+    // I2C (RTC and HDMI)
+    inout  wire i2c_scl_io,
+    inout  wire i2c_sda_io,
 
     // VGA
     output wire [3:0] rgb_r_o,
@@ -127,20 +97,9 @@
     output wire [3:0] hdmi_p_o,
     output wire [3:0] hdmi_n_o,
 
-    // I2C (RTC and HDMI)
-    inout  wire i2c_scl_io,
-    inout  wire i2c_sda_io,
-
     // ESP
-    inout  wire esp_gpio0_io,
-    inout  wire esp_gpio2_io,
     input  wire esp_rx_i,
     output wire esp_tx_o,
-    input  wire esp_rtr_n_i,
-    output wire esp_cts_n_o,
-
-    // PI GPIO
-    inout  wire [27:0] accel_io,
 
     // XADC Analog to Digital Conversion
 
@@ -153,13 +112,8 @@
     input wire  XADC_7P,
     input wire  XADC_7N,
 
-    output wire  adc_control_o,
-
-
-    // Vacant pins
-    output  wire extras_o,
-    inout   wire extras_2_io,
-    inout   wire extras_3_io
+    // Postcode output
+    output wire [5:0] postcode_o
 );
 
 
@@ -222,6 +176,9 @@ wire [5:0] post_code;
 assign post_code = !pll_locked ? 6'd1 :       // PLL not locked
                    reset ? 6'd2 :             // in reset
                    post_code_cpu;
+
+// Export postcode to top-level wrapper
+assign postcode_o = post_code;
 
 wire [31:0] build_timestamp;
 wire cfgclk;
@@ -1019,82 +976,7 @@ wire [7:0] tube_stderr;
 assign tube_stdout = (memio_go && cpu_enable && cpu_wr && {cpu_addr[23:1], 1'b0} == 24'hfffffe && !cpu_ds[1]) ? cpu_dout[15:8] : 8'dz;
 assign tube_stderr = (memio_go && cpu_enable && cpu_wr && {cpu_addr[23:1], 1'b0} == 24'hfffffe && !cpu_ds[0]) ? cpu_dout[7:0] : 8'dz;
 
-//--------------------------------------------------------
-//-- Unused outputs
-//--------------------------------------------------------
-
-// -- Interal audio (speaker, not fitted)
-assign audioint_o     = 1'bZ;
-
-// K7
-assign mic_port_o     = 1'b0;
-
-//-- Spectrum Next Bus
-assign bus_addr_o     = 16'bZ;
-assign bus_busack_n_o = 1'bz;
-assign bus_clk35_o    = 1'bz;
-assign bus_data_io    = 8'bZ;
-assign bus_halt_n_o   = 1'bz;
-assign bus_iorq_n_o   = 1'bz;
-assign bus_m1_n_o     = 1'bz;
-assign bus_mreq_n_o   = 1'bz;
-assign bus_rd_n_io     = 1'bz;
-assign bus_rfsh_n_o   = 1'bz;
-assign bus_rst_n_io   = 1'bz;
-assign bus_wr_n_o     = 1'bz;
-assign bus_int_n_o    = 1'bz;  // Output interrupt signal
-assign bus_ramcs_io   = 1'bz;  // Bidirectional RAMCS signal
-//assign bus_romcs_i    = 1'bZ;
-assign bus_y_o        = 1'bz;
-assign bus_p3_mtr_n_o = 1'b1;
-assign bus_p3_drd_n_o = 1'b1;
-assign bus_p3_dwr_n_o = 1'b1;
-
-//-- ESP 8266 module
-assign esp_gpio0_io   = 1'bZ;
-assign esp_gpio2_io   = 1'bZ;
-assign esp_cts_n_o    = 1'b0;
-//assign esp_tx_o       = 1'b1;
-
-assign flash_hold_o   = 1'b1;
-assign flash_wp_o     = 1'b1;
-assign flash_cs_n_o   = 1'b1;
-assign flash_sclk_o   = 1'b1;
-assign flash_mosi_o   = 1'b1;
-
-// PI GPIO
-// bits [27:22] output POST code
-genvar gpio_idx;
-generate
-    // Lower 22 bits are not used.
-    for (gpio_idx = 0; gpio_idx < 22; gpio_idx = gpio_idx + 1) begin : gpio_input
-        IOBUF gpio_buf (
-            .IO(accel_io[gpio_idx]),
-            .I(1'b0),
-            .O(),
-            .T(1'b1)           // Tristate enabled (high-Z)
-        );
-    end
-
-    // Upper 6 bits are POST code
-    for (gpio_idx = 22; gpio_idx < 28; gpio_idx = gpio_idx + 1) begin : gpio_output
-        IOBUF gpio_buf (
-            .IO(accel_io[gpio_idx]),
-            .I(post_code[gpio_idx-22]),
-            .O(),
-            .T(1'b0)           // Tristate disabled (output enabled)
-        );
-    end
-endgenerate
-
-// Vacant pins
-assign extras_o      = 1'bz;
-assign extras_2_io      = 1'bz;
-assign extras_3_io      = 1'bz;
-
-assign adc_control_o = 1'bz;
-
-
 endmodule
+
 
 
