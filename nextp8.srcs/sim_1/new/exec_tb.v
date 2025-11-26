@@ -113,15 +113,12 @@ wire i2c_scl_io;
 wire i2c_sda_io;
 
 // ESP
-wire esp_gpio0_io;
-wire esp_gpio2_io;
-wire esp_rx_i;
+wire esp_rx_i = 1'b1;
 wire esp_tx_o;
-wire esp_rtr_n_i;
-wire esp_cts_n_o;
 
-// PI GPIO
-wire [27:0] accel_io;
+// Pi UART
+wire pi_uart_rx_i = 1'b1;
+wire pi_uart_tx_o;
 
 // XADC Analog to Digital Conversion
 
@@ -134,12 +131,8 @@ wire XADC_15N;
 wire XADC_7P;
 wire XADC_7N;
 
-wire adc_control_o;
-
-// Vacant pins
-wire extras_o;
-wire extras_2_io;
-wire extras_3_io;
+// Postcode output
+wire [5:0] postcode_o;
 
 wire read_en1_i;
 wire write_en1_i;
@@ -245,14 +238,6 @@ nextp8 nextp8(
     .sd_mosi_o(sd_mosi_o),
     .sd_miso_i(sd_miso_i),
 
-    // Flash
-    .flash_cs_n_o(flash_cs_n_o),
-    .flash_sclk_o(flash_sclk_o),
-    .flash_mosi_o(flash_mosi_o),
-    .flash_miso_i(flash_miso_i),
-    .flash_wp_o(flash_wp_o),
-    .flash_hold_o(flash_hold_o),
-
     // Joystick
     .joyp1_i(joyp1_i),
     .joyp2_i(joyp2_i),
@@ -266,11 +251,9 @@ nextp8 nextp8(
     // Audio
     .audioext_l_o(audioext_l_o),
     .audioext_r_o(audioext_r_o),
-    .audioint_o(audioint_o),
 
     // K7
     .ear_port_i(ear_port_i),
-    .mic_port_o(mic_port_o),
 
     // Buttons
     .btn_divmmc_n_i(btn_divmmc_n_i),
@@ -281,32 +264,9 @@ nextp8 nextp8(
     .keyb_row_o(keyb_row_o),
     .keyb_col_i(keyb_col_i),
 
-    // Bus
-    .bus_rst_n_io(bus_rst_n_io),
-    .bus_clk35_o(bus_clk35_o),
-    .bus_addr_o(bus_addr_o),
-    .bus_data_io(bus_data_io),
-    .bus_int_n_io(bus_int_n_io),
-    .bus_nmi_n_i(bus_nmi_n_i),
-    .bus_ramcs_i(bus_ramcs_i),
-    .bus_romcs_i(bus_romcs_i),
-    .bus_wait_n_i(bus_wait_n_i),
-    .bus_halt_n_o(bus_halt_n_o),
-    .bus_iorq_n_o(bus_iorq_n_o),
-    .bus_m1_n_o(bus_m1_n_o),
-    .bus_mreq_n_o(bus_mreq_n_o),
-    .bus_rd_n_io(bus_rd_n_io),
-    .bus_wr_n_o(bus_wr_n_o),
-    .bus_rfsh_n_o(bus_rfsh_n_o),
-    .bus_busreq_n_i(bus_busreq_n_i),
-    .bus_busack_n_o(bus_busack_n_o),
-    .bus_iorqula_n_i(bus_iorqula_n_i),
-    .bus_y_o(bus_y_o),
-
-    // Issue 5 expansion bus
-    .bus_p3_mtr_n_o(bus_p3_mtr_n_o),
-    .bus_p3_drd_n_o(bus_p3_drd_n_o),
-    .bus_p3_dwr_n_o(bus_p3_dwr_n_o),
+    // I2C (RTC and HDMI)
+    .i2c_scl_io(i2c_scl_io),
+    .i2c_sda_io(i2c_sda_io),
 
     // VGA
     .rgb_r_o(rgb_r_o),
@@ -321,20 +281,13 @@ nextp8 nextp8(
     .hdmi_p_o(hdmi_p_o),
     .hdmi_n_o(hdmi_n_o),
 
-    // I2C (RTC and HDMI)
-    .i2c_scl_io(i2c_scl_io),
-    .i2c_sda_io(i2c_sda_io),
-
     // ESP
-    .esp_gpio0_io(esp_gpio0_io),
-    .esp_gpio2_io(esp_gpio2_io),
     .esp_rx_i(esp_rx_i),
     .esp_tx_o(esp_tx_o),
-    .esp_rtr_n_i(esp_rtr_n_i),
-    .esp_cts_n_o(esp_cts_n_o),
 
-    // PI GPIO
-    .accel_io(accel_io),
+    // Pi UART
+    .pi_uart_rx_i(pi_uart_rx_i),
+    .pi_uart_tx_o(pi_uart_tx_o),
 
     // XADC Analog to Digital Conversion
     .XADC_VP(XADC_VP),
@@ -343,17 +296,14 @@ nextp8 nextp8(
     .XADC_15N(XADC_15N),
     .XADC_7P(XADC_7P),
     .XADC_7N(XADC_7N),
-    .adc_control_o(adc_control_o),
 
-    // Vacant pins
-    .extras_o(extras_o),
-    .extras_2_io(extras_2_io),
-    .extras_3_io(extras_3_io)
+    // Postcode output
+    .postcode_o(postcode_o)
 );
 
 wire [5:0] post_code;
 
-assign post_code = accel_io[27:22];
+assign post_code = postcode_o;
 
 initial begin
     $monitor ("[$monitor] time=%0t POST=%0d (target=%0d)", $time, post_code, POST_TARGET);

@@ -42,12 +42,13 @@ reg [6:0] ncols;
 assign omatrix=p8matrix;
 assign rows_o=rows;
 
-always @(posedge clk)
+always @(posedge clk or posedge reset)
 begin
 if (reset) 
     begin
         matrix <= 64'd0;
         p8matrix <= 256'd0;
+        i <= 13'd0;
     end
 else
     begin

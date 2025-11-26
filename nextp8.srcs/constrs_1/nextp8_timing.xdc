@@ -1,327 +1,299 @@
 ## ============================================================================
 ## nextp8 Timing Constraints
 ## ============================================================================
-## This file contains timing constraints for the nextp8 PICO-8 core.
+## Clock Architecture:
+##   PLL1 (pll):        50 MHz input
+##                      ├─ clk_out1 (clk_sys):    11 MHz      (system bus)
+##                      ├─ clk_out2 (clk325):     32.35 MHz   (PLL2 input)
+##                      └─ clk_out3 (mclk):       30.56 MHz   (CPU/memory)
+##
+##   PLL2 (pll_hdmi):   32.35 MHz input from PLL1
+##                      ├─ clk_out1 (clk65):      64.71 MHz   (VGA pixel clock)
+##                      ├─ clk_out2 (clk_tmds):   323.53 MHz  (HDMI TMDS clock)
+##                      └─ clk_out3 (clk_video):  10.78 MHz   (video timing)
+##
+##   Generated Clocks:
+##                      ├─ clk_cpu:     30.56 MHz (from mclk, separate domain)
+##                      ├─ clk_pcm_8x:  354.8 kHz (audio 8× sample rate)
+##                      ├─ clk_pcm:     44.35 kHz (audio sample rate)
+##                      └─ joy_clock:   ~168 Hz   (joystick scanning)
+##
+## Clock Domain Strategy:
+##   - PLL1 outputs are related but treated as separate domains (CDC used)
+##   - PLL2 outputs are related but treated as separate domains (CDC used)
+##   - PLL1 ↔ PLL2 crossings have no phase relationship (different PLLs)
+##   - Audio clocks (clk_pcm*) are fractional dividers, fully async
+##   - All clock crossings use proper CDC synchronizers in RTL
 ## ============================================================================
 
-## ----------------------------------------------------------------------------
-## Generated Clocks
-## ----------------------------------------------------------------------------
-## Note: The PLL IP automatically creates generated clocks for CLKOUT0-5.
-## Additional derived clocks are defined here, but some may not be visible
-## during synthesis and should be applied during implementation instead.
-
-## Audio clocks generated from clk22 via phase accumulator and division
-## clk_pcm_8x: 176.4 kHz audio processing clock (8x sample rate)
-## Fractional-N divider: 22 MHz / 124.7166... ≈ 176.4 kHz
-## For constraints, we approximate as  / 125 which gives 176 kHz
-## Note: BUFGs not in netlist during synthesis - warnings expected but harmless
+## Generated clocks for audio system
+## clk_pcm_8x: 11 MHz / 31 = 354.839 kHz (16× audio sample rate)
+## clk_pcm: 354.839 kHz / 8 = 44.355 kHz (2× audio sample rate)
 create_generated_clock -name clk_pcm_8x \
-    -source [get_pins -quiet nextp8_inst/pll/inst/plle2_adv_inst/CLKOUT0] \
-    -divide_by 125 \
-    [get_pins -quiet nextp8_inst/BUFG_clk_pcm_8x/O]
+    -source [get_pins nextp8_inst/pll/clk_out1] \
+    -divide_by 31 \
+    [get_pins nextp8_inst/BUFG_clk_pcm_8x/O]
 
-## clk_pcm: 22.05 kHz audio sample clock (derived from clk_pcm_8x via /8 divider)
 create_generated_clock -name clk_pcm \
-    -source [get_pins -quiet nextp8_inst/BUFG_clk_pcm_8x/O] \
+    -source [get_pins nextp8_inst/BUFG_clk_pcm_8x/O] \
     -divide_by 8 \
-    [get_pins -quiet nextp8_inst/BUFG_clk_pcm/O]
+    [get_pins nextp8_inst/BUFG_clk_pcm/O]
 
-## CPU and peripheral clocks derived from mclk (CLKOUT5 = 30.556 MHz)
-## clk2i: CPU clock, approximately /3 from mclk via state machine gating
-## Note: This is not a true periodic clock but a gated clock from state machine
-## The /3 approximation helps timing analysis understand the relationship
-create_generated_clock -name clk2i \
-    -source [get_pins nextp8_inst/pll/clk_out5] \
-    -divide_by 3 \
+## CPU clock: same as mclk (30.56 MHz) but buffered separately for CPU domain
+create_generated_clock -name clk_cpu \
+    -source [get_pins nextp8_inst/pll/clk_out3] \
+    -divide_by 1 \
     [get_pins nextp8_inst/BUFG_inst2/O]
 
-## memio_go: Memory I/O control signal, similar pattern to clk2i
-create_generated_clock -name memio_go \
-    -source [get_pins nextp8_inst/pll/clk_out5] \
-    -divide_by 3 \
-    [get_pins nextp8_inst/memio_go_reg/Q]
-
-## Old clk_pcm_pulse constraint (now replaced by proper clocks above)
-# create_generated_clock -name clk_pcm_pulse -source [get_pins pll/clk_out1] -divide_by 998 [get_pins clk_pcm_pulse_reg/Q]
-
-## joy_clock: ~84 Hz joystick polling clock derived from clk2i
-## Marked as asynchronous to prevent timing analysis with other clocks
-## The very slow frequency and asynchronous nature means no common period analysis needed
+## Joystick clock: very slow clock for joystick scanning (~168 Hz from 11 MHz)
 create_generated_clock -name joy_clock \
-    -source [get_pins nextp8_inst/BUFG_inst2/O] \
-    -divide_by 131072 \
-    -add -master_clock clk2i \
+    -source [get_pins nextp8_inst/BUFG_joy_clock/I] \
+    -divide_by 65536 \
+    -add -master_clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
     [get_pins nextp8_inst/BUFG_joy_clock/O]
 
-## Old audio clock divider constraints - commented out as implementation may have changed
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[0]} -source [get_pins clk_pcm_pulse_reg/Q] -divide_by 2 [get_pins {p8audio_inst/pcm_div_ff_reg[0]/Q}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[1]} -source [get_pins clk_pcm_pulse_reg/Q] -divide_by 2 [get_pins {p8audio_inst/pcm_div_ff_reg[1]/Q}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[2]} -source [get_pins clk_pcm_pulse_reg/Q] -divide_by 2 [get_pins {p8audio_inst/pcm_div_ff_reg[2]/Q}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[3]} -source [get_pins clk_pcm_pulse_reg/Q] -divide_by 2 [get_pins {p8audio_inst/pcm_div_ff_reg[3]/Q}]
-## create_generated_clock -name clk_pcm_pulse_Gen -source [get_pins {p8audio_inst/phase_acc[0]_i_12__3/I2}] -divide_by 1 -add -master_clock clk_pcm_pulse [get_pins {p8audio_inst/phase_acc[0]_i_12__3/O}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[0]_Gen} -source [get_pins {p8audio_inst/phase_acc[0]_i_12__3/I0}] -divide_by 1 -add -master_clock p8audio_inst/pcm_div_ff[0] [get_pins {p8audio_inst/phase_acc[0]_i_12__3/O}]
-## create_generated_clock -name clk_pcm_pulse_Gen_1 -source [get_pins {p8audio_inst/phase_acc[0]_i_12__4/I2}] -divide_by 1 -add -master_clock clk_pcm_pulse [get_pins {p8audio_inst/phase_acc[0]_i_12__4/O}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[1]_Gen} -source [get_pins {p8audio_inst/phase_acc[0]_i_12__4/I0}] -divide_by 1 -add -master_clock p8audio_inst/pcm_div_ff[1] [get_pins {p8audio_inst/phase_acc[0]_i_12__4/O}]
-## create_generated_clock -name clk_pcm_pulse_Gen_2 -source [get_pins {p8audio_inst/phase_acc[0]_i_12__5/I2}] -divide_by 1 -add -master_clock clk_pcm_pulse [get_pins {p8audio_inst/phase_acc[0]_i_12__5/O}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[2]_Gen} -source [get_pins {p8audio_inst/phase_acc[0]_i_12__5/I0}] -divide_by 1 -add -master_clock p8audio_inst/pcm_div_ff[2] [get_pins {p8audio_inst/phase_acc[0]_i_12__5/O}]
-## create_generated_clock -name clk_pcm_pulse_Gen_3 -source [get_pins {p8audio_inst/phase_acc[0]_i_12__6/I2}] -divide_by 1 -add -master_clock clk_pcm_pulse [get_pins {p8audio_inst/phase_acc[0]_i_12__6/O}]
-## create_generated_clock -name {p8audio_inst/pcm_div_ff[3]_Gen} -source [get_pins {p8audio_inst/phase_acc[0]_i_12__6/I0}] -divide_by 1 -add -master_clock p8audio_inst/pcm_div_ff[3] [get_pins {p8audio_inst/phase_acc[0]_i_12__6/O}]
 
-## ----------------------------------------------------------------------------
-## Clock Groups - Asynchronous Domains
-## ----------------------------------------------------------------------------
-## The PLL IP cores automatically create generated clocks:
-##   nextp8_inst/pll/clk_out1 - 22.00000 MHz (clk22 - system/CPU)
-##   nextp8_inst/pll/clk_out2 - 11.00000 MHz (clk11 - peripherals)
-##   nextp8_inst/pll/clk_out3 - 32.35294 MHz (clk325 - video base)
-##   nextp8_inst/pll/clk_out4 - 32.35294 MHz inv (clk325n - qlsdpi)
-##   nextp8_inst/pll/clk_out5 - 30.55556 MHz (mclk - memory)
-##   nextp8_inst/pl2/clk_out1 - 64.70588 MHz (clk65 - pixel)
-##   nextp8_inst/pl2/clk_out2 - 323.52940 MHz (clk1625 - TMDS)
-##
-## These domains are NOT synchronized - we use async CDC techniques
-
-set_clock_groups -asynchronous \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out2]] \
-    -group [get_clocks clk2i] \
-    -group [get_clocks memio_go] \
-    -group [get_clocks joy_clock] \
-    -group [get_clocks clock_50_i]
-
-## Audio clocks - mark as asynchronous to all other domains
-## These clocks may not exist during synthesis, only during implementation when BUFGs are inferred
-## The -quiet flag suppresses warnings if clocks don't exist yet
-## CDC crossings to/from clk22 (clk_out1) are handled via toggle synchronizers in p8audio.v
+## Audio clocks are asynchronous to all other clocks
+## They derive from fractional divider, not phase-locked to main PLLs
 set clk_pcm_8x_clocks [get_clocks -quiet clk_pcm_8x]
 set clk_pcm_clocks [get_clocks -quiet clk_pcm]
 
-## Only create clock groups if the audio clocks exist
-## During synthesis these may be empty lists, during implementation they will be populated
 set_clock_groups -asynchronous -quiet \
     -group $clk_pcm_8x_clocks \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out2]] \
-    -group [get_clocks clk2i] \
-    -group [get_clocks memio_go] \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out2]]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
     -group [get_clocks joy_clock]
+
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_8x_clocks \
+    -group [get_clocks clock_50_i]
+
+## clk_pcm also asynchronous to other domains
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_clocks \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]]
 
 set_clock_groups -asynchronous -quiet \
     -group $clk_pcm_clocks \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] \
-    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out2]] \
-    -group [get_clocks clk2i] \
-    -group [get_clocks memio_go] \
-    -group [get_clocks joy_clock]
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]]
 
-## Old clock constraints from previous design - commented out as these clocks don't exist
-## set_clock_groups -logically_exclusive -group [get_clocks -include_generated_clocks clk_pcm_pulse_Gen] -group [get_clocks -include_generated_clocks {p8audio_inst/pcm_div_ff[0]_Gen}]
-## set_clock_groups -logically_exclusive -group [get_clocks -include_generated_clocks clk_pcm_pulse_Gen_1] -group [get_clocks -include_generated_clocks {p8audio_inst/pcm_div_ff[1]_Gen}]
-## set_clock_groups -logically_exclusive -group [get_clocks -include_generated_clocks clk_pcm_pulse_Gen_2] -group [get_clocks -include_generated_clocks {p8audio_inst/pcm_div_ff[2]_Gen}]
-## set_clock_groups -logically_exclusive -group [get_clocks -include_generated_clocks clk_pcm_pulse_Gen_3] -group [get_clocks -include_generated_clocks {p8audio_inst/pcm_div_ff[3]_Gen}]
-## set_clock_groups -asynchronous -group [get_clocks clk_pcm_pulse] -group [get_clocks clk_out1_pll_hdmi]
-## set_clock_groups -asynchronous -group [get_clocks joy_clock] -group [get_clocks memio_go__0]
+set_clock_groups -asynchronous -quiet \
+    -group $clk_pcm_clocks \
+    -group [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]]
 
-## ----------------------------------------------------------------------------
-## Clock Domain Crossing Constraints
-## ----------------------------------------------------------------------------
-## Max delay for signals crossing from system clock to video clocks
-## Conservative value: 1.5× slower clock period = 1.5 × 45.45ns = 68ns
 
-set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-              -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
-              68.0
+## Reset counter outputs drive many domains - false path to avoid over-constraining
+set_false_path -from [get_pins {nextp8_inst/reset_cnt_reg[*]/C}]
 
-set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-              -to [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] \
-              68.0
+## Video palette CDC: toggle-based handshake from clk_sys to clk_video
+## Max delay = ~1 video clock period (31ns at 32.35 MHz)
+set_max_delay -from [get_pins {nextp8_inst/p8video/palette_update_toggle_sys_reg/C}] \
+              -to [get_pins {nextp8_inst/p8video/palette_update_toggle_video_reg/D}] \
+              -datapath_only 31.0
 
-## Max delay from video back to system
-set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
-              -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-              68.0
+## Palette data CDC from clk_sys to clk_video
+set_max_delay -from [get_pins -hier -filter {NAME =~ */screen_palette*_sys*}] -to [get_pins -hier -filter {NAME =~ */palette*_video_reg*}] 20.0
 
-## Max delay for memory controller crossings
-set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-              -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] \
-              68.0
+## Palette transfers use multi-cycle paths (data stable for multiple cycles)
+set_false_path -from [get_cells {nextp8_inst/p8video/screen_palette0_sys_reg[*][*]}] \
+               -to [get_cells {nextp8_inst/p8video/palette0_video_reg[*]}]
+set_false_path -from [get_cells {nextp8_inst/p8video/screen_palette1_sys_reg[*][*]}] \
+               -to [get_cells {nextp8_inst/p8video/palette1_video_reg[*]}]
 
-set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] \
-              -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
-              68.0
+## VGA frontend request CDC from clk_sys to clk_video  
+set_max_delay -from [get_pins {nextp8_inst/vfrontreq_reg/C}] \
+              -to [get_pins {nextp8_inst/p8video/vfrontreq_q_reg/D}] \
+              -datapath_only 31.0
 
-## ----------------------------------------------------------------------------
+## VGA frontend acknowledge CDC from clk_video to clk_sys
+set_max_delay -from [get_pins {nextp8_inst/p8video/vfront_reg/C}] \
+              -to [get_pins {nextp8_inst/p8video/vfronto_q_reg/D}] \
+              -datapath_only 33.0
+
+## HDMI InfoFrame data CDC from clk_sys to clk_tmds
+set_false_path -from [get_cells nextp8_inst/da_memory_reg*] -to [get_cells nextp8_inst/da_data_tmds_*_reg[*]]
+
+
 ## Input/Output Delays
-## ----------------------------------------------------------------------------
-## External signals relative to the 50MHz input clock
+## These define the board-level timing requirements for external interfaces
 
-## GPIO/Button inputs - allow 10ns for board routing
-## Note: gpio_* ports currently not used in design, commented out
-## set_input_delay -clock [get_clocks clock_50_i] -max 10.0 [get_ports gpio_*]
+## Button inputs on 50 MHz clock
 set_input_delay -clock [get_clocks clock_50_i] -max 10.0 [get_ports btn_*]
 
-## UART - 115200 baud is ~8.68us per bit, timing not critical
-## Note: uart_rx/uart_tx currently not used in design, commented out
-## set_input_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports uart_rx]
-## set_output_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports uart_tx]
+## ESP32 UART (115200 baud, async, on clk_sys 11 MHz)
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 20.0 [get_ports esp_rx_i]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports esp_rx_i]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 20.0 [get_ports esp_tx_o]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports esp_tx_o]
 
-## SD Card SPI - BSP driver sets the SPI divider at 1 MHz (1000ns period)
-## Driven by clk325n (32.35 MHz) clock domain via SPI module with programmable divider
-## SPI frequency = clk325n / (2 * divider), typically divider=16 for 1 MHz
-## NOTE: SPI module handles all timing via the divider. These are just basic I/O constraints.
-## Very relaxed timing since actual SPI clock is much slower than clk325n
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] -max 5.0 [get_ports sd_miso_i]
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] -min 0.0 [get_ports sd_miso_i]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] -max 5.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out4]] -min 0.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
+## SD card SPI interface (on clk_sys 11 MHz)
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 5.0 [get_ports sd_miso_i]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports sd_miso_i]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 5.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
 
-## Audio DAC - I2S, synchronous to audio clock (clk22)
+## Audio DAC outputs (PWM-style, on clk_sys 11 MHz, board RC filter)
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 22.0 [get_ports {audioext_l_o audioext_r_o}]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports {audioext_l_o audioext_r_o}]
 
-## HDMI outputs - synchronous to TMDS serialization clock (323.53 MHz, period=3.091ns)
-## ODDR (OPPOSITE_EDGE) -> OBUFDS -> HDMI pins
-## TMDS has no external setup/hold requirements (receiver has clock recovery)
-## Relax timing to allow design to meet constraints:
-## 1. Output paths (ODDR->OBUFDS->pins): set_max_delay allows ~8ns
-## 2. Internal paths (logic->ODDR): multicycle allows 2 clock cycles (3.091ns)
+
+## HDMI outputs: TMDS serializer has internal timing, max delay keeps routing reasonable
 set_max_delay -to [get_ports {hdmi_p_o[*] hdmi_n_o[*]}] 8.0
+
+## HDMI TMDS serializer: data sampled on clk_tmds (323 MHz), serialized on 10x that
+## Multi-cycle path because data is stable for 2 clk_tmds cycles
 set_multicycle_path -setup 2 -to [get_pins nextp8_inst/hdmiqout/g1[*].to_serial/D*] -from [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out2]]
 set_multicycle_path -hold 1 -to [get_pins nextp8_inst/hdmiqout/g1[*].to_serial/D*] -from [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out2]]
 
-## Keyboard Matrix - Not timing critical (scanned at ~1kHz)
-## Rows driven by FPGA, columns sensed with pullups
-## Driven by clk11 (11 MHz) clock domain
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -max 50.0 [get_ports keyb_row_o[*]]
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -max 50.0 [get_ports keyb_col_i[*]]
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -min 0.0 [get_ports keyb_col_i[*]]
+## Keyboard matrix scanning (on clk_sys 11 MHz)
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 15.0 [get_ports keyb_row_o[*]]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports keyb_row_o[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 15.0 [get_ports keyb_col_i[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports keyb_col_i[*]]
 
-## External SRAM (Asynchronous) - Timing relative to memory clock (mclk)
-## Typical async SRAM: 10ns access time, but we use 30.56MHz mclk = 32.7ns period
-## Conservative constraints to allow for PCB routing and signal integrity
+## External SRAM interface (on clk_cpu 30.56 MHz)
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports ram_addr_o[*]]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_addr_o[*]]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports {ram_cs_n_o ram_lb_n_o ram_ub_n_o ram_oe_n_o ram_we_n_o}]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports {ram_cs_n_o ram_lb_n_o ram_ub_n_o ram_oe_n_o ram_we_n_o}]
 
-# SRAM outputs from FPGA (address, control signals)
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] -max 10.0 [get_ports ram_addr_o[*]]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] -max 10.0 [get_ports {ram_cs_n_o ram_lb_n_o ram_ub_n_o ram_oe_n_o ram_we_n_o}]
+## SRAM data is bidirectional
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports ram_data_io[*]]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_data_io[*]]
 
-# SRAM bidirectional data bus
-# When writing (output from FPGA)
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] -max 10.0 [get_ports ram_data_io[*]]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] -min 0.0 [get_ports ram_data_io[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 15.0 [get_ports ram_data_io[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_data_io[*]]
 
-# When reading (input to FPGA) - allow for RAM access time
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] -max 15.0 [get_ports ram_data_io[*]]
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out5]] -min 0.0 [get_ports ram_data_io[*]]
+## I2C bus for RTC (on clk_sys 11 MHz, slow protocol, relaxed timing)
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
 
-## Note: set_max_input_transition not supported in XDC constraint files
-## Signal integrity should be handled via PCB design and termination
-# set_max_input_transition 5.0 [get_ports ram_data_io[*]]
+## Joystick select signal (on joy_clock ~168 Hz, very relaxed timing)
+set_output_delay -clock [get_clocks joy_clock] -max 200.0 [get_ports {joysel_o}]
+set_output_delay -clock [get_clocks joy_clock] -min 0.0 [get_ports {joysel_o}]
 
-# ESP WiFi Module UART - Asynchronous serial interface
-## Timing handled by false path constraints (see below)
-## 115200 baud = 8.68us/bit, uses internal oversampling
-
-## I2C Bus (SCL/SDA) - Very relaxed timing (typically 100-400 kHz)
-## I2C is open-drain with pullups, no tight timing requirements
-## Even at Fast-Mode Plus (1 MHz), bit time is 1000ns
-## Driven by clk11 (11 MHz) clock domain
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -max 50.0 [get_ports {i2c_scl_io i2c_sda_io}]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]] -min 0.0 [get_ports {i2c_scl_io i2c_sda_io}]
-
-## Note: set_max_input_transition not supported in XDC constraint files
-## Signal integrity should be handled via PCB design and pullup resistors
-# set_max_input_transition 10.0 [get_ports {i2c_scl_io i2c_sda_io}]
-
-## Joystick interface (human input, not timing critical)
-## Completely asynchronous - timing handled by false path constraints below
-## No I/O delay constraints needed since interface is async sampled
-
-## PS/2 interface (keyboard/mouse, 10-16 kHz clock, very slow)
-set_input_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports {ps2_clk_io ps2_data_io ps2_pin2_io ps2_pin6_io}]
-set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports {ps2_clk_io ps2_data_io ps2_pin2_io ps2_pin6_io}]
-set_output_delay -clock [get_clocks clock_50_i] -max 50.0 [get_ports {ps2_clk_io ps2_data_io ps2_pin2_io ps2_pin6_io}]
-
-## Note: set_max_input_transition not supported in XDC constraint files
-## Signal integrity should be handled via PCB design and pullup resistors
-# set_max_input_transition 10.0 [get_ports {ps2_clk_io ps2_data_io ps2_pin2_io ps2_pin6_io}]
-
-## Accelerator/Expansion bus GPIO - General purpose I/O, timing depends on usage
-## Use relaxed constraints suitable for typical expansion cards
-## NOTE: accel_io port no longer exists in nextp8 core, these constraints apply to top-level only
+## Accelerometer I2C (on 50 MHz clock)
 set_input_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports accel_io[*]]
 set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports accel_io[*]]
 set_output_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports accel_io[*]]
 set_output_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports accel_io[*]]
 
-## RGB/VGA video outputs - synchronous to pixel clock (64.71 MHz)
-## RGB data and sync signals, moderate timing requirements
+## VGA outputs (on clk65 64.71 MHz pixel clock)
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] -max 5.0 [get_ports {rgb_r_o[*] rgb_g_o[*] rgb_b_o[*] hsync_o vsync_o}]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] -min 0.0 [get_ports {rgb_r_o[*] rgb_g_o[*] rgb_b_o[*] hsync_o vsync_o}]
 
-## ----------------------------------------------------------------------------
-## False Paths
-## ----------------------------------------------------------------------------
-## Async resets - don't analyze timing to reset pins
-## Note: PRE pins not present in current design, only CLR used
-# set_false_path -to [get_pins -hierarchical *rst*/PRE]
-set_false_path -to [get_pins -hierarchical *rst*/CLR]
 
-## Async inputs that go through synchronizers
+## Clock Domain Crossing False Paths
+## These are paths between different PLLs or async clock domains with proper CDC
+
+## PLL2 internal crossing: clk_video (10.78 MHz) ↔ clk65 (64.71 MHz)
+## Same PLL but intentionally async - handled with CDC in design
+set_false_path -from [get_clocks clk_out3_pll_hdmi] -to [get_clocks clk_out1_pll_hdmi]
+set_false_path -from [get_clocks clk_out1_pll_hdmi] -to [get_clocks clk_out3_pll_hdmi]
+
+## Async input paths: buttons with synchronizers
 set_false_path -from [get_ports btn_*] -to [get_pins -hierarchical *sync*/D]
-## Note: gpio_* ports currently not used in design, commented out
-# set_false_path -from [get_ports gpio_*] -to [get_pins -hierarchical *sync*/D]
 
-## Asynchronous button inputs crossing clock domains
-## Reset button is async - human press, goes to clk2i domain via reset_cnt registers
-set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks clk2i]
+## Reset button to clock domains (async, has debounce and sync)
+set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks clk_cpu]
+set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]]
 
-## PS/2 keyboard inputs are asynchronous (self-clocked protocol)
-## PS/2 data/clock go through synchronizer chain before use
-set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out2]]
+## PS/2 keyboard inputs (async, handled by keyboard controller)
+set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]]
 
-## Joystick interface is asynchronous (human input, ~84 Hz sampling)
-## No meaningful timing relationship between joy_clock and other clock domains
-set_false_path -from [get_clocks joy_clock] -to [get_ports {joysel_o joyp7_o}]
-set_false_path -from [get_ports {joyp1_i joyp2_i joyp3_i joyp4_i joyp6_i joyp9_i}] -to [get_clocks joy_clock]
-set_false_path -from [get_clocks joy_clock] -to [get_clocks clock_50_i]
-
-set_false_path -from [get_clocks clock_50_i] -to [get_clocks joy_clock]
-
-## ESP UART is asynchronous serial (115200 baud = 8.68us bit period)
-## UART uses internal oversampling and synchronization, no timing relationship to system clock
+## ESP32 UART (async serial, has CDC in UART module)
 set_false_path -from [get_ports esp_rx_i]
 set_false_path -to [get_ports esp_tx_o]
 
-## POST code debug outputs (accel_io[27:22]) are asynchronous
-## These are driven by internal clocks (clk2i, memio_go, joy_clock) with no external timing requirements
-set_false_path -from [get_clocks {clk2i memio_go joy_clock}] -to [get_ports accel_io[*]]
+## NextPi accelerator GPIO (async)
+set_false_path -from [get_ports accel_io[*]]
+set_false_path -to [get_ports accel_io[*]]
 
-## Expansion bus lower bits may be driven by various internal clocks
-## Relax timing since actual usage depends on external expansion cards
-set_false_path -from [get_clocks {clk2i memio_go}] -to [get_ports accel_io[*]]
+## Joystick clock domain (very slow, async)
+set_false_path -from [get_clocks joy_clock]
+set_false_path -to [get_clocks joy_clock]
 
-## Input paths from expansion bus to internal clocks
-set_false_path -from [get_ports accel_io[*]] -to [get_clocks -of_objects [get_pins {nextp8_inst/BUFG_inst2/O}]]
-set_false_path -from [get_ports accel_io[*]] -to [get_clocks -of_objects [get_pins {nextp8_inst/pll/clk_out2}]]
 
-## ============================================================================
-## End of nextp8 Timing Constraints
-## ============================================================================
+## Video BRAM to output register paths
+## BRAM outputs are async to video clock, captured in registers
+set_false_path -from [get_cells -hierarchical -filter {NAME =~ *vram* && PRIMITIVE_TYPE =~ BMEM.*}] -to [get_cells nextp8_inst/p8video/VR_reg*]
+set_false_path -from [get_cells -hierarchical -filter {NAME =~ *vram* && PRIMITIVE_TYPE =~ BMEM.*}] -to [get_cells nextp8_inst/p8video/VG_reg*]
+set_false_path -from [get_cells -hierarchical -filter {NAME =~ *vram* && PRIMITIVE_TYPE =~ BMEM.*}] -to [get_cells nextp8_inst/p8video/VB_reg*]
+
+## Palette to video output path (data stable across multiple clocks)
+set_false_path -from [get_cells nextp8_inst/p8video/screen_palette*_sys_reg[*][*]] -to [get_cells nextp8_inst/p8video/V*_reg[*]]
+
+## Multi-cycle path for palette lookup (4 video clocks setup, 3 hold)
+## Palette data is stable for multiple pixel clocks during rendering
+set_multicycle_path 4 -setup -from [get_cells nextp8_inst/p8video/palette*_video_reg[*]] -to [get_cells nextp8_inst/p8video/V*_reg[*]]
+set_multicycle_path 3 -hold -from [get_cells nextp8_inst/p8video/palette*_video_reg[*]] -to [get_cells nextp8_inst/p8video/V*_reg[*]]
+
+
+## Audio and InfoFrame CDC from clk_sys to clk_tmds for HDMI audio
+## These are synchronized with multi-stage synchronizers in the design
+set_false_path -from [get_cells nextp8_inst/da_playing_reg] -to [get_cells nextp8_inst/da_playing_tmds_?_reg]
+set_false_path -from [get_cells nextp8_inst/da_mono_reg] -to [get_cells nextp8_inst/da_mono_tmds_?_reg]
+set_false_path -from [get_cells {nextp8_inst/p8audio_pcm_out_sys_q_reg[*]}] -to [get_cells {nextp8_inst/p8audio_pcm_out_tmds_?_reg[*]}]
+set_false_path -from [get_cells {nextp8_inst/p8audio_inst/pcm_out_reg[*]}] -to [get_cells {nextp8_inst/p8audio_pcm_out_tmds_?_reg[*]}]
+
+## PS/2 keyboard parameter sync (quasi-static control)
+set_false_path -from [get_cells nextp8_inst/params_reg[0]] -to [get_cells {nextp8_inst/keyboard/ps2_keyboard/ps2*_sync_reg[0]}]
+
+
+## Inter-PLL clock domain crossings
+## PLL1 (pll): 50MHz input → 11MHz (clk_out1), 32.35MHz (clk_out2), 30.56MHz (clk_out3)
+## PLL2 (pl2/pll_hdmi): 32.35MHz input → 64.71MHz (clk_out1), 323.53MHz (clk_out2), 10.78MHz (clk_out3)
+## These PLLs have no phase relationship despite PLL2 using PLL1's output as input
+## All crossings use proper CDC synchronizers in RTL
+
+## mclk (30.56 MHz) ↔ clk_video (10.78 MHz): different PLLs
+set_false_path -from [get_clocks clk_out3_pll] -to [get_clocks clk_out3_pll_hdmi]
+set_false_path -from [get_clocks clk_out3_pll_hdmi] -to [get_clocks clk_out3_pll]
+
+## mclk (30.56 MHz) ↔ clk65 (64.71 MHz): different PLLs
+set_false_path -from [get_clocks clk_out3_pll] -to [get_clocks clk_out1_pll_hdmi]
+set_false_path -from [get_clocks clk_out1_pll_hdmi] -to [get_clocks clk_out3_pll]
+
+## clk325 (32.35 MHz) ↔ clk65 (64.71 MHz): different PLLs
+set_false_path -from [get_clocks clk_out2_pll] -to [get_clocks clk_out1_pll_hdmi]
+set_false_path -from [get_clocks clk_out1_pll_hdmi] -to [get_clocks clk_out2_pll]
+
+## clk325 (32.35 MHz) ↔ clk_tmds (323.53 MHz): different PLLs
+set_false_path -from [get_clocks clk_out2_pll] -to [get_clocks clk_out2_pll_hdmi]
+set_false_path -from [get_clocks clk_out2_pll_hdmi] -to [get_clocks clk_out2_pll]
+
+## clk325 (32.35 MHz) ↔ clk_video (10.78 MHz): different PLLs
+set_false_path -from [get_clocks clk_out2_pll] -to [get_clocks clk_out3_pll_hdmi]
+set_false_path -from [get_clocks clk_out3_pll_hdmi] -to [get_clocks clk_out2_pll]
+
+## clk_sys (11 MHz) ↔ clk_tmds (323.53 MHz): different PLLs, audio outputs
+set_false_path -from [get_clocks clk_out1_pll] -to [get_clocks clk_out2_pll_hdmi]
+set_false_path -from [get_clocks clk_out2_pll_hdmi] -to [get_clocks clk_out1_pll]
+
+## clk_sys (11 MHz) ↔ clk_video (10.78 MHz): different PLLs
+set_false_path -from [get_clocks clk_out1_pll] -to [get_clocks clk_out3_pll_hdmi]
+set_false_path -from [get_clocks clk_out3_pll_hdmi] -to [get_clocks clk_out1_pll]
+
+## VRAM address to BRAM (async path, address stable before read)
+set_false_path -from [get_cells nextp8_inst/p8video/vaddress_reg*] -to [get_cells nextp8_inst/vram/U0/inst_blk_mem_gen/gnbram.gnativebmg.native_blk_mem_gen/valid.cstr/ramloop*ram.r/prim_noinit.ram/DEVICE_7SERIES.NO_BMM_INFO.TRUE_DP.SIMPLE_PRIM36.ram*]
+

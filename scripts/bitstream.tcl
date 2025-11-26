@@ -25,7 +25,7 @@ if {![string match "*write_bitstream Complete!*" $status]} {
 puts "SUCCESS: Bitstream generation completed"
 
 # Find and report bitstream location
-set bit_file [get_property DIRECTORY [get_runs impl_1]]/nextp8.bit
+set bit_file [get_property DIRECTORY [get_runs impl_1]]/nextp8_top_issue5.bit
 if {[file exists $bit_file]} {
     puts "Bitstream file: $bit_file"
 } else {

@@ -82,7 +82,7 @@ module tb_p8audio_sfx;
     // DUT: p8audio
     //====================
     p8audio dut (
-        .clk_sys(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x), .resetn(resetn),
+        .mclk(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x), .resetn(resetn),
         .address(address), .din(din), .dout(dout), .nUDS(nUDS), .nLDS(nLDS), .write_en(write_en), .read_en(read_en),
         .pcm_out(pcm_out),
         .dma_addr(dma_addr), .dma_rdata(dma_rdata), .dma_req(dma_req), .dma_ack(dma_ack)

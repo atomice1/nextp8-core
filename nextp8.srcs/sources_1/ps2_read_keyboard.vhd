@@ -49,6 +49,11 @@ architecture rtl of ps2_read_keyboard is
   signal ps2c_sync  : std_logic_vector(1 downto 0) := (others => '1');
   signal ps2d_sync  : std_logic_vector(1 downto 0) := (others => '1');
 
+  -- ASYNC_REG attributes for CDC synchronizers
+  attribute ASYNC_REG : string;
+  attribute ASYNC_REG of ps2c_sync : signal is "TRUE";
+  attribute ASYNC_REG of ps2d_sync : signal is "TRUE";
+
   -- Debounce/filter shift register for PS/2 clock
   subtype filter_vec_t is std_logic_vector(FILTER_BITS-1 downto 0);
   signal clk_filter : filter_vec_t := (others => '1');

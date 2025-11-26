@@ -252,7 +252,6 @@ reg [7:0]  arp_speed_8x [0:7];    // Arpeggio speed 0,2,4,8
 // SFX data from RAM
 // Used for both note data and waveform dat
 reg [15:0] sfx_data_8x [0:7];        // 16-bit word read from RAM
-reg [4:0]  sfx_read_addr_8x [0:7];   // Read address (0-31 for 32 16-bit words)
 reg        sfx_byte_sel_8x [0:7];    // Byte select bit for waveform mode
 
 // DSP state
@@ -292,17 +291,22 @@ reg [7:0] hwfx_5f40_sys;
 reg [7:0] hwfx_5f41_sys;
 reg [7:0] hwfx_5f42_sys;
 reg [7:0] hwfx_5f43_sys;
-reg [7:0] hwfx_5f40_pcm, hwfx_5f40_pcm_q;
-reg [7:0] hwfx_5f41_pcm, hwfx_5f41_pcm_q;
-reg [7:0] hwfx_5f42_pcm, hwfx_5f42_pcm_q;
-reg [7:0] hwfx_5f43_pcm, hwfx_5f43_pcm_q;
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f40_pcm;       // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f40_pcm_q;     // CDC stage 2
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f41_pcm;       // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f41_pcm_q;     // CDC stage 2
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f42_pcm;       // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f42_pcm_q;     // CDC stage 2
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f43_pcm;       // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] hwfx_5f43_pcm_q;     // CDC stage 2
 
 // Custom instrument load request CDC (clk_pcm_8x -> clk_sys)
 // Use per-voice toggles to handle multiple simultaneous requests
 // Only MAIN contexts (1,3,5,7) can request, loading into CUSTOM contexts (0,2,4,6)
 reg [3:0] custom_load_toggle_pcm;         // One bit per voice (0-3)
 reg [2:0] custom_load_wave_pcm [0:3];     // Wave ID per voice
-reg [3:0] custom_load_toggle_sys, custom_load_toggle_sys_q;
+(* ASYNC_REG = "TRUE" *) reg [3:0] custom_load_toggle_sys;      // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [3:0] custom_load_toggle_sys_q;    // CDC stage 2
 
 //==============================================================
 // Current Context Wires (mux into current context)
@@ -746,19 +750,19 @@ end
 //==============================================================
 
 // Toggle synchronizers and sticky flags(clk_pcm_8x domain)
-reg [7:0] load_done_toggle_pcm;
-reg [7:0] load_done_toggle_pcm_q;
+(* ASYNC_REG = "TRUE" *) reg [7:0] load_done_toggle_pcm;        // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] load_done_toggle_pcm_q;      // CDC stage 2
 reg [7:0] load_done_pcm_sticky;  // Sticky flag for load completion (persist until cleared)
 
 // Force stop/release synchronizers and sticky flags
 reg [7:0] force_stop_toggle_sys;
-reg [7:0] force_stop_toggle_pcm;
-reg [7:0] force_stop_toggle_pcm_q;
+(* ASYNC_REG = "TRUE" *) reg [7:0] force_stop_toggle_pcm;       // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] force_stop_toggle_pcm_q;     // CDC stage 2
 reg [7:0] force_stop_pcm_sticky;  // Sticky flags for force_stop (persist until cleared)
 
 reg [7:0] force_release_toggle_sys;
-reg [7:0] force_release_toggle_pcm;
-reg [7:0] force_release_toggle_pcm_q;
+(* ASYNC_REG = "TRUE" *) reg [7:0] force_release_toggle_pcm;    // CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [7:0] force_release_toggle_pcm_q;  // CDC stage 2
 reg [7:0] force_release_pcm_sticky;  // Sticky flags for force_release (persist until cleared)
 
 // Generate toggles on force_stop/force_release inputs (clk_sys domain)

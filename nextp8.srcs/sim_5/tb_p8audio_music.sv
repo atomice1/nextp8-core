@@ -25,6 +25,7 @@ module tb_p8audio_music;
     //====================
     reg clk_sys = 1'b0;     // 33 MHz system clock
     reg clk_pcm = 1'b0;     // ~22.05 kHz PCM sample clock
+    reg clk_pcm_8x = 1'b0;  // ~176.4 kHz (8× PCM sample clock)
     reg resetn  = 1'b0;
 
     // 33MHz: 30ns period
@@ -34,6 +35,8 @@ module tb_p8audio_music;
     // Note: the test bench runs the PCM clock at 1000x to reduce simulation time.
     localparam integer PCM_HALF_NS = 1000000/22050/2; // 22.675ns ~ 44.101MHz
     always #(PCM_HALF_NS) clk_pcm = ~clk_pcm;
+    // clk_pcm_8x: 8× faster than clk_pcm
+    always #(PCM_HALF_NS/8) clk_pcm_8x = ~clk_pcm_8x;
 
     //====================
     // MMIO signals
@@ -74,7 +77,7 @@ module tb_p8audio_music;
     // DUT: p8audio
     //====================
     p8audio dut (
-        .clk_sys(clk_sys), .clk_pcm(clk_pcm), .resetn(resetn),
+        .mclk(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x), .resetn(resetn),
         .address(address), .din(din), .dout(dout), .nUDS(nUDS), .nLDS(nLDS), .write_en(write_en), .read_en(read_en),
         .pcm_out(pcm_out),
         .dma_addr(dma_addr), .dma_rdata(dma_rdata), .dma_req(dma_req), .dma_ack(dma_ack)

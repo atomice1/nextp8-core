@@ -31,7 +31,7 @@ entity UART is
 		ready : OUT std_logic:='1';
 		data_in : IN std_logic_vector (7 downto 0);
 		data_out :OUT std_logic_vector (7 downto 0);
-		speed: IN std_logic_vector (14 downto 0) := std_logic_vector(to_unsigned(1301, 15)) --natural range 0 to 32768:=1301
+		speed: IN std_logic_vector (14 downto 0) := std_logic_vector(to_unsigned(95, 15)) --natural range 0 to 32768:=95
 	);
 end UART;
 
@@ -58,105 +58,104 @@ signal rx0,rx1:std_logic:='1';
 
 begin
 
-	process (clk,reset)
+	process (clk)
 	
    variable wa,ra:boolean :=false ;
 
 	begin
-		if (reset='1') then 
-			rptr1<=0; rptr2<=0; data_ready<='0'; ready<='1'; rcounter<=1; rstate<=0; tstate<=0;
-			tcounter<=1; tptr1<=0; tptr2<=0; dr<=false; rd<=true; wa:=false; ra:=false; 
-			Tx<='1';  rx0<='1'; rx1<='1'; --rFIFO<=(OTHERS=>"00000000"); 
-		elsif  clk'EVENT  and clk = '1' then
-			rcounter<=rcounter+1; 
-			tcounter<=tcounter+1;
-			rx1<=Rx; rx0<=rx1;
-			if rcounter=speed or (rstate=0 and rx1='0' and rx0='0' and Rx='0') then	
-				if rstate=0 and Rx='0' and rx1='0' and rx0='0' then
-					rcounter<=to_integer(unsigned(speed))/2;	
-					rstate<=1; 
-				elsif rstate=1 then
-					rstate<=rstate+1;
-					rcounter<=1;
-				elsif rstate>0 and rstate<10 then
-					inb(rstate)<=Rx;
-					rcounter<=1;
-					rstate<=rstate+1;
-				elsif rstate=10 then
-					rcounter<=1;
-					rstate<=0;
-					rFIFO(rptr2)<=inb;
-					if rptr2+1<rblen then 
-						if rptr2+1 /= rptr1 then
-							rptr2<=rptr2+1;
+		if  clk'EVENT  and clk = '1' then
+			if (reset='1') then 
+				rptr1<=0; rptr2<=0; data_ready<='0'; ready<='1'; rcounter<=1; rstate<=0; tstate<=0;
+				tcounter<=1; tptr1<=0; tptr2<=0; dr<=false; rd<=true; wa:=false; ra:=false;
+				Tx<='1';  rx0<='1'; rx1<='1'; --rFIFO<=(OTHERS=>"00000000");
+			else
+				rcounter<=rcounter+1;
+				tcounter<=tcounter+1;
+				rx1<=Rx; rx0<=rx1;
+				if rcounter=speed or (rstate=0 and rx1='0' and rx0='0' and Rx='0') then
+					if rstate=0 and Rx='0' and rx1='0' and rx0='0' then
+						rcounter<=to_integer(unsigned(speed))/2;
+						rstate<=1;
+					elsif rstate=1 then
+						rstate<=rstate+1;
+						rcounter<=1;
+					elsif rstate>0 and rstate<10 then
+						inb(rstate)<=Rx;
+						rcounter<=1;
+						rstate<=rstate+1;
+					elsif rstate=10 then
+						rcounter<=1;
+						rstate<=0;
+						rFIFO(rptr2)<=inb;
+						if rptr2+1<rblen then
+							if rptr2+1 /= rptr1 then
+								rptr2<=rptr2+1;
+							end if;
+						else
+							if rptr1/=0 then
+								rptr2<=0;
+							end if;
 						end if;
+						data_ready<='1'; dr<=true;
 					else
-						if rptr1/=0 then
-							rptr2<=0; 
-						end if;
+						rcounter<=1;
 					end if;
-					data_ready<='1'; dr<=true;
-				else
-					rcounter<=1;
 				end if;
-			end if;
-			
-			
-			if tcounter=speed then
+
+				if tcounter=speed then
+					
+					if tstate=0 and ( tptr1/=tptr2 or rd=false) then
+						tcounter<=1;
+						Tx<='0';
+						outb<=tFIFO(tptr1);
+						tstate<=2;
+					elsif tstate>1 and tstate<10 then
+						TX<=outb(tstate);
+						tcounter<=1;
+						tstate<=tstate+1;
+					elsif tstate=10 then
+						Tx<='1';
+						tcounter<=1;
+						tstate<=0;
+						if tptr1<tblen-1 then tptr1<=tptr1+1; else tptr1<=0; end if;
+						ready<='1'; rd<=true;
+					else
+						tcounter<=1;
+						Tx<='1';
+					end if;
+				end if;
 				
-				if tstate=0 and ( tptr1/=tptr2 or rd=false) then
-					tcounter<=1;
-					Tx<='0';
-					outb<=tFIFO(tptr1);
-					tstate<=2;
-				elsif tstate>1 and tstate<10 then
-					TX<=outb(tstate);
-					tcounter<=1;
-					tstate<=tstate+1;
-				elsif tstate=10 then
-					Tx<='1';
-					tcounter<=1;
-					tstate<=0;
-					if tptr1<tblen-1 then tptr1<=tptr1+1; else tptr1<=0; end if;
-					ready<='1'; rd<=true;
-				else
-					tcounter<=1;
-					Tx<='1';
-				end if;
-			end if;
-			
-			
-			if r='1' and ra=false then 
-				if dr then
-					data_out<=rFIFO(rptr1);
-					if rptr1+1<rblen then 
-						rptr1<=rptr1+1;
-						if rptr1+1 = rptr2 then data_ready<='0'; dr<=false; end if;
-					else
-						rptr1<=0; 
-						if rptr2=0 then data_ready<='0'; dr<=false; end if;
+				
+				if r='1' and ra=false then 
+					if dr then
+						data_out<=rFIFO(rptr1);
+						if rptr1+1<rblen then 
+							rptr1<=rptr1+1;
+							if rptr1+1 = rptr2 then data_ready<='0'; dr<=false; end if;
+						else
+							rptr1<=0; 
+							if rptr2=0 then data_ready<='0'; dr<=false; end if;
+						end if;
 					end if;
-				end if;
-				ra:=true;
-			else
-				if r='0' then ra:=false; end if;
-				if dr=true then data_out<=rFIFO(rptr1); end if;
-			end if;
-			
-			if w='1' and rd=true and wa=false then
-				wa:=true;
-				tFIFO(tptr2)<=data_in;
-				if tptr2<tblen-1 then
-					if tptr2+1=tptr1 then  ready<='0'; rd<=false; end if;
-					tptr2<=tptr2+1;
+					ra:=true;
 				else
-					tptr2<=0;
-					if tptr1=0 then ready<='0'; rd<=false;	end if;
+					if r='0' then ra:=false; end if;
+					if dr=true then data_out<=rFIFO(rptr1); end if;
 				end if;
-			else
-				if w='0' then wa:=false; end if;
+				
+				if w='1' and rd=true and wa=false then
+					wa:=true;
+					tFIFO(tptr2)<=data_in;
+					if tptr2<tblen-1 then
+						if tptr2+1=tptr1 then  ready<='0'; rd<=false; end if;
+						tptr2<=tptr2+1;
+					else
+						tptr2<=0;
+						if tptr1=0 then ready<='0'; rd<=false;	end if;
+					end if;
+				else
+				end if;
 			end if;
-			
 		end if;
 	end process;
 end behavior;
