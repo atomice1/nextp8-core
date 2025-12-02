@@ -466,7 +466,7 @@ p8audio p8audio_inst (
     .mclk       (mclk),
     .clk_pcm    (clk_pcm),          // 22.05 kHz sample clock (proper clock)
     .clk_pcm_8x (clk_pcm_8x),       // 176.4 kHz time-mux clock (proper clock)
-    .resetn     (~reset_pcm_q),     // Active-low reset (synchronized to clk_pcm domain)
+    .resetn     (~reset),           // Active-low reset
 
     // MMIO interface
     .address    (p8audio_address),
@@ -1067,6 +1067,10 @@ wire esp_rd,esp_dr;
 // CDC synchronizers for esp_rd, esp_dr
 (* ASYNC_REG = "TRUE" *) reg esp_rd_d, esp_rd_q;
 (* ASYNC_REG = "TRUE" *) reg esp_dr_d, esp_dr_q;
+// New: ra and wa signals with CDC synchronizers
+wire esp_ra, esp_wa;
+(* ASYNC_REG = "TRUE" *) reg esp_ra_d, esp_ra_q;
+(* ASYNC_REG = "TRUE" *) reg esp_wa_d, esp_wa_q;
 reg  [14:0] esp_div=15'd95;  // 95 = 115200 bps
 
 UART esp_uart (
@@ -1078,6 +1082,8 @@ UART esp_uart (
 		.w (esp_w_q),
 		.data_ready (esp_dr),
 		.ready (esp_rd),
+		.ra (esp_ra),
+		.wa (esp_wa),
 		.data_in (esp_din_q),
 		.data_out (esp_dout),
 		.speed (esp_div_q) // 95 = 115200 bps
@@ -1094,6 +1100,10 @@ wire uart_rd,uart_dr;
 // CDC synchronizers for uart_rd, uart_dr
 (* ASYNC_REG = "TRUE" *) reg uart_rd_d, uart_rd_q;
 (* ASYNC_REG = "TRUE" *) reg uart_dr_d, uart_dr_q;
+// New: ra and wa signals with CDC synchronizers
+wire uart_ra, uart_wa;
+(* ASYNC_REG = "TRUE" *) reg uart_ra_d, uart_ra_q;
+(* ASYNC_REG = "TRUE" *) reg uart_wa_d, uart_wa_q;
 // CDC synchronizer for UART RX input (metastability protection)
 (* ASYNC_REG = "TRUE" *) reg uart_rx_sync_d, uart_rx_sync_q;
 reg  [14:0] uart_div=15'd95;  // 95 = 115200 bps
@@ -1107,6 +1117,8 @@ UART uart (
 		.w (uart_w_q),
 		.data_ready (uart_dr),
 		.ready (uart_rd),
+		.ra (uart_ra),
+		.wa (uart_wa),
 		.data_in (uart_din_q),
 		.data_out (uart_dout),
 		.speed (uart_div_q) // 95 = 115200 bps
@@ -1357,12 +1369,20 @@ begin
 		esp_rd_q <= esp_rd_d;
 		esp_dr_d <= esp_dr;
 		esp_dr_q <= esp_dr_d;
+		esp_ra_d <= esp_ra;
+		esp_ra_q <= esp_ra_d;
+		esp_wa_d <= esp_wa;
+		esp_wa_q <= esp_wa_d;
 		uart_dout_d <= uart_dout;
 		uart_dout_q <= uart_dout_d;
 		uart_rd_d <= uart_rd;
 		uart_rd_q <= uart_rd_d;
 		uart_dr_d <= uart_dr;
 		uart_dr_q <= uart_dr_d;
+		uart_ra_d <= uart_ra;
+		uart_ra_q <= uart_ra_d;
+		uart_wa_d <= uart_wa;
+		uart_wa_q <= uart_wa_d;
 		utimer_1mhz_d <= utimer_1mhz;
 		utimer_1mhz_q <= utimer_1mhz_d;
 		utimer_1khz_d <= utimer_1khz;
@@ -1389,10 +1409,10 @@ begin
             if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
             //-------------- ESP UART ----------------------------------------------------------
             if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout_q,esp_dout_q}; //h800029
-            if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,esp_rd_q,esp_dr_q, 6'b0,esp_rd_q,esp_dr_q}; //h800028
+            if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q, 4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q}; //h800028
             //-------------- Pi UART ----------------------------------------------------------
             if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[0]) memio_out <= {uart_dout_q,uart_dout_q}; //h800025
-            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {6'b0,uart_rd_q,uart_dr_q, 6'b0,uart_rd_q,uart_dr_q}; //h800024
+            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q, 4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q}; //h800024
             //------------- User timers -------------------------
             if (cpu_addr[6:1]==6'b010111 && cpu_rd) memio_out <= utimer_1mhz_q[31:16]; utbuf_1mhz<=utimer_1mhz_q[15:0];  //h80002E
             if (cpu_addr[6:1]==6'b011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
