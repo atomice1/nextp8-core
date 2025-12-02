@@ -129,7 +129,7 @@ parameter PATCH_VERSION = 8'h00;
 parameter VERSION = {API_VERSION, MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION};
 
 reg [15:0] params = 16'd0;
-reg [5:0] post_code_cpu = 6'd0;
+reg [5:0] post_code_cpu = 6'd3;
 
 // -------------------------------------------------------------------------
 // -------------------------- clock generation -----------------------------
@@ -1037,6 +1037,7 @@ begin
 		3'b010: begin
 		    clk_cpu_i<=1'b1;
 			ramwe <= 1'b1; vw1 <= 2'b00;
+            memio_go<=1'b0;
 		    estate<=3'b000;
 			 end
 		3'b011: begin

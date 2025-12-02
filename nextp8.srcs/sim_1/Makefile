@@ -9,7 +9,7 @@
 SRC_DIR = ../sources_1
 IMPORTS_DIR = $(SRC_DIR)/imports/Sinclair\ QL/src
 IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
-TB_DIR = new
+TB_DIR = .
 
 # Verilog source files
 VERILOG_SOURCES = \
@@ -20,7 +20,7 @@ VERILOG_SOURCES = \
 	$(IMPORTS_DIR)/hdmi/hdmi.v \
 	$(IMPORTS_DIR)/keyboard.v \
 	$(IMPORTS_DIR)/mkeyboard.v \
-	$(TB_DIR)/exec_tb.v
+	exec_tb.v
 
 # IP core simulation files (generated)
 IP_SOURCES = \
@@ -52,7 +52,6 @@ VHDL_SOURCES = \
 TOP = exec_tb
 SNAPSHOT = exec_tb_snap
 TIMEOUT ?= 60
-POST_TARGET ?= 3
 
 # xsim commands
 XVLOG = xvlog
@@ -63,9 +62,15 @@ XSIM = xsim
 # Build directory
 WORK_DIR = xsim.dir
 
-.PHONY: all sim run clean wave help
+.PHONY: all sim run clean wave help rom
 
-all: sim
+all: rom sim
+
+# Build ROM
+rom:
+	@echo "=== Building hello test ROM ==="
+	@$(MAKE) -f Makefile.rom
+	@echo ""
 
 # Compile VHDL sources
 compile_vhdl:
@@ -87,13 +92,12 @@ elaborate: compile_verilog
 		--timescale 1ns/1ps \
 		-L unisims_ver -L unimacro_ver -L secureip \
 		-L blk_mem_gen_v8_4_11 -L xpm \
-		-generic_top "POST_TARGET=$(POST_TARGET)" \
 		glbl
 	@echo ""
 
 # Run simulation
 sim: elaborate
-	@echo "=== Running simulation (timeout: $(TIMEOUT)s, POST_TARGET=$(POST_TARGET)) ==="
+	@echo "=== Running simulation (timeout: $(TIMEOUT)s) ==="
 	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
 		(if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
@@ -132,6 +136,7 @@ clean:
 	rm -f *.jou *.log *.pb
 	rm -f *.wdb
 	rm -f xsim.ini
+	@$(MAKE) -f Makefile.rom clean
 	@echo "Clean complete"
 
 # Help target
@@ -148,13 +153,11 @@ help:
 	@echo ""
 	@echo "Options:"
 	@echo "  TIMEOUT=<sec>      - Simulation timeout in seconds (default: 60)"
-	@echo "  POST_TARGET=<code> - Target POST code for success (default: 3)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make                          # Run with defaults"
 	@echo "  make sim TIMEOUT=120          # Run with 120 second timeout"
-	@echo "  make sim POST_TARGET=5        # Run until POST code 5"
 	@echo ""
 	@echo "This testbench instantiates the full nextp8_top module"
-	@echo "with simulated external interfaces (SRAM, PS2, SD card, etc.)"
-	@echo "Exits successfully when POST code reaches POST_TARGET."
+	@echo "with simulated external interfaces (SRAM, UART etc.)"
+	@echo "Exits successfully when POST code reaches 5 and the expected UART is output."

@@ -368,8 +368,7 @@ begin
                 else
                     system_index := to_integer(unsigned(palette0_video_d(screen_index*5+4 downto screen_index*5)));
                 end if;
-                report "Pixel at x=" & integer'image(pixel) & " y=" & integer'image(lin) & ": screen_index=" & integer'image(screen_index) & " system_index=" & integer'image(system_index);
-                
+
                 vdata := SystemPalette(system_index);
                 VR <= vdata(23 downto 16);
                 VG <= vdata(15 downto 8);

@@ -2,10 +2,7 @@
 // Copyright (C) 2025 Chris January  
 //////////////////////////////////////////////////////////////////////////////////
 
-module exec_tb #(
-    parameter POST_TARGET = 5  // Target POST code for successful completion
-) (
-    );
+module exec_tb ();
 
 //Clock - 50 MHz (20 ns period)
 reg clock_50_i = 0;
@@ -154,39 +151,6 @@ wire sram_clk_i;
 
 assign sram_clk_i = clock_50_i;
 
-/*
-sram sram1(sram_clk_i,
-    read_en1_i,
-    write_en1_i,
-    addr1_i,
-    lb1_i,
-    ub1_i,
-    data_in1_i,
-    data_out1_o);
-sram sram2(sram_clk_i,
-    read_en2_i,
-    write_en2_i,
-    addr2_i,
-    lb2_i,
-    ub2_i,
-    data_in2_i,
-    data_out2_o);
-
-assign addr1_i = ~ram_cs_n_o ? ram_addr_o : 21'h0;
-assign addr2_i = ram_cs_n_o ? ram_addr_o : 21'h0;
-assign data_in1_i = (~ram_cs_n_o && ~ram_we_n_o) ? ram_data_io : 16'h0;
-assign data_in2_i = (ram_cs_n_o && ~ram_we_n_o) ? ram_data_io : 16'h0;
-assign ram_data_io = ram_we_n_o ? (~ram_cs_n_o ? data_in1_i : data_in2_i) : 16'bZZZZZZZZZZZZZZZZ;
-assign lb1_i = ~ram_cs_n_o ? ~ram_lb_n_o : 1'b0;
-assign ub1_i = ~ram_cs_n_o ? ~ram_ub_n_o : 1'b0;
-assign lb2_i = ram_cs_n_o ? ~ram_lb_n_o : 1'b0;
-assign ub2_i = ram_cs_n_o ? ~ram_ub_n_o : 1'b0;
-assign read_en1_i = ~ram_cs_n_o ? ~ram_oe_n_o : 1'b0;
-assign read_en2_i =~ram_cs_n_o ? ~ram_oe_n_o : 1'b0;
-assign write_en1_i = ~ram_cs_n_o ? ~ram_we_n_o : 1'b0;
-assign write_en2_i =~ram_cs_n_o ? ~ram_we_n_o : 1'b0; 
-*/
-
 wire read_en_i;
 wire write_en_i;
 wire [20:0] addr_i;
@@ -305,19 +269,92 @@ wire [5:0] post_code;
 
 assign post_code = postcode_o;
 
+parameter POST_TARGET = 5;
+
+// UART receiver using UART module instance
+parameter EXPECTED_MSG = "Hello, world!\n";
+
+reg [7:0] uart_rx_buffer[0:31];
+integer uart_rx_count = 0;
+
+// UART RX signals
+wire uart_rx_r;            // Read strobe
+wire uart_rx_ready;        // Data ready
+wire uart_rx_data_ready;   // Data available
+wire uart_rx_ra;           // Read acknowledge
+wire [7:0] uart_rx_data;   // Received data
+
+// UART control/status registers  
+reg uart_rx_r_reg = 0;
+
+// Instantiate UART module for reception
+UART uart_rx_inst (
+    .clk(nextp8.clk_sys),     // Use same 11MHz clock as system UART
+    .reset(1'b0),
+    .speed(15'd95),        // 115200 baud at 11MHz
+    .rx(pi_uart_tx_o),     // Connect to DUT's TX output
+    .tx(),                 // Not used
+    .data_in(8'h00),       // Not used
+    .data_out(uart_rx_data),
+    .w(1'b0),              // Not transmitting
+    .r(uart_rx_r_reg),     // Read strobe
+    .ready(uart_rx_ready),
+    .data_ready(uart_rx_data_ready),
+    .wa(),                 // Not used
+    .ra(uart_rx_ra)
+);
+
+// UART RX state machine - read bytes as they arrive
+reg uart_data_read = 0;
+always @(posedge nextp8.clk_sys) begin
+    uart_rx_r_reg <= 0;
+    
+    if (uart_rx_data_ready && !uart_rx_ra) begin
+        // Set read strobe
+        uart_rx_r_reg <= 1;
+        uart_data_read <= 0;
+    end
+    
+    if (uart_rx_ra && !uart_data_read) begin
+        // Read acknowledge - data has been captured
+        uart_rx_buffer[uart_rx_count] <= uart_rx_data;
+        if (uart_rx_data >= 32 && uart_rx_data < 127)
+            $display("[$time=%0t] UART: Received byte 0x%02h ('%c')", $time, uart_rx_data, uart_rx_data);
+        else
+            $display("[$time=%0t] UART: Received byte 0x%02h", $time, uart_rx_data);
+        uart_rx_count <= uart_rx_count + 1;
+        uart_data_read <= 1;
+    end
+end
+
 initial begin
     $monitor ("[$monitor] time=%0t POST=%0d (target=%0d)", $time, post_code, POST_TARGET);
 end 
 
-// Monitor POST code and finish successfully when target POST code is reached
-reg [5:0] post_code_prev = 0;
+// Monitor POST code and UART output
 always @(posedge clock_50_i) begin
-    post_code_prev <= post_code;
-    if (post_code == POST_TARGET && post_code_prev != POST_TARGET) begin
-        $display("=== SUCCESS: POST code %0d reached at time %0t ===", POST_TARGET, $time);
-        $display("=== Boot sequence completed successfully ===");
-        #100; // Small delay to allow any pending operations
-        $finish(0); // Exit with success code
+    if (uart_rx_count == 14 && post_code == POST_TARGET) begin // "Hello, world!\n" = 14 characters
+        if (uart_rx_buffer[0] == "H" && 
+            uart_rx_buffer[1] == "e" &&
+            uart_rx_buffer[2] == "l" &&
+            uart_rx_buffer[3] == "l" &&
+            uart_rx_buffer[4] == "o" &&
+            uart_rx_buffer[5] == "," &&
+            uart_rx_buffer[6] == " " &&
+            uart_rx_buffer[7] == "w" &&
+            uart_rx_buffer[8] == "o" &&
+            uart_rx_buffer[9] == "r" &&
+            uart_rx_buffer[10] == "l" &&
+            uart_rx_buffer[11] == "d" &&
+            uart_rx_buffer[12] == "!" &&
+            uart_rx_buffer[13] == 8'd10) begin // \n = 10
+            $display("=== SUCCESS: UART message matches! ===");
+            $display("=== Boot sequence with UART test completed successfully ===");
+            $finish(0);
+        end else begin
+            $display("=== FAILURE: UART message content mismatch ===");
+            $finish(1);
+        end
     end
 end
 
@@ -362,8 +399,8 @@ module sram #(
 
     integer i;
     initial begin
-        $display("Loading boot ROM...");
-        $readmemh("loader.mem", mem);
+        $display("Loading hello test ROM...");
+        $readmemh("hello_test_rom.mem", mem);
     end
 
 endmodule
