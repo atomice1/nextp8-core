@@ -90,7 +90,7 @@
   <FileSets Version="1" Minor="32">
     <FileSet Name="sources_1" Type="DesignSrcs" RelSrcDir="$PSRCDIR/sources_1" RelGenDir="$PGENDIR/sources_1">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/hdmi/encoder.v">
+      <File Path="$PSRCDIR/sources_1/hdmi/encoder.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi/encoder.v"/>
@@ -100,7 +100,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/hdmi/hdmidataencoder.v">
+      <File Path="$PSRCDIR/sources_1/hdmi/hdmidataencoder.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi/hdmidataencoder.v"/>
@@ -110,14 +110,14 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/hdmi/hdmidelay.sv">
+      <File Path="$PSRCDIR/sources_1/hdmi/hdmidelay.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/hdmi/hdmi.v">
+      <File Path="$PSRCDIR/sources_1/hdmi/hdmi.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi/hdmi.v"/>
@@ -127,7 +127,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/TG68K.C-master/TG68K_Pack.vhd">
+      <File Path="$PSRCDIR/sources_1/TG68K.C-master/TG68K_Pack.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/TG68K.C-master/TG68K_Pack.vhd"/>
@@ -136,7 +136,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/TG68K.C-master/TG68K_ALU.vhd">
+      <File Path="$PSRCDIR/sources_1/TG68K.C-master/TG68K_ALU.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/TG68K.C-master/TG68K_ALU.vhd"/>
@@ -145,7 +145,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/TG68K.C-master/TG68KdotC_Kernel.vhd">
+      <File Path="$PSRCDIR/sources_1/TG68K.C-master/TG68KdotC_Kernel.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/TG68K.C-master/TG68KdotC_Kernel.vhd"/>
@@ -154,7 +154,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/t48_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_pack-p.vhd"/>
@@ -163,7 +163,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/alu_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/alu_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/alu_pack-p.vhd"/>
@@ -172,7 +172,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/t48_tb_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_tb_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_tb_pack-p.vhd"/>
@@ -181,7 +181,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/cond_branch_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/cond_branch_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/cond_branch_pack-p.vhd"/>
@@ -190,13 +190,13 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/dac.vhd">
+      <File Path="$PSRCDIR/sources_1/dac.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/dmem_ctrl_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/dmem_ctrl_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/dmem_ctrl_pack-p.vhd"/>
@@ -205,7 +205,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/pmem_ctrl_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/pmem_ctrl_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/pmem_ctrl_pack-p.vhd"/>
@@ -214,7 +214,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/decoder_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/decoder_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/decoder_pack-p.vhd"/>
@@ -223,7 +223,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/t48_comp_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_comp_pack-p.vhd"/>
@@ -232,7 +232,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/hdmi_out_xilinx.vhd">
+      <File Path="$PSRCDIR/sources_1/hdmi_out_xilinx.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi_out_xilinx.vhd"/>
@@ -241,7 +241,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/i2c.vhd">
+      <File Path="$PSRCDIR/sources_1/i2c.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/i2c.vhd"/>
@@ -250,7 +250,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/ps2_in.vhd">
+      <File Path="$PSRCDIR/sources_1/ps2_in.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/ps2_in.vhd"/>
@@ -259,7 +259,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/spi.vhd">
+      <File Path="$PSRCDIR/sources_1/spi.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/spi.vhd"/>
@@ -268,7 +268,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/t48_core_comp_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_core_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_core_comp_pack-p.vhd"/>
@@ -277,7 +277,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/uart.vhd">
+      <File Path="$PSRCDIR/sources_1/uart.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -290,7 +290,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/system/t49_rom-e.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/system/t49_rom-e.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/t49_rom-e.vhd"/>
@@ -299,7 +299,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/system/t48_system_comp_pack-p.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/system/t48_system_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/t48_system_comp_pack-p.vhd"/>
@@ -308,7 +308,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/t48/rtl/vhdl/system/t48_rom-e.vhd">
+      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/system/t48_rom-e.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/t48_rom-e.vhd"/>
@@ -323,7 +323,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/mkeyboard.v">
+      <File Path="$PSRCDIR/sources_1/mkeyboard.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/keyboard.v"/>
@@ -333,7 +333,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/imports/Sinclair QL/src/keyboard.v">
+      <File Path="$PSRCDIR/sources_1/keyboard.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/keyboard.v"/>
@@ -697,9 +697,7 @@
     </Run>
     <Run Id="vram_synth_1" Type="Ft3:Synth" SrcSet="vram" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/vram_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/vram_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/vram_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025">
-          <Desc>Vivado Synthesis Defaults</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
       </Strategy>
       <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
@@ -709,9 +707,7 @@
     </Run>
     <Run Id="pll_synth_1" Type="Ft3:Synth" SrcSet="pll" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025">
-          <Desc>Vivado Synthesis Defaults</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
       </Strategy>
       <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
@@ -721,9 +717,7 @@
     </Run>
     <Run Id="pll_hdmi_synth_1" Type="Ft3:Synth" SrcSet="pll_hdmi" Part="xc7a35tcsg324-2" ConstrsSet="pll_hdmi" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_hdmi_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_hdmi_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_hdmi_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025">
-          <Desc>Vivado Synthesis Defaults</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
       </Strategy>
       <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
@@ -750,9 +744,7 @@
     </Run>
     <Run Id="vram_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="vram_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/vram_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/vram_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025">
-          <Desc>Default settings for Implementation.</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>
         <Step Id="opt_design"/>
         <Step Id="power_opt_design"/>
@@ -769,9 +761,7 @@
     </Run>
     <Run Id="pll_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="pll_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025">
-          <Desc>Default settings for Implementation.</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>
         <Step Id="opt_design"/>
         <Step Id="power_opt_design"/>
@@ -788,9 +778,7 @@
     </Run>
     <Run Id="pll_hdmi_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="pll_hdmi" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="pll_hdmi_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_hdmi_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_hdmi_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025">
-          <Desc>Default settings for Implementation.</Desc>
-        </StratHandle>
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>
         <Step Id="opt_design"/>
         <Step Id="power_opt_design"/>

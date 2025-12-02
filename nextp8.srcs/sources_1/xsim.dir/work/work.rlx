@@ -1,0 +1,7 @@
+0.7
+2020.2
+May 21 2025
+22:59:56
+/home/chris/code/nextp8-dev/nextp8-core/nextp8.srcs/sources_1/p8audio.v,1761079710,verilog,,,,p8audio,,,,,,,,
+/home/chris/code/nextp8-dev/nextp8-core/nextp8.srcs/sources_1/p8sfx_core.v,1761146962,verilog,,/home/chris/code/nextp8-dev/nextp8-core/nextp8.srcs/sources_1/p8audio.v,,p8sfx_core,,,,,,,,
+/home/chris/code/nextp8-dev/nextp8-core/nextp8.srcs/sources_1/p8sfx_voice.v,1761072017,verilog,,,,p8sfx_voice,,,,,,,,

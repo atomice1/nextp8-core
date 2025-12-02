@@ -7,7 +7,6 @@
 
 # Paths
 SRC_DIR = ../sources_1
-IMPORTS_DIR = $(SRC_DIR)/imports/Sinclair\ QL/src
 IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
 TB_DIR = .
 
@@ -15,11 +14,11 @@ TB_DIR = .
 VERILOG_SOURCES = \
 	$(SRC_DIR)/nextp8_top.v \
 	$(SRC_DIR)/dma_arbiter.v \
-	$(IMPORTS_DIR)/hdmi/encoder.v \
-	$(IMPORTS_DIR)/hdmi/hdmidataencoder.v \
-	$(IMPORTS_DIR)/hdmi/hdmi.v \
-	$(IMPORTS_DIR)/keyboard.v \
-	$(IMPORTS_DIR)/mkeyboard.v \
+	$(SRC_DIR)/hdmi/encoder.v \
+	$(SRC_DIR)/hdmi/hdmidataencoder.v \
+	$(SRC_DIR)/hdmi/hdmi.v \
+	$(SRC_DIR)/keyboard.v \
+	$(SRC_DIR)/mkeyboard.v \
 	exec_tb.v
 
 # IP core simulation files (generated)
@@ -30,7 +29,7 @@ IP_SOURCES = \
 
 # SystemVerilog source files
 SYSTEMVERILOG_SOURCES = \
-	$(IMPORTS_DIR)/hdmi/hdmidelay.sv \
+	$(SRC_DIR)/hdmi/hdmidelay.sv \
 	$(SRC_DIR)/p8audio.sv \
 	$(SRC_DIR)/p8sfx_core_mux.sv
 
@@ -38,15 +37,15 @@ SYSTEMVERILOG_SOURCES = \
 VHDL_SOURCES = \
 	$(SRC_DIR)/p8video.vhd \
 	$(SRC_DIR)/ps2_read_keyboard.vhd \
-	$(IMPORTS_DIR)/dac.vhd \
-	$(IMPORTS_DIR)/hdmi_out_xilinx.vhd \
-	$(IMPORTS_DIR)/i2c.vhd \
-	$(IMPORTS_DIR)/ps2_in.vhd \
-	$(IMPORTS_DIR)/spi.vhd \
-	$(IMPORTS_DIR)/uart.vhd \
-	$(IMPORTS_DIR)/TG68K.C-master/TG68K_Pack.vhd \
-	$(IMPORTS_DIR)/TG68K.C-master/TG68K_ALU.vhd \
-	$(IMPORTS_DIR)/TG68K.C-master/TG68KdotC_Kernel.vhd
+	$(SRC_DIR)/dac.vhd \
+	$(SRC_DIR)/hdmi_out_xilinx.vhd \
+	$(SRC_DIR)/i2c.vhd \
+	$(SRC_DIR)/ps2_in.vhd \
+	$(SRC_DIR)/spi.vhd \
+	$(SRC_DIR)/uart.vhd \
+	$(SRC_DIR)/TG68K.C-master/TG68K_Pack.vhd \
+	$(SRC_DIR)/TG68K.C-master/TG68K_ALU.vhd \
+	$(SRC_DIR)/TG68K.C-master/TG68KdotC_Kernel.vhd
 
 # Simulation parameters
 TOP = exec_tb

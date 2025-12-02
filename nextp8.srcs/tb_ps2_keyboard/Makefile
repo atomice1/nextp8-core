@@ -12,7 +12,7 @@ TB_DIR = .
 # Source files (hierarchy: ps2_read_keyboard <- tb)
 SRCS = $(SRC_DIR)/ps2_read_keyboard.vhd \
        $(TB_DIR)/tb_ps2_read_keyboard.vhd
-#SRCS = $(SRC_DIR)/imports/Sinclair\ QL/src/ps2_intf.vhd \
+#SRCS = $(SRC_DIR)/ps2_intf.vhd \
 #       $(TB_DIR)/tb_ps2_read_keyboard.vhd
 
 # Simulation parameters
