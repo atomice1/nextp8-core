@@ -33,13 +33,13 @@ IMPL_DIR = $(BUILD_DIR)/impl_1
 SCRIPTS_DIR = scripts
 
 # Test bench directories
-SIM_DIRS = nextp8.srcs/sim_1 \
-           nextp8.srcs/sim_2 \
-           nextp8.srcs/sim_3 \
-           nextp8.srcs/sim_4 \
-           nextp8.srcs/sim_5 \
-           nextp8.srcs/sim_6 \
-           nextp8.srcs/sim_7
+SIM_DIRS = nextp8.srcs/tb_nextp8_boot \
+           nextp8.srcs/tb_p8video \
+           nextp8.srcs/tb_p8audio_sfx \
+           nextp8.srcs/tb_ps2_keyboard \
+           nextp8.srcs/tb_p8audio_music \
+           nextp8.srcs/tb_nextp8_p8audio \
+           nextp8.srcs/tb_waveform_gen
 
 # Output files
 BITSTREAM = $(IMPL_DIR)/$(TOP_MODULE).bit
@@ -65,13 +65,14 @@ help:
 	@echo "  make all        - Run complete build flow (default)"
 	@echo ""
 	@echo "Test Targets:"
-	@echo "  make test       - Run all testbenches (sim_1 through sim_6)"
-	@echo "  make test-sim1  - Run exec_tb (full system test)"
-	@echo "  make test-sim2  - Run p8video_tb (video module test)"
-	@echo "  make test-sim3  - Run tb_p8audio_sfx (audio SFX test)"
-	@echo "  make test-sim4  - Run tb_ps2_read_keyboard (PS/2 keyboard test)"
-	@echo "  make test-sim5  - Run tb_p8audio_music (audio music test)"
-	@echo "  make test-sim6  - Run tb_nextp8_p8audio (integrated audio test)"
+	@echo "  make test                 - Run all testbenches"
+	@echo "  make test-tb_nextp8_boot  - Run exec_tb (full system boot test)"
+	@echo "  make test-tb_p8video      - Run p8video_tb (video module test)"
+	@echo "  make test-tb_p8audio_sfx  - Run tb_p8audio_sfx (audio SFX test)"
+	@echo "  make test-tb_ps2_keyboard - Run tb_ps2_read_keyboard (PS/2 test)"
+	@echo "  make test-tb_p8audio_music - Run tb_p8audio_music (audio music test)"
+	@echo "  make test-tb_nextp8_p8audio - Run tb_nextp8_p8audio (integrated audio test)"
+	@echo "  make test-tb_waveform_gen - Run tb_waveform_gen (waveform generation test)"
 	@echo ""
 	@echo "Utility Targets:"
 	@echo "  make clean      - Remove all generated files"
@@ -121,42 +122,42 @@ bitstream: implement
 	fi
 
 # Test targets
-test: test-sim1 test-sim2 test-sim3 test-sim4 test-sim5 test-sim6 test-sim7
+test: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen
 	@echo "=== All tests complete ==="
 
-test-sim1:
-	@echo "=== Running sim_1: exec_tb (full system test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_1 || (echo "ERROR: sim_1 failed"; exit 1)
+test-tb_nextp8_boot:
+	@echo "=== Running tb_nextp8_boot: exec_tb (full system boot test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_nextp8_boot || (echo "ERROR: tb_nextp8_boot failed"; exit 1)
 	@echo ""
 
-test-sim2:
-	@echo "=== Running sim_2: p8video_tb (video module test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_2 || (echo "ERROR: sim_2 failed"; exit 1)
+test-tb_p8video:
+	@echo "=== Running tb_p8video: p8video_tb (video module test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_p8video || (echo "ERROR: tb_p8video failed"; exit 1)
 	@echo ""
 
-test-sim3:
-	@echo "=== Running sim_3: tb_p8audio_sfx (audio SFX test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_3 || (echo "ERROR: sim_3 failed"; exit 1)
+test-tb_p8audio_sfx:
+	@echo "=== Running tb_p8audio_sfx: tb_p8audio_sfx (audio SFX test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_p8audio_sfx || (echo "ERROR: tb_p8audio_sfx failed"; exit 1)
 	@echo ""
 
-test-sim4:
-	@echo "=== Running sim_4: tb_ps2_read_keyboard (PS/2 test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_4 || (echo "ERROR: sim_4 failed"; exit 1)
+test-tb_ps2_keyboard:
+	@echo "=== Running tb_ps2_keyboard: tb_ps2_read_keyboard (PS/2 test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_ps2_keyboard || (echo "ERROR: tb_ps2_keyboard failed"; exit 1)
 	@echo ""
 
-test-sim5:
-	@echo "=== Running sim_5: tb_p8audio_music (audio music test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_5 || (echo "ERROR: sim_5 failed"; exit 1)
+test-tb_p8audio_music:
+	@echo "=== Running tb_p8audio_music: tb_p8audio_music (audio music test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_p8audio_music || (echo "ERROR: tb_p8audio_music failed"; exit 1)
 	@echo ""
 
-test-sim6:
-	@echo "=== Running sim_6: tb_nextp8_p8audio (integrated audio test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_6 || (echo "ERROR: sim_6 failed"; exit 1)
+test-tb_nextp8_p8audio:
+	@echo "=== Running tb_nextp8_p8audio: tb_nextp8_p8audio (integrated audio test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_nextp8_p8audio || (echo "ERROR: tb_nextp8_p8audio failed"; exit 1)
 	@echo ""
 
-test-sim7:
-	@echo "=== Running sim_7: tb_waveform_gen (waveform generation test) ==="
-	@$(MAKE) -C nextp8.srcs/sim_7 || (echo "ERROR: sim_7 failed"; exit 1)
+test-tb_waveform_gen:
+	@echo "=== Running tb_waveform_gen: tb_waveform_gen (waveform generation test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_waveform_gen || (echo "ERROR: tb_waveform_gen failed"; exit 1)
 	@echo ""
 
 # Clean targets

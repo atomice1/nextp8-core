@@ -1,4 +1,4 @@
-# Makefile for sim_7: Waveform generation test bench
+# Makefile for tb_waveform_gen: Waveform generation test bench
 # Tests the waveform_gen task in p8sfx_core_mux.v
 
 # Vivado simulator tools

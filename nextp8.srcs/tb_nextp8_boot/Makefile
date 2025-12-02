@@ -1,4 +1,4 @@
-# Makefile for exec_tb - Full nextp8_top execution testbench
+# Makefile for tb_nextp8_boot - Full nextp8_top boot testbench
 # 
 # Usage:
 #   make          - Compile and run simulation

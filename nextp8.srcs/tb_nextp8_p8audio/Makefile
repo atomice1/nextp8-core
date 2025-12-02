@@ -1,4 +1,4 @@
-# Makefile for sim_6: nextp8_top with p8audio integration test
+# Makefile for tb_nextp8_p8audio: nextp8_top with p8audio integration test
 # Usage:
 #   make sim CART=path/to/cart.p8  # Compile and run simulation
 #   make wave                       # Open waveform in Vivado
