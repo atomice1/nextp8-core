@@ -1,1 +1,1 @@
-../sim_3/tb_p8audio_sfx.p8
+../tb_p8audio_sfx/tb_p8audio_sfx.p8

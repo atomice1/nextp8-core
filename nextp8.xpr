@@ -45,7 +45,7 @@
     <Option Name="SimulatorGccVersionActiveHdl" Val="9.3.0"/>
     <Option Name="BoardPart" Val=""/>
     <Option Name="SourceMgmtMode" Val="DisplayOnly"/>
-    <Option Name="ActiveSimSet" Val="sim_2"/>
+    <Option Name="ActiveSimSet" Val="tb_p8video"/>
     <Option Name="DefaultLib" Val="xil_defaultlib"/>
     <Option Name="ProjectType" Val="Default"/>
     <Option Name="IPOutputRepo" Val="$PCACHEDIR/ip"/>
@@ -409,9 +409,9 @@
         <Option Name="ConstrsType" Val="XDC"/>
       </Config>
     </FileSet>
-    <FileSet Name="sim_1" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_1" RelGenDir="$PGENDIR/sim_1">
+    <FileSet Name="tb_nextp8_boot" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_nextp8_boot" RelGenDir="$PGENDIR/tb_nextp8_boot">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sim_1/new/exec_tb.v">
+      <File Path="$PSRCDIR/tb_nextp8_boot/exec_tb.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -450,9 +450,9 @@
         <Option Name="TopAutoSet" Val="TRUE"/>
       </Config>
     </FileSet>
-    <FileSet Name="sim_2" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_2" RelGenDir="$PGENDIR/sim_2">
+    <FileSet Name="tb_p8video" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_p8video" RelGenDir="$PGENDIR/tb_p8video">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sim_2/new/p8video_tb.sv">
+      <File Path="$PSRCDIR/tb_p8video/p8video_tb.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -485,9 +485,9 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="sim_3" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_3" RelGenDir="$PGENDIR/sim_3">
+    <FileSet Name="tb_p8audio_sfx" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_p8audio_sfx" RelGenDir="$PGENDIR/tb_p8audio_sfx">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sim_3/tb_p8audio_sfx.sv">
+      <File Path="$PSRCDIR/tb_p8audio_sfx/tb_p8audio_sfx.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -499,7 +499,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sim_3/tb_p8audio_sfx.p8">
+      <File Path="$PSRCDIR/tb_p8audio_sfx/tb_p8audio_sfx.p8">
         <FileInfo SFType="DATA">
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -526,9 +526,9 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="sim_4" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_4" RelGenDir="$PGENDIR/sim_4">
+    <FileSet Name="tb_ps2_keyboard" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_ps2_keyboard" RelGenDir="$PGENDIR/tb_ps2_keyboard">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sim_4/tb_ps2_read_keyboard.vhd">
+      <File Path="$PSRCDIR/tb_ps2_keyboard/tb_ps2_read_keyboard.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -553,9 +553,9 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="sim_5" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_5" RelGenDir="$PGENDIR/sim_5">
+    <FileSet Name="tb_p8audio_music" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_p8audio_music" RelGenDir="$PGENDIR/tb_p8audio_music">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sim_5/tb_p8audio_music.sv">
+      <File Path="$PSRCDIR/tb_p8audio_music/tb_p8audio_music.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -581,17 +581,17 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="sim_6" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/sim_6" RelGenDir="$PGENDIR/sim_6">
+    <FileSet Name="tb_nextp8_p8audio" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_nextp8_p8audio" RelGenDir="$PGENDIR/tb_nextp8_p8audio">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sim_6/tb_nextp8_p8audio.sv">
+      <File Path="$PSRCDIR/tb_nextp8_p8audio/tb_nextp8_p8audio.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sim_6/tb_p8audio_sfx.p8"/>
-      <File Path="$PSRCDIR/sim_6/p8audio_test_rom.mem">
+      <File Path="$PSRCDIR/tb_nextp8_p8audio/tb_p8audio_sfx.p8"/>
+      <File Path="$PSRCDIR/tb_nextp8_p8audio/p8audio_test_rom.mem">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
