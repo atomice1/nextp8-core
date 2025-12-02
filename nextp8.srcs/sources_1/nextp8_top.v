@@ -162,13 +162,34 @@ BUFG  BUFG_inst2 (.I (clk_cpu_i), .O (clk_cpu));
 // -------------------------------------- reset ------------------------------------
 // ---------------------------------------------------------------------------------
 
+// -------------------------------------- reset ------------------------------------
+// Button debounce logic: require button to be stable for ~12ms at 11MHz (2^17 cycles)
+parameter DEBOUNCE_CNT = 17'd131072;  // ~11.9ms at 11MHz
+reg [16:0] debounce_cnt = 17'd0;
+reg btn_reset_n_sync = 1'b1;
+reg btn_reset_n_stable = 1'b1;
+
+always @(posedge clk_sys) begin
+    if (btn_reset_n_sync != btn_reset_n_i) begin
+        // Button state changed, reset counter
+        debounce_cnt <= 17'd0;
+        btn_reset_n_sync <= btn_reset_n_i;
+    end else if (debounce_cnt != DEBOUNCE_CNT) begin
+        // Count up while button is stable
+        debounce_cnt <= debounce_cnt + 17'd1;
+    end else begin
+        // Button has been stable for full debounce period
+        btn_reset_n_stable <= btn_reset_n_sync;
+    end
+end
+
+// Reset generation logic
 parameter RESET_CNT = 15'h0003;
 reg [14:0] reset_cnt = RESET_CNT;
 reg reset_reg = 1'b1;
 
-// -------------------------------------- reset ------------------------------------
 always @(posedge clk_sys) begin
-    if (!pll_locked  || !btn_reset_n_i) begin
+    if (!pll_locked || !btn_reset_n_stable) begin
         reset_cnt <= RESET_CNT;
         reset_reg <= 1'b1;
     end else if(reset_cnt != 15'h0) begin
