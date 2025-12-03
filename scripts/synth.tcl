@@ -2,7 +2,7 @@
 # This script opens the project and runs synthesis
 
 # Open the project
-open_project nextp8.xpr
+open_project nextp8-issue5.xpr
 
 # Reset synthesis run
 reset_run synth_1

@@ -4,7 +4,7 @@
 <!-- Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.                   -->
 <!-- Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.   -->
 
-<Project Product="Vivado" Version="7" Minor="70" Path="/home/chris/code/nextp8-dev/nextp8-core/nextp8.xpr">
+<Project Product="Vivado" Version="7" Minor="70" Path="/home/chris/code/nextp8-dev/nextp8-core/nextp8-issue5.xpr">
   <DefaultLaunch Dir="$PRUNDIR"/>
   <Configuration>
     <Option Name="Id" Val="be5ba4cb82bb40cd822f830536989150"/>
@@ -88,9 +88,9 @@
     <Option Name="LocalIPRepoLeafDirName" Val="ip_repo"/>
   </Configuration>
   <FileSets Version="1" Minor="32">
-    <FileSet Name="sources_1" Type="DesignSrcs" RelSrcDir="$PSRCDIR/sources_1" RelGenDir="$PGENDIR/sources_1">
+    <FileSet Name="sources_1" Type="DesignSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/sources_1" RelGenDir="$PGENDIR/sources_1">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/sources_1/hdmi/encoder.v">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/hdmi/encoder.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi/encoder.v"/>
@@ -100,7 +100,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/hdmi/hdmidataencoder.v">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/hdmi/hdmidataencoder.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi/hdmidataencoder.v"/>
@@ -110,14 +110,14 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/hdmi/hdmidelay.sv">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/hdmi/hdmidelay.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/hdmi/hdmi.v">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/hdmi/hdmi.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi/hdmi.v"/>
@@ -127,7 +127,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/TG68K.C-master/TG68K_Pack.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/TG68K.C-master/TG68K_Pack.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/TG68K.C-master/TG68K_Pack.vhd"/>
@@ -136,7 +136,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/TG68K.C-master/TG68K_ALU.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/TG68K.C-master/TG68K_ALU.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/TG68K.C-master/TG68K_ALU.vhd"/>
@@ -145,7 +145,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/TG68K.C-master/TG68KdotC_Kernel.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/TG68K.C-master/TG68KdotC_Kernel.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/TG68K.C-master/TG68KdotC_Kernel.vhd"/>
@@ -154,7 +154,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/t48_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_pack-p.vhd"/>
@@ -163,7 +163,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/alu_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/alu_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/alu_pack-p.vhd"/>
@@ -172,7 +172,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_tb_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/t48_tb_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_tb_pack-p.vhd"/>
@@ -181,7 +181,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/cond_branch_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/cond_branch_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/cond_branch_pack-p.vhd"/>
@@ -190,13 +190,13 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/dac.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/dac.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/dmem_ctrl_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/dmem_ctrl_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/dmem_ctrl_pack-p.vhd"/>
@@ -205,7 +205,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/pmem_ctrl_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/pmem_ctrl_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/pmem_ctrl_pack-p.vhd"/>
@@ -214,7 +214,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/decoder_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/decoder_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/decoder_pack-p.vhd"/>
@@ -223,7 +223,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_comp_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/t48_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_comp_pack-p.vhd"/>
@@ -232,7 +232,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/hdmi_out_xilinx.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/hdmi_out_xilinx.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/hdmi_out_xilinx.vhd"/>
@@ -241,7 +241,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/i2c.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/i2c.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/i2c.vhd"/>
@@ -250,7 +250,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/ps2_in.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/ps2_in.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/ps2_in.vhd"/>
@@ -259,7 +259,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/spi.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/spi.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/spi.vhd"/>
@@ -268,7 +268,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/t48_core_comp_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/t48_core_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/t48_core_comp_pack-p.vhd"/>
@@ -277,20 +277,20 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/uart.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/uart.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/nextp8_top.v">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/nextp8_top.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/system/t49_rom-e.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/system/t49_rom-e.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/t49_rom-e.vhd"/>
@@ -299,7 +299,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/system/t48_system_comp_pack-p.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/system/t48_system_comp_pack-p.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/t48_system_comp_pack-p.vhd"/>
@@ -308,7 +308,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/t48/rtl/vhdl/system/t48_rom-e.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/t48/rtl/vhdl/system/t48_rom-e.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/t48/rtl/vhdl/system/t48_rom-e.vhd"/>
@@ -317,23 +317,13 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/p8video.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/p8video.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/mkeyboard.v">
-        <FileInfo>
-          <Attr Name="Library" Val="xil_defaultlib"/>
-          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/keyboard.v"/>
-          <Attr Name="ImportTime" Val="1708734862"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="implementation"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/keyboard.v">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/mkeyboard.v">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/keyboard.v"/>
@@ -343,7 +333,17 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/ps2_read_keyboard.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/keyboard.v">
+        <FileInfo>
+          <Attr Name="Library" Val="xil_defaultlib"/>
+          <Attr Name="ImportPath" Val="$PPRDIR/Sinclair QL/src/keyboard.v"/>
+          <Attr Name="ImportTime" Val="1708734862"/>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/ps2_read_keyboard.vhd">
         <FileInfo>
           <Attr Name="Library" Val="xil_defaultlib"/>
           <Attr Name="ImportPath" Val="$PPRDIR/new/ps2_read_keyboard.vhd"/>
@@ -352,28 +352,28 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/p8audio.sv">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/p8audio.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/dma_arbiter.v">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/dma_arbiter.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/p8sfx_core_mux.sv">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/p8sfx_core_mux.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/sources_1/nextp8_top_issue5.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/nextp8_top_issue5.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -384,34 +384,34 @@
         <Option Name="TopModule" Val="nextp8_top_issue5"/>
       </Config>
     </FileSet>
-    <FileSet Name="constrs_1" Type="Constrs" RelSrcDir="$PSRCDIR/constrs_1" RelGenDir="$PGENDIR/constrs_1">
+    <FileSet Name="constrs_1" Type="Constrs" RelSrcDir="$PPRDIR/nextp8.srcs/constrs_1" RelGenDir="$PGENDIR/constrs_1">
       <Filter Type="Constrs"/>
-      <File Path="$PSRCDIR/constrs_1/nextp8_timing.xdc">
+      <File Path="$PPRDIR/nextp8.srcs/constrs_1/nextp8_timing.xdc">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/constrs_1/zxnext_pins_issue5.xdc">
+      <File Path="$PPRDIR/nextp8.srcs/constrs_1/zxnext_pins_issue5.xdc">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/constrs_1/version.xdc">
+      <File Path="$PPRDIR/nextp8.srcs/constrs_1/version.xdc">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
         </FileInfo>
       </File>
       <Config>
-        <Option Name="TargetConstrsFile" Val="$PSRCDIR/constrs_1/zxnext_pins_issue5.xdc"/>
+        <Option Name="TargetConstrsFile" Val="$PPRDIR/nextp8.srcs/constrs_1/zxnext_pins_issue5.xdc"/>
         <Option Name="ConstrsType" Val="XDC"/>
       </Config>
     </FileSet>
-    <FileSet Name="tb_nextp8_boot" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_nextp8_boot" RelGenDir="$PGENDIR/tb_nextp8_boot">
+    <FileSet Name="tb_nextp8_boot" Type="SimulationSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/tb_nextp8_boot" RelGenDir="$PGENDIR/tb_nextp8_boot">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/tb_nextp8_boot/exec_tb.v">
+      <File Path="$PPRDIR/nextp8.srcs/tb_nextp8_boot/exec_tb.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -444,15 +444,15 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="utils_1" Type="Utils" RelSrcDir="$PSRCDIR/utils_1" RelGenDir="$PGENDIR/utils_1">
+    <FileSet Name="utils_1" Type="Utils" RelSrcDir="$PPRDIR/nextp8.srcs/utils_1" RelGenDir="$PGENDIR/utils_1">
       <Filter Type="Utils"/>
       <Config>
         <Option Name="TopAutoSet" Val="TRUE"/>
       </Config>
     </FileSet>
-    <FileSet Name="tb_p8video" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_p8video" RelGenDir="$PGENDIR/tb_p8video">
+    <FileSet Name="tb_p8video" Type="SimulationSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/tb_p8video" RelGenDir="$PGENDIR/tb_p8video">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/tb_p8video/p8video_tb.sv">
+      <File Path="$PPRDIR/nextp8.srcs/tb_p8video/p8video_tb.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -485,9 +485,9 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="tb_p8audio_sfx" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_p8audio_sfx" RelGenDir="$PGENDIR/tb_p8audio_sfx">
+    <FileSet Name="tb_p8audio_sfx" Type="SimulationSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/tb_p8audio_sfx" RelGenDir="$PGENDIR/tb_p8audio_sfx">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/tb_p8audio_sfx/tb_p8audio_sfx.sv">
+      <File Path="$PPRDIR/nextp8.srcs/tb_p8audio_sfx/tb_p8audio_sfx.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -499,7 +499,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/tb_p8audio_sfx/tb_p8audio_sfx.p8">
+      <File Path="$PPRDIR/nextp8.srcs/tb_p8audio_sfx/tb_p8audio_sfx.p8">
         <FileInfo SFType="DATA">
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -526,9 +526,9 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="tb_ps2_keyboard" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_ps2_keyboard" RelGenDir="$PGENDIR/tb_ps2_keyboard">
+    <FileSet Name="tb_ps2_keyboard" Type="SimulationSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/tb_ps2_keyboard" RelGenDir="$PGENDIR/tb_ps2_keyboard">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/tb_ps2_keyboard/tb_ps2_read_keyboard.vhd">
+      <File Path="$PPRDIR/nextp8.srcs/tb_ps2_keyboard/tb_ps2_read_keyboard.vhd">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -553,9 +553,9 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="tb_p8audio_music" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_p8audio_music" RelGenDir="$PGENDIR/tb_p8audio_music">
+    <FileSet Name="tb_p8audio_music" Type="SimulationSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/tb_p8audio_music" RelGenDir="$PGENDIR/tb_p8audio_music">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/tb_p8audio_music/tb_p8audio_music.sv">
+      <File Path="$PPRDIR/nextp8.srcs/tb_p8audio_music/tb_p8audio_music.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -581,17 +581,17 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="tb_nextp8_p8audio" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_nextp8_p8audio" RelGenDir="$PGENDIR/tb_nextp8_p8audio">
+    <FileSet Name="tb_nextp8_p8audio" Type="SimulationSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/tb_nextp8_p8audio" RelGenDir="$PGENDIR/tb_nextp8_p8audio">
       <Filter Type="Srcs"/>
-      <File Path="$PSRCDIR/tb_nextp8_p8audio/tb_nextp8_p8audio.sv">
+      <File Path="$PPRDIR/nextp8.srcs/tb_nextp8_p8audio/tb_nextp8_p8audio.sv">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/tb_nextp8_p8audio/tb_p8audio_sfx.p8"/>
-      <File Path="$PSRCDIR/tb_nextp8_p8audio/p8audio_test_rom.mem">
+      <File Path="$PPRDIR/nextp8.srcs/tb_nextp8_p8audio/tb_p8audio_sfx.p8"/>
+      <File Path="$PPRDIR/nextp8.srcs/tb_nextp8_p8audio/p8audio_test_rom.mem">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="simulation"/>
@@ -623,8 +623,8 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="vram" Type="BlockSrcs" RelSrcDir="$PSRCDIR/vram" RelGenDir="$PGENDIR/vram">
-      <File Path="$PSRCDIR/sources_1/ip/vram_2/vram.xci">
+    <FileSet Name="vram" Type="BlockSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/vram" RelGenDir="$PGENDIR/vram">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/ip/vram_2/vram.xci">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -636,8 +636,8 @@
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
     </FileSet>
-    <FileSet Name="pll" Type="BlockSrcs" RelSrcDir="$PSRCDIR/pll" RelGenDir="$PGENDIR/pll">
-      <File Path="$PSRCDIR/sources_1/ip/pll_2/pll.xci">
+    <FileSet Name="pll" Type="BlockSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/pll" RelGenDir="$PGENDIR/pll">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/ip/pll_2/pll.xci">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -649,8 +649,8 @@
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
     </FileSet>
-    <FileSet Name="pll_hdmi" Type="BlockSrcs" RelSrcDir="$PSRCDIR/pll_hdmi" RelGenDir="$PGENDIR/pll_hdmi">
-      <File Path="$PSRCDIR/sources_1/ip/pll_hdmi_2/pll_hdmi.xci">
+    <FileSet Name="pll_hdmi" Type="BlockSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/pll_hdmi" RelGenDir="$PGENDIR/pll_hdmi">
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/ip/pll_hdmi_2/pll_hdmi.xci">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -685,7 +685,7 @@
     </Simulator>
   </Simulators>
   <Runs Version="1" Minor="22">
-    <Run Id="synth_1" Type="Ft3:Synth" SrcSet="sources_1" Part="xc7a35tcsg324-2" ConstrsSet="constrs_1" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" State="current" Dir="$PRUNDIR/synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/synth_1" ParallelReportGen="true">
+    <Run Id="synth_1" Type="Ft3:Synth" SrcSet="sources_1" Part="xc7a35tcsg324-2" ConstrsSet="constrs_1" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" State="current" Dir="$PRUNDIR/synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/synth_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023"/>
         <Step Id="synth_design"/>
@@ -695,7 +695,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="vram_synth_1" Type="Ft3:Synth" SrcSet="vram" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/vram_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/vram_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/vram_synth_1" ParallelReportGen="true">
+    <Run Id="vram_synth_1" Type="Ft3:Synth" SrcSet="vram" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/vram_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_synth_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
@@ -705,7 +705,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="pll_synth_1" Type="Ft3:Synth" SrcSet="pll" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_synth_1" ParallelReportGen="true">
+    <Run Id="pll_synth_1" Type="Ft3:Synth" SrcSet="pll" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_synth_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
@@ -715,7 +715,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="pll_hdmi_synth_1" Type="Ft3:Synth" SrcSet="pll_hdmi" Part="xc7a35tcsg324-2" ConstrsSet="pll_hdmi" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_hdmi_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_hdmi_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_hdmi_synth_1" ParallelReportGen="true">
+    <Run Id="pll_hdmi_synth_1" Type="Ft3:Synth" SrcSet="pll_hdmi" Part="xc7a35tcsg324-2" ConstrsSet="pll_hdmi" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_hdmi_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_hdmi_synth_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_hdmi_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
         <Step Id="synth_design"/>
@@ -725,7 +725,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="constrs_1" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" State="current" SynthRun="synth_1" IncludeInArchive="true" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/impl_1" LaunchOptions="-jobs 4 " AutoRQSDir="$PSRCDIR/utils_1/imports/impl_1" ParallelReportGen="true">
+    <Run Id="impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="constrs_1" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" State="current" Dir="$PRUNDIR/impl_1" SynthRun="synth_1" IncludeInArchive="true" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/impl_1" LaunchOptions="-jobs 14 " AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023"/>
         <Step Id="init_design"/>
@@ -738,11 +738,12 @@
         <Step Id="post_route_phys_opt_design"/>
         <Step Id="write_bitstream"/>
       </Strategy>
+      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
       <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2023"/>
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="vram_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="vram_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/vram_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/vram_impl_1" ParallelReportGen="true">
+    <Run Id="vram_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="vram_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_impl_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>
@@ -759,7 +760,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="pll_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="pll_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_impl_1" ParallelReportGen="true">
+    <Run Id="pll_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="pll_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_impl_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>
@@ -776,7 +777,7 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="pll_hdmi_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="pll_hdmi" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="pll_hdmi_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/pll_hdmi_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/pll_hdmi_impl_1" ParallelReportGen="true">
+    <Run Id="pll_hdmi_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="pll_hdmi" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="pll_hdmi_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_hdmi_impl_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_hdmi_impl_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
         <Step Id="init_design"/>

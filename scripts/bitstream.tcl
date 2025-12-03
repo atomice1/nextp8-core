@@ -2,7 +2,7 @@
 # This script opens the project and generates the bitstream
 
 # Open the project
-open_project nextp8.xpr
+open_project nextp8-issue5.xpr
 
 # Check that implementation is complete
 if {[get_property PROGRESS [get_runs impl_1]] != "100%"} {

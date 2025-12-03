@@ -2,7 +2,7 @@
 # This script opens the project and runs implementation
 
 # Open the project
-open_project nextp8.xpr
+open_project nextp8-issue5.xpr
 
 # Check that synthesis is complete
 if {[get_property PROGRESS [get_runs synth_1]] != "100%"} {

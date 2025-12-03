@@ -2,7 +2,7 @@
 # This script checks all source files for syntax errors by running elaboration
 
 # Open the project
-open_project nextp8.xpr
+open_project nextp8-issue5.xpr
 
 puts "=== Running design elaboration for syntax checking ==="
 
