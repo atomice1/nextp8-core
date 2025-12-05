@@ -192,6 +192,7 @@ public:
     int Tx;
     int data_ready;
     int ready;
+    int ra, wa;
     uint8_t data_out;
 
     // Inputs
@@ -205,7 +206,7 @@ private:
     uint8_t tFIFO[TBLEN];
     uint8_t inb, outb;
     uint16_t rcounter, tcounter;
-    bool dr, rd, wa, ra;
+    bool dr, rd;
     int rptr1, rptr2, tptr1, tptr2;
     int rstate, tstate;
     int rx0, rx1;
@@ -277,10 +278,24 @@ extern "C" {
         if (reinterpret_cast<UART*>(uart)->ready) {
             ctrl |= 2;  // ready
         }
+        if (reinterpret_cast<UART*>(uart)->ra) {
+            ctrl |= 4;  // read acknowledge
+        }
+        if (reinterpret_cast<UART*>(uart)->wa) {
+            ctrl |= 8;  // write acknowledge
+        }
         return ctrl;
     }
 
     uint16_t UART_GetSpeed(UART_t *uart) {
         return reinterpret_cast<UART*>(uart)->speed;
+    }
+
+    int UART_GetReadAcknowledge(UART_t *uart) {
+        return reinterpret_cast<UART*>(uart)->ra;
+    }
+
+    int UART_GetWriteAcknowledge(UART_t *uart) {
+        return reinterpret_cast<UART*>(uart)->wa;
     }
 }

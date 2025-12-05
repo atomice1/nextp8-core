@@ -34,6 +34,7 @@ SCRIPTS_DIR = scripts
 
 # Test bench directories
 SIM_DIRS = nextp8.srcs/tb_nextp8_boot \
+           nextp8.srcs/tb_nextp8_loader \
            nextp8.srcs/tb_p8video \
            nextp8.srcs/tb_p8audio_sfx \
            nextp8.srcs/tb_ps2_keyboard \
@@ -65,14 +66,15 @@ help:
 	@echo "  make all        - Run complete build flow (default)"
 	@echo ""
 	@echo "Test Targets:"
-	@echo "  make test                 - Run all testbenches"
-	@echo "  make test-tb_nextp8_boot  - Run exec_tb (full system boot test)"
-	@echo "  make test-tb_p8video      - Run p8video_tb (video module test)"
-	@echo "  make test-tb_p8audio_sfx  - Run tb_p8audio_sfx (audio SFX test)"
-	@echo "  make test-tb_ps2_keyboard - Run tb_ps2_read_keyboard (PS/2 test)"
-	@echo "  make test-tb_p8audio_music - Run tb_p8audio_music (audio music test)"
-	@echo "  make test-tb_nextp8_p8audio - Run tb_nextp8_p8audio (integrated audio test)"
-	@echo "  make test-tb_waveform_gen - Run tb_waveform_gen (waveform generation test)"
+	@echo "  make test                     - Run all testbenches"
+	@echo "  make test-tb_nextp8_boot      - Run exec_tb (full system boot test)"
+	@echo "  make test-tb_nextp8_loader    - Run loader_tb (loader with SD card test)"
+	@echo "  make test-tb_p8video          - Run p8video_tb (video module test)"
+	@echo "  make test-tb_p8audio_sfx      - Run tb_p8audio_sfx (audio SFX test)"
+	@echo "  make test-tb_ps2_keyboard     - Run tb_ps2_read_keyboard (PS/2 test)"
+	@echo "  make test-tb_p8audio_music    - Run tb_p8audio_music (audio music test)"
+	@echo "  make test-tb_nextp8_p8audio   - Run tb_nextp8_p8audio (integrated audio test)"
+	@echo "  make test-tb_waveform_gen     - Run tb_waveform_gen (waveform generation test)"
 	@echo ""
 	@echo "Utility Targets:"
 	@echo "  make clean      - Remove all generated files"
@@ -122,12 +124,17 @@ bitstream: implement
 	fi
 
 # Test targets
-test: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen
+test: test-tb_nextp8_boot test-tb_nextp8_loader test-tb_p8video test-tb_p8audio_sfx test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen
 	@echo "=== All tests complete ==="
 
 test-tb_nextp8_boot:
 	@echo "=== Running tb_nextp8_boot: exec_tb (full system boot test) ==="
 	@$(MAKE) -C nextp8.srcs/tb_nextp8_boot || (echo "ERROR: tb_nextp8_boot failed"; exit 1)
+	@echo ""
+
+test-tb_nextp8_loader:
+	@echo "=== Running tb_nextp8_loader: loader_tb (loader with SD card test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_nextp8_loader || (echo "ERROR: tb_nextp8_loader failed"; exit 1)
 	@echo ""
 
 test-tb_p8video:

@@ -403,7 +403,7 @@ begin
       pi_uart_rx_i      => pi_uart_rx,
       pi_uart_tx_o      => pi_uart_tx,
       XADC_VP           => XADC_VP,
-      XADC_VN           => XADC_VN;
+      XADC_VN           => XADC_VN,
       XADC_15P          => XADC_15P,
       XADC_15N          => XADC_15N,
       XADC_7P           => XADC_7P,

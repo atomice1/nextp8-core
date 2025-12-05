@@ -176,9 +176,10 @@ void	SDSPISIM::CSD(void) {
 	// The following code works on high-capacity cards only
 	assert((DEFAULT_CSD[0] & 0x0c0)== 0x40);
 
-	m_csd[7] = (m_devblocks >> 16) & 0x03f;
-	m_csd[8] = (m_devblocks >>  8) & 0x0ff;
-	m_csd[9] = (m_devblocks      ) & 0x0ff;
+	unsigned long c_size = (m_devblocks >> 10) - 1;
+	m_csd[7] = (c_size >> 16) & 0x03f;
+	m_csd[8] = (c_size >>  8) & 0x0ff;
+	m_csd[9] = (c_size      ) & 0x0ff;
 
 	//
 	// Now make the CRC match

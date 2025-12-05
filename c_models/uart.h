@@ -32,6 +32,8 @@ extern void UART_Tick(UART_t* uart);
 extern uint8_t UART_GetControl(UART_t* uart);
 extern void UART_SetControl(UART_t* uart, uint8_t ctrl);
 extern uint16_t UART_GetSpeed(UART_t *uart);
+extern int UART_GetReadAcknowledge(UART_t *uart);
+extern int UART_GetWriteAcknowledge(UART_t *uart);
 
 #ifdef __cplusplus
 }

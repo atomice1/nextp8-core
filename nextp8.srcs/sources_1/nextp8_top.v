@@ -164,7 +164,7 @@ BUFG  BUFG_inst2 (.I (clk_cpu_i), .O (clk_cpu));
 
 // -------------------------------------- reset ------------------------------------
 // Button debounce logic: require button to be stable for ~12ms at 11MHz (2^17 cycles)
-parameter DEBOUNCE_CNT = 17'd131072;  // ~11.9ms at 11MHz
+parameter DEBOUNCE_CNT = 17'd131071;  // ~11.9ms at 11MHz
 reg [16:0] debounce_cnt = 17'd0;
 reg btn_reset_n_sync = 1'b1;
 reg btn_reset_n_stable = 1'b1;
@@ -1000,7 +1000,7 @@ begin
                 else
                     pal_sel = cpu_addr[4];
 				rds <= cpu_ds;
-				memio_go<=1'b0;
+				memio_go<=1'b1;
 				if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
 				if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
 				// Start BRAM read for da_memory
@@ -1012,7 +1012,7 @@ begin
 		end
 		3'b001: begin
 			if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
-			memio_go<=1'b1;
+			memio_go<=1'b0;
 			if (!sys_wr) rdata <= ram_data_io;
 			if (da_mem) begin
 			     if (cpu_wr) begin
@@ -1037,8 +1037,7 @@ begin
 		3'b010: begin
 		    clk_cpu_i<=1'b1;
 			ramwe <= 1'b1; vw1 <= 2'b00;
-            memio_go<=1'b0;
-		    estate<=3'b000;
+            estate<=3'b000;
 			 end
 		3'b011: begin
 			// DMA read cycle - data is valid on ram_data_io, ack asserted
@@ -1364,6 +1363,54 @@ always @(posedge clk_tmds) begin
 end
 
 // -------------------------------------------------------------------------
+// ---------------- CDC synchronizers for clk_sys -> mclk crossings --
+// -------------------------------------------------------------------------
+
+always @(posedge mclk)
+begin
+    kbd_matrix_d <= kbd_matrix;
+    kbd_matrix_q <= kbd_matrix_d;
+    i2c_din_d <= i2c_din;
+    i2c_din_q <= i2c_din_d;
+    da_data_d <= da_data;
+    da_data_q <= da_data_d;
+    da_playing_d <= da_playing;
+    da_playing_q <= da_playing_d;
+    da_mono_d <= da_mono;
+    da_mono_q <= da_mono_d;
+    esp_dout_d <= esp_dout;
+    esp_dout_q <= esp_dout_d;
+    esp_rd_d <= esp_rd;
+    esp_rd_q <= esp_rd_d;
+    esp_dr_d <= esp_dr;
+    esp_dr_q <= esp_dr_d;
+    esp_ra_d <= esp_ra;
+    esp_ra_q <= esp_ra_d;
+    esp_wa_d <= esp_wa;
+    esp_wa_q <= esp_wa_d;
+    uart_dout_d <= uart_dout;
+    uart_dout_q <= uart_dout_d;
+    uart_rd_d <= uart_rd;
+    uart_rd_q <= uart_rd_d;
+    uart_dr_d <= uart_dr;
+    uart_dr_q <= uart_dr_d;
+    uart_ra_d <= uart_ra;
+    uart_ra_q <= uart_ra_d;
+    uart_wa_d <= uart_wa;
+    uart_wa_q <= uart_wa_d;
+    utimer_1mhz_d <= utimer_1mhz;
+    utimer_1mhz_q <= utimer_1mhz_d;
+    utimer_1khz_d <= utimer_1khz;
+    utimer_1khz_q <= utimer_1khz_d;
+    qlsd_data_d <= qlsd_data;
+    qlsd_data_q <= qlsd_data_d;
+    js0_d <= js0;
+    js0_q <= js0_d;
+    js1_d <= js1;
+    js1_q <= js1_d;
+end    
+
+// -------------------------------------------------------------------------
 // ---------------- Memory mapped ports ------------------------------------
 // -------------------------------------------------------------------------
 
@@ -1374,47 +1421,6 @@ reg [31:0] debug_reg;
 always @(posedge mclk)
 begin
 	if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
-		// CDC synchronizers
-		kbd_matrix_d <= kbd_matrix;
-		kbd_matrix_q <= kbd_matrix_d;
-		i2c_din_d <= i2c_din;
-		i2c_din_q <= i2c_din_d;
-		da_data_d <= da_data;
-		da_data_q <= da_data_d;
-		da_playing_d <= da_playing;
-		da_playing_q <= da_playing_d;
-		da_mono_d <= da_mono;
-		da_mono_q <= da_mono_d;
-		esp_dout_d <= esp_dout;
-		esp_dout_q <= esp_dout_d;
-		esp_rd_d <= esp_rd;
-		esp_rd_q <= esp_rd_d;
-		esp_dr_d <= esp_dr;
-		esp_dr_q <= esp_dr_d;
-		esp_ra_d <= esp_ra;
-		esp_ra_q <= esp_ra_d;
-		esp_wa_d <= esp_wa;
-		esp_wa_q <= esp_wa_d;
-		uart_dout_d <= uart_dout;
-		uart_dout_q <= uart_dout_d;
-		uart_rd_d <= uart_rd;
-		uart_rd_q <= uart_rd_d;
-		uart_dr_d <= uart_dr;
-		uart_dr_q <= uart_dr_d;
-		uart_ra_d <= uart_ra;
-		uart_ra_q <= uart_ra_d;
-		uart_wa_d <= uart_wa;
-		uart_wa_q <= uart_wa_d;
-		utimer_1mhz_d <= utimer_1mhz;
-		utimer_1mhz_q <= utimer_1mhz_d;
-		utimer_1khz_d <= utimer_1khz;
-		utimer_1khz_q <= utimer_1khz_d;
-		qlsd_data_d <= qlsd_data;
-		qlsd_data_q <= qlsd_data_d;
-		js0_d <= js0;
-		js0_q <= js0_d;
-		js1_d <= js1;
-		js1_q <= js1_d;
         if (cpu_addr[8] == 1'b0) begin
             // ------------ video ----------------------------------------------------
             if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
@@ -1488,8 +1494,14 @@ begin
             if (cpu_addr[6:1]==6'b011011 && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end //h800036
             if (cpu_addr[6:1]==6'b011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
             //------------------ debug ------------------------------
-            if (cpu_addr[6:1]==6'b110001 && cpu_wr) debug_reg[31:16] <= cpu_dout; //h800062
-            if (cpu_addr[6:1]==6'b110010 && cpu_wr) debug_reg[15:0]  <= cpu_dout; //h800064
+            if (cpu_addr[6:1]==6'b110001 && cpu_wr) begin
+                debug_reg[31:16] <= cpu_dout; //h800062
+                $display("Debug reg hi write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
+            end
+            if (cpu_addr[6:1]==6'b110010 && cpu_wr) begin
+                debug_reg[15:0]  <= cpu_dout; //h800064
+                $display("Debug reg lo write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
+            end
         end
 	end
 end
