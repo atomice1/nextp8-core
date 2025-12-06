@@ -1449,11 +1449,9 @@ begin
             //------------- digital audio -----------------------------
             if (cpu_addr[6:1]==6'b011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
             //------------- keyboard ----------------------------- h800040-h80005f
-            if (cpu_addr[6:5]==2'b10 && cpu_rd && !cpu_ds[1]) memio_out <= kbd_matrix_q[{cpu_addr[4:1], 1'b0}];
-            if (cpu_addr[6:5]==2'b10 && cpu_rd && !cpu_ds[0]) memio_out <= kbd_matrix_q[{cpu_addr[4:1], 1'b1}];
+            if (cpu_addr[6:5]==2'b10 && cpu_rd) memio_out <= {kbd_matrix_q[{cpu_addr[4:1], 1'b0}], kbd_matrix_q[{cpu_addr[4:1], 1'b1}]};
             //------------- joystick -----------------------------
-            if (cpu_addr[6:1]==6'b110000 && cpu_rd && !cpu_ds[1]) memio_out <= js0_q; //h800060
-            if (cpu_addr[6:1]==6'b110000 && cpu_rd && !cpu_ds[0]) memio_out <= js1_q; //h800061
+            if (cpu_addr[6:1]==6'b110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
         end else begin
 		    //------------- P8 Audio ----------------------------- h800100-h8001FF
 		    if (cpu_rd) memio_out <= p8audio_dout;
