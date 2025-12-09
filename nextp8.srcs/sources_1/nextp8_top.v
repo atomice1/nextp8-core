@@ -141,17 +141,17 @@ pll pll
 (
     .clk_in1   ( clock_50_i ),
     .clk_out1  ( clk_sys ),    // 11 MHz
-	.clk_out2  ( clk325 ),     // 325 MHz
-	.clk_out3  ( mclk ),       // 30.56 MHz
+    .clk_out2  ( clk325 ),     // 325 MHz
+    .clk_out3  ( mclk ),       // 30.56 MHz
     .locked    ( pll_locked )
 );
 
 pll_hdmi pl2
 (
     .clk_in1   ( clk325 ),
-	.clk_out1  ( clk65 ),      // 64.71 MHz pixel clock
-	.clk_out2  ( clk_tmds ),   // 323.52940 MHz TMDS clock
-	.clk_out3  ( clk_video )   // 10.78 MHz video clock (64.71 MHz / 6)
+    .clk_out1  ( clk65 ),      // 64.71 MHz pixel clock
+    .clk_out2  ( clk_tmds ),   // 323.52940 MHz TMDS clock
+    .clk_out3  ( clk_video )   // 10.78 MHz video clock (64.71 MHz / 6)
 );
 
 wire clk_cpu;
@@ -265,10 +265,10 @@ assign pal_read_en = pal_mem && cpu_rd;
 
 // demultiplex the various data sources
 wire [15:0] cpu_din =
-	memio_rd?{ memio_out}:
+    memio_rd?{ memio_out}:
     cpu_mem? rdata:
-	vid_mem? {vdout1} :
-	16'hffff;
+    vid_mem? {vdout1} :
+    16'hffff;
 
 reg cpu_enable;
 
@@ -436,7 +436,7 @@ begin
     end else begin
         da_cnt<=da_period_sys_q;
         case (da_state)
-		2'd0: begin
+        2'd0: begin
             da_data<=da_memory[da_address];
             if (da_playing) da_address<=da_address+13'd1;
             da_state<=3'd2;
@@ -694,9 +694,9 @@ end
 
 p8video p8video (
     // Clock and reset
-	.mclk(mclk),
-	.clk_video(clk_video),
-	.reset(reset),                 // Async reset
+    .mclk(mclk),
+    .clk_video(clk_video),
+    .reset(reset),                 // Async reset
 
     // MMIO palette interface (clk_sys domain)
     .address(cpu_addr[3:1]),
@@ -709,17 +709,17 @@ p8video p8video (
     .pal_sel(pal_sel),
     
     // Video interface (clk_video domain)
-	.vaddress(vaddr2),
-	.vdin(vdout2),
+    .vaddress(vaddr2),
+    .vdin(vdout2),
     .vfronto(vfront),
     .vfrontreq(vfrontreq_video_q),
-	.VSB(video_vs),
-	.HS(video_hs),
-	.iblank(iblank),
-	.VR(video_r),
-	.VG(video_g),
-	.VB(video_b)
-	);
+    .VSB(video_vs),
+    .HS(video_hs),
+    .iblank(iblank),
+    .VR(video_r),
+    .VG(video_g),
+    .VB(video_b)
+    );
 
 // Video CDC synchronizers (clk_video -> clk_sys for VGA outputs)
 always @(posedge mclk) begin
@@ -945,113 +945,113 @@ assign p8audio_dma_rdata = rdata;
 // P8 Audio DMA request capture - latch any request pulse until serviced
 // Both p8audio and FSM run on mclk (same clock domain)
 always @(posedge mclk) begin
-	if (!pll_locked) begin
-		p8audio_dma_req_latched <= 1'b0;
-		p8audio_dma_addr_latched <= 31'd0;
-	end else begin
-		// Latch request when it goes high
-		if (p8audio_dma_req) begin
-			p8audio_dma_req_latched <= 1'b1;
-			p8audio_dma_addr_latched <= p8audio_dma_addr;
-		end
-		// Clear latched request when FSM detects it in state 000
-		// Non-blocking assignment ensures FSM sees old value before it changes
-		else if (p8audio_dma_req_latched && (estate == 3'b000)) begin
-			p8audio_dma_req_latched <= 1'b0;
-			$display("[nextp8_top] time=%0t DMA request cleared (FSM picked up in state 000)", $time);
-		end
-	end
+    if (!pll_locked) begin
+        p8audio_dma_req_latched <= 1'b0;
+        p8audio_dma_addr_latched <= 31'd0;
+    end else begin
+        // Latch request when it goes high
+        if (p8audio_dma_req) begin
+            p8audio_dma_req_latched <= 1'b1;
+            p8audio_dma_addr_latched <= p8audio_dma_addr;
+        end
+        // Clear latched request when FSM detects it in state 000
+        // Non-blocking assignment ensures FSM sees old value before it changes
+        else if (p8audio_dma_req_latched && (estate == 3'b000)) begin
+            p8audio_dma_req_latched <= 1'b0;
+            $display("[nextp8_top] time=%0t DMA request cleared (FSM picked up in state 000)", $time);
+        end
+    end
 end
 
 always @(posedge mclk)
 begin
-	if (pll_locked)
-	begin
-		case (estate)
-		3'b000: begin
-			// P8 Audio DMA has priority - if requesting, service it first
-			if (p8audio_dma_req_latched) begin
-				cpu_enable <= 1'b0;  // Stall CPU
-				ramce <= 1'b0;
-				ramoe <= 1'b0;  // Enable read
-				ramwe <= 1'b1;  // DMA is read-only
-				raddr <= p8audio_dma_addr_latched[20:0];  // DMA address (word-addressed)
-				rds <= 2'b00;   // Both bytes enabled
-				clk_cpu_i <= 1'b0;
-				memio_go <= 1'b0;
-				estate <= 3'b011;  // DMA state
-			end else begin
-				// Normal CPU access
-				cpu_enable <= 1'b1;
-				ramce <= 1'b0;
-				ramoe <= ~sys_oe;
-				raddr <= cpu_addr[21:1];
-				clk_cpu_i<=1'b0;
-				if (back_mem)
-					vaddr1 <= {^vfront, cpu_addr[12:1]};
-				else if (front_mem)
-					vaddr1 <= {vfront, cpu_addr[12:1]};
-				else if (fb_mem)
-					vaddr1 <= cpu_addr[13:1];
+    if (pll_locked)
+    begin
+        case (estate)
+        3'b000: begin
+            // P8 Audio DMA has priority - if requesting, service it first
+            if (p8audio_dma_req_latched) begin
+                cpu_enable <= 1'b0;  // Stall CPU
+                ramce <= 1'b0;
+                ramoe <= 1'b0;  // Enable read
+                ramwe <= 1'b1;  // DMA is read-only
+                raddr <= p8audio_dma_addr_latched[20:0];  // DMA address (word-addressed)
+                rds <= 2'b00;   // Both bytes enabled
+                clk_cpu_i <= 1'b0;
+                memio_go <= 1'b0;
+                estate <= 3'b011;  // DMA state
+            end else begin
+                // Normal CPU access
+                cpu_enable <= 1'b1;
+                ramce <= 1'b0;
+                ramoe <= ~sys_oe;
+                raddr <= cpu_addr[21:1];
+                clk_cpu_i<=1'b0;
+                if (back_mem)
+                    vaddr1 <= {^vfront, cpu_addr[12:1]};
+                else if (front_mem)
+                    vaddr1 <= {vfront, cpu_addr[12:1]};
+                else if (fb_mem)
+                    vaddr1 <= cpu_addr[13:1];
                 if (cpu_addr[5:4] == 2'b00)
                     pal_sel <= ^vfront;
                 else if (cpu_addr[5:4] == 2'b01)
                     pal_sel <= vfront;
                 else
                     pal_sel <= cpu_addr[4];
-				rds <= cpu_ds;
-				memio_go<=1'b1;
-				if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
-				if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
-				// Start BRAM read for da_memory
-				if (da_mem && !cpu_wr) begin
-					da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
-				end
-			end
-		end
-		3'b001: begin
-			if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
-			memio_go<=1'b0;
-			if (!sys_wr) rdata <= ram_data_io;
-			if (da_mem) begin
-			     if (cpu_wr) begin
-			          // BRAM supports byte-enable writes
-			          if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0]<=cpu_dout[7:0];
-			          if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8]<=cpu_dout[15:8];
-			     end else begin
-			          // Use pre-registered read data and select bytes
-			          if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
-			          if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
-			     end
-			end
-			if (pal_mem) begin
+                rds <= cpu_ds;
+                memio_go<=1'b1;
+                if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
+                if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
+                // Start BRAM read for da_memory
+                if (da_mem && !cpu_wr) begin
+                    da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
+                end
+            end
+        end
+        3'b001: begin
+            if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
+            memio_go<=1'b0;
+            if (!sys_wr) rdata <= ram_data_io;
+            if (da_mem) begin
+                 if (cpu_wr) begin
+                      // BRAM supports byte-enable writes
+                      if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0]<=cpu_dout[7:0];
+                      if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8]<=cpu_dout[15:8];
+                 end else begin
+                      // Use pre-registered read data and select bytes
+                      if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
+                      if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
+                 end
+            end
+            if (pal_mem) begin
                 // Palette read/write now handled by p8video module via MMIO interface
                 // Just latch the read data from p8video
                 if (!cpu_wr) begin
-			          rdata <= pal_dout;
-			     end
-			end
-			estate<=3'b010;
-			end
-		3'b010: begin
-		    clk_cpu_i<=1'b1;
-			ramwe <= 1'b1; vw1 <= 2'b00;
+                      rdata <= pal_dout;
+                 end
+            end
+            estate<=3'b010;
+            end
+        3'b010: begin
+            clk_cpu_i<=1'b1;
+            ramwe <= 1'b1; vw1 <= 2'b00;
             estate<=3'b000;
-			 end
-		3'b011: begin
-			// DMA read cycle - data is valid on ram_data_io, ack asserted
-			rdata <= ram_data_io;
-			ramce <= 1'b1;
-			ramoe <= 1'b1;
-			estate <= 3'b100;
-		end
+             end
+        3'b011: begin
+            // DMA read cycle - data is valid on ram_data_io, ack asserted
+            rdata <= ram_data_io;
+            ramce <= 1'b1;
+            ramoe <= 1'b1;
+            estate <= 3'b100;
+        end
         3'b100: begin
-			// Complete DMA cycle
+            // Complete DMA cycle
             estate <= 3'b000;
         end
-		endcase
-	end
-	else	begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk_cpu_i<=1'b0; ramoe <= 1'b1; end
+        endcase
+    end
+    else    begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk_cpu_i<=1'b0; ramoe <= 1'b1; end
 end
 
 //-------------- user timer -----------------
@@ -1094,20 +1094,20 @@ wire esp_ra, esp_wa;
 reg  [14:0] esp_div=15'd95;  // 95 = 115200 bps
 
 UART esp_uart (
-		.Tx  (esp_tx_o),
-		.Rx  (esp_rx_i),
-		.clk (clk_sys),
-		.reset (esp_reset_q),
-		.r (esp_r_q),
-		.w (esp_w_q),
-		.data_ready (esp_dr),
-		.ready (esp_rd),
-		.ra (esp_ra),
-		.wa (esp_wa),
-		.data_in (esp_din_q),
-		.data_out (esp_dout),
-		.speed (esp_div_q) // 95 = 115200 bps
-	);
+        .Tx  (esp_tx_o),
+        .Rx  (esp_rx_i),
+        .clk (clk_sys),
+        .reset (esp_reset_q),
+        .r (esp_r_q),
+        .w (esp_w_q),
+        .data_ready (esp_dr),
+        .ready (esp_rd),
+        .ra (esp_ra),
+        .wa (esp_wa),
+        .data_in (esp_din_q),
+        .data_out (esp_dout),
+        .speed (esp_div_q) // 95 = 115200 bps
+    );
 
 //------------------- Pi UART -----------------------------------------
 
@@ -1129,20 +1129,20 @@ wire uart_ra, uart_wa;
 reg  [14:0] uart_div=15'd95;  // 95 = 115200 bps
 
 UART uart (
-		.Tx  (pi_uart_tx_o),
-		.Rx  (uart_rx_sync_q),
-		.clk (clk_sys),
-		.reset (uart_reset_q),
-		.r (uart_r_q),
-		.w (uart_w_q),
-		.data_ready (uart_dr),
-		.ready (uart_rd),
-		.ra (uart_ra),
-		.wa (uart_wa),
-		.data_in (uart_din_q),
-		.data_out (uart_dout),
-		.speed (uart_div_q) // 95 = 115200 bps
-	);
+        .Tx  (pi_uart_tx_o),
+        .Rx  (uart_rx_sync_q),
+        .clk (clk_sys),
+        .reset (uart_reset_q),
+        .r (uart_r_q),
+        .w (uart_w_q),
+        .data_ready (uart_dr),
+        .ready (uart_rd),
+        .ra (uart_ra),
+        .wa (uart_wa),
+        .data_in (uart_din_q),
+        .data_out (uart_dout),
+        .speed (uart_div_q) // 95 = 115200 bps
+    );
 
 //------------- SD card -------------------------------------
 
@@ -1163,16 +1163,16 @@ assign sd_cs0_n_o  =  ql_sd_cs0_n_o_q;
 assign sd_cs1_n_o  =  ql_sd_cs1_n_o_q;
 
 spi qlsdspi(
-	.sclko    (sd_sclk_o),
-	.mosi     (sd_mosi_o),
-	.miso     (sd_miso_i),
-	.clk      (clk_sys),
-	.reset    (reset),
-	.w		  (ql_sd_w_q),
-	.readyo   (ql_sd_ready),
-	.data_in  (qlsd_din_q),
-	.data_out (qlsd_data),
-	.divider  (qlsd_div_q)
+    .sclko    (sd_sclk_o),
+    .mosi     (sd_mosi_o),
+    .miso     (sd_miso_i),
+    .clk      (clk_sys),
+    .reset    (reset),
+    .w          (ql_sd_w_q),
+    .readyo   (ql_sd_ready),
+    .data_in  (qlsd_din_q),
+    .data_out (qlsd_data),
+    .divider  (qlsd_div_q)
 );
 
 // -------------------------------------------------------------------------
@@ -1419,7 +1419,7 @@ reg [31:0] debug_reg;
 
 always @(posedge mclk)
 begin
-	if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
+    if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
             // ------------ video ----------------------------------------------------
             if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
@@ -1452,15 +1452,15 @@ begin
             //------------- joystick -----------------------------
             if (cpu_addr[6:1]==6'b110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
         end else begin
-		    //------------- P8 Audio ----------------------------- h800100-h8001FF
-		    if (cpu_rd) memio_out <= p8audio_dout;
+            //------------- P8 Audio ----------------------------- h800100-h8001FF
+            if (cpu_rd) memio_out <= p8audio_dout;
         end
-	end
+    end
 end
 
 always @(negedge mclk) // write memory mapped ports
 begin
-	if (memio_go && memio_rd && cpu_wr) begin
+    if (memio_go && memio_rd && cpu_wr) begin
         if (cpu_addr[8] == 1'b0) begin
             // ------------  ql-sd io -------------------------------------------------
             if (cpu_addr[6:1]==6'b000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800004
@@ -1500,7 +1500,7 @@ begin
                 $display("Debug reg lo write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
             end
         end
-	end
+    end
 end
 
 //------------- HDMI -------------------------------------
@@ -1555,30 +1555,30 @@ assign pcm_audio_R = (da_playing_q ? (da_mono_65_q ? da_data_q : {da_data_q[15:8
                      {p8audio_pcm_out_65_q, 8'd0};
 
 hdmi_out_xilinx hdmiqout (
-	.clock_pixel_i 	(clk65),
-	.clock_tmds_i  	(clk_tmds),
-	.red_i	(ored),
-	.green_i	(ogreen),
-	.blue_i	(oblue),
-	.tmds_out_p (hdmi_p_o),
-	.tmds_out_n (hdmi_n_o)
+    .clock_pixel_i     (clk65),
+    .clock_tmds_i      (clk_tmds),
+    .red_i    (ored),
+    .green_i    (ogreen),
+    .blue_i    (oblue),
+    .tmds_out_p (hdmi_p_o),
+    .tmds_out_n (hdmi_n_o)
 );
 
 hdmi hdmi (
-	.I_CLK_PIXEL (clk65),
-	.I_R         	( video_r_q ),
-	.I_G         	( video_g_q ),
-	.I_B         	( video_b_q ),
-	.I_BLANK			( iblank_q ),
-	.I_HSYNC			( video_hs_q ),
-	.I_VSYNC      	( video_vs_q ),
-	.I_AUDIO_ENABLE ( 1'b1 ),
-	.I_AUDIO_PCM_L   ( pcm_audio_L ),
-	.I_AUDIO_PCM_R    ( pcm_audio_R ),
-	.O_RED 	(ored),
-	.O_GREEN (ogreen),
-	.O_BLUE	(oblue)
-	);
+    .I_CLK_PIXEL (clk65),
+    .I_R             ( video_r_q ),
+    .I_G             ( video_g_q ),
+    .I_B             ( video_b_q ),
+    .I_BLANK            ( iblank_q ),
+    .I_HSYNC            ( video_hs_q ),
+    .I_VSYNC          ( video_vs_q ),
+    .I_AUDIO_ENABLE ( 1'b1 ),
+    .I_AUDIO_PCM_L   ( pcm_audio_L ),
+    .I_AUDIO_PCM_R    ( pcm_audio_R ),
+    .O_RED     (ored),
+    .O_GREEN (ogreen),
+    .O_BLUE    (oblue)
+    );
 
 
 //-------------- tube -----------------
