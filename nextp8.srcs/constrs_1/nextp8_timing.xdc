@@ -39,7 +39,10 @@ create_generated_clock -name clk_pcm \
     -divide_by 8 \
     [get_pins nextp8_inst/BUFG_clk_pcm/O]
 
-## CPU clock: same as mclk (30.56 MHz) but buffered separately for CPU domain
+## CPU clock: dynamically generated from mclk via combinational mux
+## - In idle mode: clk_cpu passes through mclk directly (cpu_idle_reg=1)
+## - In memory mode: clk_cpu uses FSM-generated clock (3-cycle access pattern)
+## Note: This is a dynamic clock muxed based on cpu_idle_reg state
 create_generated_clock -name clk_cpu \
     -source [get_pins nextp8_inst/pll/clk_out3] \
     -divide_by 1 \
@@ -103,20 +106,16 @@ set_clock_groups -asynchronous -quiet \
 ## Reset counter outputs drive many domains - false path to avoid over-constraining
 set_false_path -from [get_pins {nextp8_inst/reset_cnt_reg[*]/C}]
 
-## Video palette CDC: toggle-based handshake from clk_sys to clk_video
-## Max delay = ~1 video clock period (31ns at 32.35 MHz)
-set_max_delay -from [get_pins {nextp8_inst/p8video/palette_update_toggle_sys_reg/C}] \
-              -to [get_pins {nextp8_inst/p8video/palette_update_toggle_video_reg/D}] \
+## Video palette CDC: Direct transfer with ASYNC_REG synchronizers
+## Palette data is quasi-static (only changes on palette writes from CPU)
+## Use max_delay to allow ample time for clock domain crossing
+## Max delay = 1 video clock period (~31ns at 32 MHz video clock)
+set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
+              -to [get_pins {nextp8_inst/p8video/palette0_video_reg[*]/D}] \
               -datapath_only 31.0
-
-## Palette data CDC from clk_sys to clk_video
-set_max_delay -from [get_pins -hier -filter {NAME =~ */screen_palette*_sys*}] -to [get_pins -hier -filter {NAME =~ */palette*_video_reg*}] 20.0
-
-## Palette transfers use multi-cycle paths (data stable for multiple cycles)
-set_false_path -from [get_cells {nextp8_inst/p8video/screen_palette0_sys_reg[*][*]}] \
-               -to [get_cells {nextp8_inst/p8video/palette0_video_reg[*]}]
-set_false_path -from [get_cells {nextp8_inst/p8video/screen_palette1_sys_reg[*][*]}] \
-               -to [get_cells {nextp8_inst/p8video/palette1_video_reg[*]}]
+set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
+              -to [get_pins {nextp8_inst/p8video/palette1_video_reg[*]/D}] \
+              -datapath_only 31.0
 
 ## VGA frontend request CDC from clk_sys to clk_video  
 set_max_delay -from [get_pins {nextp8_inst/vfrontreq_reg/C}] \
@@ -127,9 +126,6 @@ set_max_delay -from [get_pins {nextp8_inst/vfrontreq_reg/C}] \
 set_max_delay -from [get_pins {nextp8_inst/p8video/vfront_reg/C}] \
               -to [get_pins {nextp8_inst/p8video/vfronto_q_reg/D}] \
               -datapath_only 33.0
-
-## HDMI InfoFrame data CDC from clk_sys to clk_tmds
-set_false_path -from [get_cells nextp8_inst/da_memory_reg*] -to [get_cells nextp8_inst/da_data_tmds_*_reg[*]]
 
 
 ## Input/Output Delays
@@ -240,9 +236,6 @@ set_false_path -from [get_cells -hierarchical -filter {NAME =~ *vram* && PRIMITI
 set_false_path -from [get_cells -hierarchical -filter {NAME =~ *vram* && PRIMITIVE_TYPE =~ BMEM.*}] -to [get_cells nextp8_inst/p8video/VG_reg*]
 set_false_path -from [get_cells -hierarchical -filter {NAME =~ *vram* && PRIMITIVE_TYPE =~ BMEM.*}] -to [get_cells nextp8_inst/p8video/VB_reg*]
 
-## Palette to video output path (data stable across multiple clocks)
-set_false_path -from [get_cells nextp8_inst/p8video/screen_palette*_sys_reg[*][*]] -to [get_cells nextp8_inst/p8video/V*_reg[*]]
-
 ## Multi-cycle path for palette lookup (4 video clocks setup, 3 hold)
 ## Palette data is stable for multiple pixel clocks during rendering
 set_multicycle_path 4 -setup -from [get_cells nextp8_inst/p8video/palette*_video_reg[*]] -to [get_cells nextp8_inst/p8video/V*_reg[*]]
@@ -255,6 +248,11 @@ set_false_path -from [get_cells nextp8_inst/da_playing_reg] -to [get_cells nextp
 set_false_path -from [get_cells nextp8_inst/da_mono_reg] -to [get_cells nextp8_inst/da_mono_tmds_?_reg]
 set_false_path -from [get_cells {nextp8_inst/p8audio_pcm_out_sys_q_reg[*]}] -to [get_cells {nextp8_inst/p8audio_pcm_out_tmds_?_reg[*]}]
 set_false_path -from [get_cells {nextp8_inst/p8audio_inst/pcm_out_reg[*]}] -to [get_cells {nextp8_inst/p8audio_pcm_out_tmds_?_reg[*]}]
+
+## HDMI InfoFrame BRAM read from clk_tmds domain to clk_sys domain
+## da_memory is dual-port BRAM: write port on clk_tmds/10, read port on clk_sys
+## This is an asynchronous read - data stability is guaranteed by control logic
+set_false_path -from [get_clocks clk_out3_pll] -to [get_pins {nextp8_inst/da_data_reg[*]/D}]
 
 ## PS/2 keyboard parameter sync (quasi-static control)
 set_false_path -from [get_cells nextp8_inst/params_reg[0]] -to [get_cells {nextp8_inst/keyboard/ps2_keyboard/ps2*_sync_reg[0]}]

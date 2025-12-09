@@ -578,7 +578,7 @@ assign kbd_matrix = ps2_kbd_matrix | meb_kbd_matrix;
 (* ASYNC_REG = "TRUE" *) reg [63:0] kbd_matrix_d, kbd_matrix_q;
 
 // ----------- Joystick ---------------
-// Generate ~84 Hz clock for joystick polling from clk_cpu (11 MHz)
+// Generate ~84 Hz clock for joystick polling from clk_sys(11 MHz)
 // Reset synchronizer for joy_clock domain (declare before use)
 (* ASYNC_REG = "TRUE" *) reg reset_joy_d, reset_joy_q;
 
@@ -994,11 +994,11 @@ begin
 				else if (fb_mem)
 					vaddr1 <= cpu_addr[13:1];
                 if (cpu_addr[5:4] == 2'b00)
-                    pal_sel = ^vfront;
+                    pal_sel <= ^vfront;
                 else if (cpu_addr[5:4] == 2'b01)
-                    pal_sel = vfront;
+                    pal_sel <= vfront;
                 else
-                    pal_sel = cpu_addr[4];
+                    pal_sel <= cpu_addr[4];
 				rds <= cpu_ds;
 				memio_go<=1'b1;
 				if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
@@ -1007,7 +1007,6 @@ begin
 				if (da_mem && !cpu_wr) begin
 					da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
 				end
-				estate<=3'b001;
 			end
 		end
 		3'b001: begin

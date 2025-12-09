@@ -1,5 +1,5 @@
 //================================================================
-// loader_tb.sv
+// tb_nextp8_loader.sv
 // Loader Testbench
 //
 // Copyright (C) 2025 Chris January
@@ -19,7 +19,7 @@
 //
 //==============================================================
 
-module loader_tb ();
+module tb_nextp8_loader ();
 
 //Clock - 50 MHz (20 ns period)
 reg clock_50_i = 0;

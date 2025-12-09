@@ -68,7 +68,7 @@ help:
 	@echo "Test Targets:"
 	@echo "  make test                     - Run all testbenches"
 	@echo "  make test-tb_nextp8_boot      - Run exec_tb (full system boot test)"
-	@echo "  make test-tb_nextp8_loader    - Run loader_tb (loader with SD card test)"
+	@echo "  make test-tb_nextp8_loader    - Run tb_nextp8_loader (bootloader test)"
 	@echo "  make test-tb_p8video          - Run p8video_tb (video module test)"
 	@echo "  make test-tb_p8audio_sfx      - Run tb_p8audio_sfx (audio SFX test)"
 	@echo "  make test-tb_ps2_keyboard     - Run tb_ps2_read_keyboard (PS/2 test)"
