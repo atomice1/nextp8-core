@@ -80,7 +80,7 @@ app:
 # Create SD card image
 sdcard: app
 	@echo "=== Creating SD card image ==="
-	@./make-sdcard-image.sh
+	#@./make-sdcard-image.sh
 	@echo ""
 
 # Note: loader.mem should be provided by user before running simulation

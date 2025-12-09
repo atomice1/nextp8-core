@@ -13,7 +13,6 @@
 ##                      └─ clk_out3 (clk_video):  10.78 MHz   (video timing)
 ##
 ##   Generated Clocks:
-##                      ├─ clk_cpu:     30.56 MHz (from mclk, separate domain)
 ##                      ├─ clk_pcm_8x:  354.8 kHz (audio 8× sample rate)
 ##                      ├─ clk_pcm:     44.35 kHz (audio sample rate)
 ##                      └─ joy_clock:   ~168 Hz   (joystick scanning)
@@ -39,14 +38,6 @@ create_generated_clock -name clk_pcm \
     -divide_by 8 \
     [get_pins nextp8_inst/BUFG_clk_pcm/O]
 
-## CPU clock: dynamically generated from mclk via combinational mux
-## - In idle mode: clk_cpu passes through mclk directly (cpu_idle_reg=1)
-## - In memory mode: clk_cpu uses FSM-generated clock (3-cycle access pattern)
-## Note: This is a dynamic clock muxed based on cpu_idle_reg state
-create_generated_clock -name clk_cpu \
-    -source [get_pins nextp8_inst/pll/clk_out3] \
-    -divide_by 1 \
-    [get_pins nextp8_inst/BUFG_inst2/O]
 
 ## Joystick clock: very slow clock for joystick scanning (~168 Hz from 11 MHz)
 create_generated_clock -name joy_clock \
@@ -165,7 +156,7 @@ set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_ou
 set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 15.0 [get_ports keyb_col_i[*]]
 set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports keyb_col_i[*]]
 
-## External SRAM interface (on clk_cpu 30.56 MHz)
+## External SRAM interface (on mclk/clk_out3 30.56 MHz)
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports ram_addr_o[*]]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_addr_o[*]]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports {ram_cs_n_o ram_lb_n_o ram_ub_n_o ram_oe_n_o ram_we_n_o}]
@@ -211,7 +202,7 @@ set_false_path -from [get_clocks clk_out1_pll_hdmi] -to [get_clocks clk_out3_pll
 set_false_path -from [get_ports btn_*] -to [get_pins -hierarchical *sync*/D]
 
 ## Reset button to clock domains (async, has debounce and sync)
-set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks clk_cpu]
+set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]]
 set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]]
 
 ## PS/2 keyboard inputs (async, handled by keyboard controller)

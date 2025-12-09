@@ -154,9 +154,6 @@ pll_hdmi pl2
     .clk_out3  ( clk_video )   // 10.78 MHz video clock (64.71 MHz / 6)
 );
 
-wire clk_cpu;
-
-BUFG  BUFG_inst2 (.I (clk_cpu_i), .O (clk_cpu));
 
 // ---------------------------------------------------------------------------------
 // -------------------------------------- reset ------------------------------------
@@ -270,11 +267,9 @@ wire [15:0] cpu_din =
     vid_mem? {vdout1} :
     16'hffff;
 
-reg cpu_enable;
-
 TG68KdotC_Kernel #(0,0,0,0,0,0,0,1)
 tg68k (
-    .clk            ( clk_cpu           ),
+    .clk            ( mclk              ),
     .nReset         ( ~reset         ),
     .clkena_in      ( cpu_enable     ),
     .data_in        ( cpu_din        ),
@@ -935,7 +930,11 @@ assign ram_lb_n_o = rds[0];
 assign ram_ub_n_o = rds[1];
 assign ram_data_io = ramwe ? 16'bZZZZZZZZZZZZZZZZ : rdout;
 reg [2:0] estate =3'b000;
-reg clk_cpu_i=1'b0;
+
+// cpu_enable generation: combinational logic to avoid one-cycle delay
+// Must be LOW when CPU is performing memory access (not idle)
+// and we're in wait states (estate 001 or early in 000)
+wire cpu_enable = pll_locked && ((estate == 3'b000 && cpu_idle) || estate == 3'b010);
 
 // P8 Audio DMA arbiter signals (depend on estate)
 // Acknowledge is a single-cycle pulse in state 3'b100 (after data latched in state 011)
@@ -971,22 +970,18 @@ begin
         3'b000: begin
             // P8 Audio DMA has priority - if requesting, service it first
             if (p8audio_dma_req_latched) begin
-                cpu_enable <= 1'b0;  // Stall CPU
                 ramce <= 1'b0;
                 ramoe <= 1'b0;  // Enable read
                 ramwe <= 1'b1;  // DMA is read-only
                 raddr <= p8audio_dma_addr_latched[20:0];  // DMA address (word-addressed)
                 rds <= 2'b00;   // Both bytes enabled
-                clk_cpu_i <= 1'b0;
                 memio_go <= 1'b0;
                 estate <= 3'b011;  // DMA state
             end else begin
-                // Normal CPU access
-                cpu_enable <= 1'b1;
+                // Normal CPU access - latch address when busstate changes from idle
                 ramce <= 1'b0;
                 ramoe <= ~sys_oe;
                 raddr <= cpu_addr[21:1];
-                clk_cpu_i<=1'b0;
                 if (back_mem)
                     vaddr1 <= {^vfront, cpu_addr[12:1]};
                 else if (front_mem)
@@ -1001,15 +996,22 @@ begin
                     pal_sel <= cpu_addr[4];
                 rds <= cpu_ds;
                 memio_go<=1'b1;
-                if (cpu_idle) estate<=3'b010; else estate<=3'b001; //skip cycles when cpu idle
                 if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
                 // Start BRAM read for da_memory
                 if (da_mem && !cpu_wr) begin
                     da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
                 end
+                if (cpu_idle) begin
+                    // CPU idle - cpu_enable automatically HIGH (combinational)
+                    estate <= 3'b000;
+                end else begin
+                    // CPU starting memory access - cpu_enable automatically LOW (combinational)
+                    estate <= 3'b001;
+                end
             end
         end
         3'b001: begin
+            // Memory access in progress - data propagating from SRAM/BRAM
             if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
             memio_go<=1'b0;
             if (!sys_wr) rdata <= ram_data_io;
@@ -1031,11 +1033,16 @@ begin
                       rdata <= pal_dout;
                  end
             end
+            // cpu_enable will automatically go HIGH in state 010 (combinational)
+            // TG68K samples data_in on rising_edge(clk) when clkena_in='1'
             estate<=3'b010;
             end
         3'b010: begin
-            clk_cpu_i<=1'b1;
-            ramwe <= 1'b1; vw1 <= 2'b00;
+            // Data valid, CPU sampled on rising edge entering this state
+            // Clean up and return to idle
+            ramwe <= 1'b1; 
+            vw1 <= 2'b00;
+            // Keep cpu_enable HIGH - state 000 will control it based on cpu_idle
             estate<=3'b000;
              end
         3'b011: begin
@@ -1051,7 +1058,7 @@ begin
         end
         endcase
     end
-    else    begin cpu_enable <= 1'b0; estate <=3'b000; ramce<=1'b1; clk_cpu_i<=1'b0; ramoe <= 1'b1; end
+    else    begin estate <=3'b000; ramce<=1'b1; ramoe <= 1'b1; end
 end
 
 //-------------- user timer -----------------
