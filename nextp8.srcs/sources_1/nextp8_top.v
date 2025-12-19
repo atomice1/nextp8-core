@@ -407,7 +407,6 @@ dac #(11) audioDR
 //------------- Digital Audio --------------
 
 reg da_read=1'b0;
-// da_data, da_playing, da_mono already declared above
 // CDC synchronizers for da_data
 (* ASYNC_REG = "TRUE" *) reg [15:0] da_data_d, da_data_q;
 reg [12:0] da_address=13'd0;
@@ -424,6 +423,19 @@ reg [1:0] da_state=0;
 (* ram_style = "block" *) reg [15:0] da_memory [0:8191];
 reg [15:0] da_memory_cpu_rdata; // Registered BRAM read output for CPU access
 
+always @(posedge clk_sys) begin
+    da_data <= da_memory[da_address];
+end
+
+always @(posedge mclk) begin
+    da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
+    
+    if (da_mem && cpu_wr && estate == 3'b001) begin
+        if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0] <= cpu_dout[7:0];
+        if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8] <= cpu_dout[15:8];
+    end
+end
+
 always @(posedge clk_sys)
 begin
     if (da_cnt>12'd0) begin
@@ -432,7 +444,6 @@ begin
         da_cnt<=da_period_sys_q;
         case (da_state)
         2'd0: begin
-            da_data<=da_memory[da_address];
             if (da_playing) da_address<=da_address+13'd1;
             da_state<=3'd2;
             end
@@ -997,10 +1008,6 @@ begin
                 rds <= cpu_ds;
                 memio_go<=1'b1;
                 if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
-                // Start BRAM read for da_memory
-                if (da_mem && !cpu_wr) begin
-                    da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
-                end
                 if (cpu_idle) begin
                     // CPU idle - cpu_enable automatically HIGH (combinational)
                     estate <= 3'b000;
@@ -1015,16 +1022,9 @@ begin
             if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
             memio_go<=1'b0;
             if (!sys_wr) rdata <= ram_data_io;
-            if (da_mem) begin
-                 if (cpu_wr) begin
-                      // BRAM supports byte-enable writes
-                      if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0]<=cpu_dout[7:0];
-                      if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8]<=cpu_dout[15:8];
-                 end else begin
-                      // Use pre-registered read data and select bytes
-                      if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
-                      if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
-                 end
+            if (da_mem && !cpu_wr) begin
+                 if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
+                 if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
             end
             if (pal_mem) begin
                 // Palette read/write now handled by p8video module via MMIO interface
@@ -1219,9 +1219,6 @@ spi qlsdspi(
 // P8 audio PCM synchronizer (clk_pcm -> clk_sys)
 (* ASYNC_REG = "TRUE" *) reg signed [7:0] p8audio_pcm_out_sys_d, p8audio_pcm_out_sys_q;
 
-// da_data synchronizer (clk_out2_pll -> clk_sys) for DAC mixing
-(* ASYNC_REG = "TRUE" *) reg [15:0] da_data_sys_d, da_data_sys_q;
-
 // Synchronization logic in clk_sys domain
 always @(posedge clk_sys) begin
     if (reset) begin
@@ -1282,10 +1279,6 @@ always @(posedge clk_sys) begin
         // P8 audio PCM
         p8audio_pcm_out_sys_d <= 8'd0;
         p8audio_pcm_out_sys_q <= 8'd0;
-        
-        // da_data for DAC mixing
-        da_data_sys_d <= 16'd0;
-        da_data_sys_q <= 16'd0;
     end else begin
         // ESP UART
         esp_din_d <= esp_din;
@@ -1344,10 +1337,6 @@ always @(posedge clk_sys) begin
         // P8 audio PCM
         p8audio_pcm_out_sys_d <= p8audio_pcm_out;
         p8audio_pcm_out_sys_q <= p8audio_pcm_out_sys_d;
-        
-        // da_data for DAC mixing
-        da_data_sys_d <= da_data;
-        da_data_sys_q <= da_data_sys_d;
     end
 end
 
