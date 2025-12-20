@@ -210,7 +210,7 @@ assign postcode_o = post_code;
 
 wire [31:0] build_timestamp;
 wire cfgclk;
-wire data_valid; 
+wire data_valid;
 USR_ACCESSE2 USR_ACCESS (
     .CFGCLK(cfgclk),
     .DATA(build_timestamp),
@@ -239,16 +239,18 @@ wire cpu_rom = 1'b0;
 wire cpu_mem = cpu_ram || cpu_rom;
 wire memio_rd = cpu_act && (cpu_addr[23:20] == 4'b1000);
 wire p8audio_mem = memio_rd && cpu_addr[8];                              // $800100 - $8001ff
-wire da_mem  = cpu_act && (cpu_addr[23:14] == 10'b1100000011);           // $c0c000 - $c0ffff
 wire vid_mem = cpu_act && (cpu_addr[23:15] ==  9'b110000000);            // $c00000 - $c07fff
-wire pal_mem = cpu_act && (cpu_addr[23:6]  == 18'b110000001000000000);   // $c08000 - $c0803f
 wire back_mem  = cpu_addr[23:13] == 11'b11000000000;                     // $c00000 - $c01fff
 wire front_mem = cpu_addr[23:13] == 11'b11000000001;                     // $c02000 - $c03fff
-wire fb_mem    = cpu_addr[23:14] == 10'b1100000001;                      // $c04000 - $c07fff
+wire overlay_back_mem  = cpu_addr[23:13] == 11'b11000000010;             // $c04000 - $c05fff
+wire overlay_front_mem = cpu_addr[23:13] == 11'b11000000011;             // $c06000 - $c07fff
+wire pal_mem = cpu_act && (cpu_addr[23:6]  == 18'b110000001000000000);   // $c08000 - $c0803f
+wire da_mem  = cpu_act && (cpu_addr[23:14] == 10'b1100000011);           // $c0c000 - $c0ffff
 
 reg [15:0] rdata;
 reg [15:0] memio_out;
-wire [15:0] vdout1;
+wire [15:0] vdout1_main;
+wire [15:0] vdout1_overlay;
 
 // Palette interface signals
 wire [15:0] pal_dout;
@@ -264,7 +266,8 @@ assign pal_read_en = pal_mem && cpu_rd;
 wire [15:0] cpu_din =
     memio_rd?{ memio_out}:
     cpu_mem? rdata:
-    vid_mem? {vdout1} :
+    (back_mem || front_mem)? {vdout1_main} :
+    (overlay_back_mem || overlay_front_mem)? {vdout1_overlay} :
     16'hffff;
 
 TG68KdotC_Kernel #(0,0,0,0,0,0,0,1)
@@ -344,7 +347,7 @@ always @(posedge clk_tmds) begin
         pcm_audio_L_dac_2pll_q <= 16'd0;
         pcm_audio_R_dac_2pll_d <= 16'd0;
         pcm_audio_R_dac_2pll_q <= 16'd0;
-        
+
         da_playing_tmds_d <= 1'b0;
         da_playing_tmds_q <= 1'b0;
         da_mono_tmds_d <= 1'b0;
@@ -353,7 +356,7 @@ always @(posedge clk_tmds) begin
         da_data_tmds_q <= 16'd0;
         p8audio_pcm_out_tmds_d <= 8'd0;
         p8audio_pcm_out_tmds_q <= 8'd0;
-        
+
         // Pipeline registers for audio mixing
         da_audio_L_tmds_reg <= 16'd0;
         da_audio_R_tmds_reg <= 16'd0;
@@ -369,13 +372,13 @@ always @(posedge clk_tmds) begin
         p8_audio_R_tmds_reg <= p8_audio_R_ext;
         pcm_audio_L_tmds_reg <= da_audio_L_tmds_reg + p8_audio_L_tmds_reg;
         pcm_audio_R_tmds_reg <= da_audio_R_tmds_reg + p8_audio_R_tmds_reg;
-        
+
         // Synchronize the final mixed audio
         pcm_audio_L_dac_2pll_d <= pcm_audio_L_tmds_reg;
         pcm_audio_L_dac_2pll_q <= pcm_audio_L_dac_2pll_d;
         pcm_audio_R_dac_2pll_d <= pcm_audio_R_tmds_reg;
         pcm_audio_R_dac_2pll_q <= pcm_audio_R_dac_2pll_d;
-        
+
         // Synchronize the audio mixing components
         da_playing_tmds_d <= da_playing;
         da_playing_tmds_q <= da_playing_tmds_d;
@@ -429,7 +432,7 @@ end
 
 always @(posedge mclk) begin
     da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
-    
+
     if (da_mem && cpu_wr && estate == 3'b001) begin
         if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0] <= cpu_dout[7:0];
         if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8] <= cpu_dout[15:8];
@@ -646,27 +649,49 @@ end
 // -------------------------------------- video ------------------------------------
 // ---------------------------------------------------------------------------------
 
-reg  [12:0] vaddr1;
-wire [12:0] vaddr2;
-wire [15:0] vdout2;
-reg [15:0] vdin1;
-reg [15:0] vdin2=16'd0;
-reg [1:0] vw1,vw2=2'b00;
+reg  [12:0] vaddr1_main;
+wire [12:0] vaddr2_main;
+wire [15:0] vdout2_main;
+reg [15:0] vdin1_main;
+reg [1:0] vw1_main = 2'b00;
+
+reg  [12:0] vaddr1_overlay;
+wire [12:0] vaddr2_overlay;
+wire [15:0] vdout2_overlay;
+reg [15:0] vdin1_overlay;
+reg [1:0] vw1_overlay = 2'b00;
+
 reg vfrontreq=1'b0;
 
+// overlay control register (clk_sys)
+reg [7:0] overlay_ctrl_sys = 8'h00;  // [6]=enable, [3:0]=key_colour
+(* ASYNC_REG = "TRUE" *) reg [7:0] overlay_ctrl_video_d, overlay_ctrl_video_q; // (clk_video)
 
-// dual bus video ram
-vram vram (
-  .clka(mclk),        // input clka - CPU clock domain
-  .wea(vw1),          // input [0 : 0] wea
-  .addra(vaddr1),     // input [12 : 0] addra
-  .dina(vdin1),       // input [15 : 0] dina
-  .douta(vdout1),     // output [15 : 0] douta
-  .clkb(clk_video),   // input clkb - video clock domain
-  .web(2'b00),        // input [0 : 0] web
-  .addrb(vaddr2),     // input [12 : 0] addrb
-  .dinb(vdin2),       // input [15 : 0] dinb
-  .doutb(vdout2)      // output [15 : 0] doutb
+
+vram vram_main (
+  .clka(mclk),
+  .wea(vw1_main),
+  .addra(vaddr1_main),
+  .dina(vdin1_main),
+  .douta(vdout1_main),
+  .clkb(clk_video),
+  .web(2'b00),
+  .addrb(vaddr2_main),
+  .dinb(16'd0),
+  .doutb(vdout2_main)
+);
+
+vram vram_overlay (
+  .clka(mclk),
+  .wea(vw1_overlay),
+  .addra(vaddr1_overlay),
+  .dina(vdin1_overlay),
+  .douta(vdout1_overlay),
+  .clkb(clk_video),
+  .web(2'b00),
+  .addrb(vaddr2_overlay),
+  .dinb(16'd0),
+  .doutb(vdout2_overlay)
 );
 
 
@@ -686,15 +711,24 @@ wire vfront;
 // Video RAM data synchronizer (RAM clk_video domain -> p8video clk_video domain)
 // The RAM has synchronous outputs with 1-cycle latency, so we register the data
 // to provide stable input to p8video's DDR timing logic
-(* ASYNC_REG = "TRUE" *) reg [15:0] vdout2_d, vdout2_q;
+(* ASYNC_REG = "TRUE" *) reg [15:0] vdout2_main_d, vdout2_main_q;
+(* ASYNC_REG = "TRUE" *) reg [15:0] vdout2_overlay_d, vdout2_overlay_q;
 
 always @(posedge clk_video) begin
     if (reset) begin
-        vdout2_d <= 16'd0;
-        vdout2_q <= 16'd0;
+        vdout2_main_d <= 16'd0;
+        vdout2_overlay_d <= 16'd0;
+        vdout2_main_q <= 16'd0;
+        vdout2_overlay_q <= 16'd0;
+        overlay_ctrl_video_d <= 8'd0;
+        overlay_ctrl_video_q <= 8'd0;
     end else begin
-        vdout2_d <= vdout2;
-        vdout2_q <= vdout2_d;
+        vdout2_main_d <= vdout2_main;
+        vdout2_main_q <= vdout2_main_d;
+        vdout2_overlay_d <= vdout2_overlay;
+        vdout2_overlay_q <= vdout2_overlay_d;
+        overlay_ctrl_video_d <= overlay_ctrl_sys;
+        overlay_ctrl_video_q <= overlay_ctrl_video_d;
     end
 end
 
@@ -713,12 +747,22 @@ p8video p8video (
     .write_en(pal_write_en),
     .read_en(pal_read_en),
     .pal_sel(pal_sel),
-    
-    // Video interface (clk_video domain)
-    .vaddress(vaddr2),
-    .vdin(vdout2),
+
+    // Overlay control (clk_video domain, already CDC'd)
+    .overlay_enable(overlay_ctrl_video_q[6]),
+    .overlay_key_colour(overlay_ctrl_video_q[3:0]),
+
+    // VRAM interface (clk_video domain)
+    .vaddress_main(vaddr2_main),
+    .vdin_main(vdout2_main_q),
+    .vaddress_overlay(vaddr2_overlay),
+    .vdin_overlay(vdout2_overlay_q),
+
+    // Double buffering interface (clk_video domain)
     .vfronto(vfront),
     .vfrontreq(vfrontreq_video_q),
+
+    // Video output signals (clk_video domain)
     .VSB(video_vs),
     .HS(video_hs),
     .iblank(iblank),
@@ -777,7 +821,7 @@ begin
         // Add fractional increment, pulse on overflow
         // Toggle rate = 2x desired clock frequency (352.8 kHz for 176.4 kHz clock)
         {clk_pcm_8x_pulse, clk_pcm_8x_phase} <= {1'b0, clk_pcm_8x_phase} + 33'd137751328;
-        
+
         // Toggle clk_pcm_8x_div to create proper 50% duty cycle clock
         if (clk_pcm_8x_pulse) begin
             clk_pcm_8x_div <= ~clk_pcm_8x_div;
@@ -801,7 +845,7 @@ begin
         clk_pcm_div <= 1'b0;
     end else begin
         clk_pcm_div_counter <= clk_pcm_div_counter + 2'd1;
-        
+
         // Toggle every 4 clk_pcm_8x cycles (when 2-bit counter wraps)
         // This creates 1:8 frequency division (4 toggles = 8 clk_pcm_8x edges)
         if (clk_pcm_div_counter == 2'd3) begin
@@ -994,11 +1038,13 @@ begin
                 ramoe <= ~sys_oe;
                 raddr <= cpu_addr[21:1];
                 if (back_mem)
-                    vaddr1 <= {^vfront, cpu_addr[12:1]};
+                    vaddr1_main <= {^vfront, cpu_addr[12:1]};
                 else if (front_mem)
-                    vaddr1 <= {vfront, cpu_addr[12:1]};
-                else if (fb_mem)
-                    vaddr1 <= cpu_addr[13:1];
+                    vaddr1_main <= {vfront, cpu_addr[12:1]};
+                if (overlay_back_mem)
+                    vaddr1_overlay <= {1'b0, cpu_addr[12:1]};
+                else if (overlay_front_mem)
+                    vaddr1_overlay <= {1'b1, cpu_addr[12:1]};
                 if (cpu_addr[5:4] == 2'b00)
                     pal_sel <= ^vfront;
                 else if (cpu_addr[5:4] == 2'b01)
@@ -1019,7 +1065,15 @@ begin
         end
         3'b001: begin
             // Memory access in progress - data propagating from SRAM/BRAM
-            if (vid_mem) begin vdin1=cpu_dout; vw1 <= cpu_wr ? ~cpu_ds : 2'b00; end
+            if (vid_mem) begin
+                if (back_mem || front_mem) begin
+                    vdin1_main <= cpu_dout;
+                    vw1_main <= cpu_wr ? ~cpu_ds : 2'b00;
+                end else if (overlay_back_mem || overlay_front_mem) begin
+                    vdin1_overlay <= cpu_dout;
+                    vw1_overlay <= cpu_wr ? ~cpu_ds : 2'b00;
+                end
+            end
             memio_go<=1'b0;
             if (!sys_wr) rdata <= ram_data_io;
             if (da_mem && !cpu_wr) begin
@@ -1040,8 +1094,9 @@ begin
         3'b010: begin
             // Data valid, CPU sampled on rising edge entering this state
             // Clean up and return to idle
-            ramwe <= 1'b1; 
-            vw1 <= 2'b00;
+            ramwe <= 1'b1;
+            vw1_main <= 2'b00;
+            vw1_overlay <= 2'b00;
             // Keep cpu_enable HIGH - state 000 will control it based on cpu_idle
             estate<=3'b000;
              end
@@ -1233,7 +1288,7 @@ always @(posedge clk_sys) begin
         esp_div_q <= 15'd95;
         esp_reset_d <= 1'b1;
         esp_reset_q <= 1'b1;
-        
+
         // Pi UART
         uart_din_d <= 8'd0;
         uart_din_q <= 8'd0;
@@ -1247,7 +1302,7 @@ always @(posedge clk_sys) begin
         uart_reset_q <= 1'b1;
         uart_rx_sync_d <= 1'b1;
         uart_rx_sync_q <= 1'b1;
-        
+
         // I2C
         i2c_dout_d <= 8'd0;
         i2c_dout_q <= 8'd0;
@@ -1255,7 +1310,7 @@ always @(posedge clk_sys) begin
         i2c_rw_q <= 1'b1;
         i2c_ena_d <= 1'b0;
         i2c_ena_q <= 1'b0;
-        
+
         // SD card
         qlsd_din_d <= 8'd0;
         qlsd_din_q <= 8'd0;
@@ -1267,15 +1322,15 @@ always @(posedge clk_sys) begin
         ql_sd_cs0_n_o_q <= 1'b1;
         ql_sd_cs1_n_o_d <= 1'b1;
         ql_sd_cs1_n_o_q <= 1'b1;
-        
+
         // DA control
         da_start_sys_d <= 1'b0;
         da_start_sys_q <= 1'b0;
-        
+
         // DA period
         da_period_sys_d <= 12'd500;
         da_period_sys_q <= 12'd500;
-        
+
         // P8 audio PCM
         p8audio_pcm_out_sys_d <= 8'd0;
         p8audio_pcm_out_sys_q <= 8'd0;
@@ -1291,7 +1346,7 @@ always @(posedge clk_sys) begin
         esp_div_q <= esp_div_d;
         esp_reset_d <= reset;
         esp_reset_q <= esp_reset_d;
-        
+
         // Pi UART
         uart_din_d <= uart_din;
         uart_din_q <= uart_din_d;
@@ -1305,7 +1360,7 @@ always @(posedge clk_sys) begin
         uart_reset_q <= uart_reset_d;
         uart_rx_sync_d <= pi_uart_rx_i;
         uart_rx_sync_q <= uart_rx_sync_d;
-        
+
         // I2C
         i2c_dout_d <= i2c_dout;
         i2c_dout_q <= i2c_dout_d;
@@ -1313,7 +1368,7 @@ always @(posedge clk_sys) begin
         i2c_rw_q <= i2c_rw_d;
         i2c_ena_d <= i2c_ena;
         i2c_ena_q <= i2c_ena_d;
-        
+
         // SD card
         qlsd_din_d <= qlsd_din;
         qlsd_din_q <= qlsd_din_d;
@@ -1325,15 +1380,15 @@ always @(posedge clk_sys) begin
         ql_sd_cs0_n_o_q <= ql_sd_cs0_n_o_d;
         ql_sd_cs1_n_o_d <= ql_sd_cs1_n_o;
         ql_sd_cs1_n_o_q <= ql_sd_cs1_n_o_d;
-        
+
         // DA control
         da_start_sys_d <= da_start;
         da_start_sys_q <= da_start_sys_d;
-        
+
         // DA period
         da_period_sys_d <= da_period;
         da_period_sys_q <= da_period_sys_d;
-        
+
         // P8 audio PCM
         p8audio_pcm_out_sys_d <= p8audio_pcm_out;
         p8audio_pcm_out_sys_q <= p8audio_pcm_out_sys_d;
@@ -1403,7 +1458,7 @@ begin
     js0_q <= js0_d;
     js1_d <= js1;
     js1_q <= js1_d;
-end    
+end
 
 // -------------------------------------------------------------------------
 // ---------------- Memory mapped ports ------------------------------------
@@ -1417,11 +1472,13 @@ always @(posedge mclk)
 begin
     if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
-            // ------------ video ----------------------------------------------------
-            if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
             //--------------- QLSD --------------------------------------------------
             if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800006
             if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
+            // ------------ video ----------------------------------------------------
+            if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
+            //--------------- overlay ----------------------------------
+            if (cpu_addr[6:1]==6'b001000 && cpu_rd && !cpu_ds[1]) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys}; //h800010
             //--------------- Build Info --------------------------------------------------
             if (cpu_addr[6:1]==6'b001010 && cpu_rd) memio_out <= build_timestamp[31:16]; // h800014
             if (cpu_addr[6:1]==6'b001011 && cpu_rd) memio_out <= build_timestamp[15:0]; // h800016
@@ -1467,6 +1524,8 @@ begin
             if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
             // ------------ video ----------------------------------------------------
             if (cpu_addr[6:1]==6'b000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
+            //--------------- overlay ----------------------------------
+            if (cpu_addr[6:1]==6'b001000 && cpu_wr && !cpu_ds[1]) overlay_ctrl_sys <= cpu_dout[15:8]; //h800010
             // ------------ parameters -------------------------------------------------------
             if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[0]) params[7:0] <= cpu_dout[7:0]; //h800013  bit0=key_ms
             if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[1]) params[15:8] <= cpu_dout[15:8]; //h800012
@@ -1533,11 +1592,11 @@ always @(posedge clk65) begin
     video_hs_q <= video_hs_d;
     video_vs_d <= video_vs;
     video_vs_q <= video_vs_d;
-    
+
     // DA mono
     da_mono_65_d <= da_mono;
     da_mono_65_q <= da_mono_65_d;
-    
+
     // P8 audio PCM
     p8audio_pcm_out_65_d <= p8audio_pcm_out;
     p8audio_pcm_out_65_q <= p8audio_pcm_out_65_d;

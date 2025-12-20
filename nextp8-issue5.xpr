@@ -66,12 +66,12 @@
     <Option Name="WTVcsLaunchSim" Val="0"/>
     <Option Name="WTRivieraLaunchSim" Val="0"/>
     <Option Name="WTActivehdlLaunchSim" Val="0"/>
-    <Option Name="WTXSimExportSim" Val="169"/>
-    <Option Name="WTModelSimExportSim" Val="169"/>
-    <Option Name="WTQuestaExportSim" Val="169"/>
+    <Option Name="WTXSimExportSim" Val="171"/>
+    <Option Name="WTModelSimExportSim" Val="171"/>
+    <Option Name="WTQuestaExportSim" Val="171"/>
     <Option Name="WTIesExportSim" Val="0"/>
-    <Option Name="WTVcsExportSim" Val="169"/>
-    <Option Name="WTRivieraExportSim" Val="169"/>
+    <Option Name="WTVcsExportSim" Val="171"/>
+    <Option Name="WTRivieraExportSim" Val="171"/>
     <Option Name="WTActivehdlExportSim" Val="154"/>
     <Option Name="GenerateIPUpgradeLog" Val="TRUE"/>
     <Option Name="XSimRadix" Val="hex"/>
@@ -379,6 +379,13 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
+      <File Path="$PPRDIR/nextp8.srcs/sources_1/ip/vram_2/vram.xci">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
       <Config>
         <Option Name="DesignMode" Val="RTL"/>
         <Option Name="TopModule" Val="nextp8_top_issue5"/>
@@ -623,19 +630,6 @@
         <Option Name="xsim.simulate.log_all_signals" Val="true"/>
       </Config>
     </FileSet>
-    <FileSet Name="vram" Type="BlockSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/vram" RelGenDir="$PGENDIR/vram">
-      <File Path="$PPRDIR/nextp8.srcs/sources_1/ip/vram_2/vram.xci">
-        <FileInfo>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="implementation"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <Config>
-        <Option Name="TopModule" Val="vram"/>
-        <Option Name="UseBlackboxStub" Val="1"/>
-      </Config>
-    </FileSet>
     <FileSet Name="pll" Type="BlockSrcs" RelSrcDir="$PPRDIR/nextp8.srcs/pll" RelGenDir="$PGENDIR/pll">
       <File Path="$PPRDIR/nextp8.srcs/sources_1/ip/pll_2/pll.xci">
         <FileInfo>
@@ -747,16 +741,6 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
-    <Run Id="vram_synth_1" Type="Ft3:Synth" SrcSet="vram" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/vram_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_synth_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_synth_1" ParallelReportGen="true">
-      <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
-        <Step Id="synth_design"/>
-      </Strategy>
-      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
-      <ReportStrategy Name="Vivado Synthesis Default Reports" Flow="Vivado Synthesis 2025"/>
-      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
-      <RQSFiles/>
-    </Run>
     <Run Id="pll_synth_1" Type="Ft3:Synth" SrcSet="pll" Part="xc7a35tcsg324-2" ConstrsSet="pll" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/pll_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_synth_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/pll_synth_1" ParallelReportGen="true">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2025"/>
@@ -791,23 +775,6 @@
         <Step Id="write_bitstream"/>
       </Strategy>
       <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2023"/>
-      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
-      <RQSFiles/>
-    </Run>
-    <Run Id="vram_impl_1" Type="Ft2:EntireDesign" Part="xc7a35tcsg324-2" ConstrsSet="vram" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="vram_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_impl_1" AutoRQSDir="$PPRDIR/nextp8.srcs/utils_1/imports/vram_impl_1" ParallelReportGen="true">
-      <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2025"/>
-        <Step Id="init_design"/>
-        <Step Id="opt_design"/>
-        <Step Id="power_opt_design"/>
-        <Step Id="place_design"/>
-        <Step Id="post_place_power_opt_design"/>
-        <Step Id="phys_opt_design"/>
-        <Step Id="route_design"/>
-        <Step Id="post_route_phys_opt_design"/>
-        <Step Id="write_bitstream"/>
-      </Strategy>
-      <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2025"/>
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>

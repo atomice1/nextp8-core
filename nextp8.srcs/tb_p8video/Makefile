@@ -9,7 +9,7 @@
 SRC_DIR = ../sources_1
 IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
 IP_DIR = $(SRC_DIR)/ip
-TB_DIR = new
+TB_DIR = .
 
 # IP Core simulation files
 IP_VRAM = $(IP_GEN_DIR)/vram_1/vram_sim_netlist.v
@@ -31,6 +31,7 @@ ALL_SRCS = $(P8VIDEO_SRCS) $(TB_SRCS)
 TOP = p8video_tb
 SNAPSHOT = p8video_tb_snap
 TIMEOUT ?= 30
+GENERICS ?=
 
 # xsim commands
 XVLOG = xvlog
@@ -70,6 +71,7 @@ elaborate: compile_sv
 	@echo "      If you see errors about missing 'vram', generate it in Vivado GUI first"
 	$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
 		--timescale 1ns/1ps \
+		$(if $(GENERICS),-generic_top "$(GENERICS)",) \
 		-L unisims_ver -L unimacro_ver -L secureip \
 		-L blk_mem_gen_v8_4_11 -L xpm \
 		glbl

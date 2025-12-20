@@ -59,11 +59,21 @@ port (
     read_en:      IN Std_logic;  -- Read enable
     pal_sel:      IN Std_logic;  -- Palette select
 
-    -- Video interface (clk_video domain)
-    vaddress:     OUT Std_logic_vector(12 downto 0);
-    vdin:         IN  Std_logic_vector(15 downto 0);
+    -- Overlay control (clk_video domain)
+    overlay_enable:  IN Std_logic;  -- Overlay enable
+    overlay_key_colour: IN Std_logic_vector(3 downto 0);  -- Overlay key colour index
+
+    -- Video ram interface (clk_video domain)
+    vaddress_main:     OUT Std_logic_vector(12 downto 0);  -- Main vram address
+    vdin_main:         IN  Std_logic_vector(15 downto 0);  -- Main vram data
+    vaddress_overlay:  OUT Std_logic_vector(12 downto 0);  -- Overlay vram address
+    vdin_overlay:      IN  Std_logic_vector(15 downto 0);  -- Overlay vram data
+
+    -- Double buffering interface (clk_video domain)
     vfronto:      OUT Std_logic;
     vfrontreq:    IN Std_logic;
+
+    -- Video output signals (clk_video domain)
     VSB,HS:       buffer Std_logic;
     iblank:       OUT Std_logic;
     VR,VG,VB:     OUT Std_logic_vector(7 downto 0):="00000000"
@@ -148,6 +158,10 @@ signal vfronto_sys : Std_logic := '0';
 signal vfront : Std_logic := '0';
 attribute ASYNC_REG of vfronto_q : signal is "TRUE";
 attribute ASYNC_REG of vfronto_d : signal is "TRUE";
+
+-- Overlay support (clk_video domain)
+signal overlay_vdin : Std_logic_vector(15 downto 0) := (others => '0');
+signal reading_overlay : Std_logic := '0';
 
 -- Reset synchronizers for each clock domain
 signal reset_sys_d : Std_logic := '1';
@@ -275,6 +289,7 @@ palette1_sys_packed <= screen_palette1_sys(15) & screen_palette1_sys(14) &
 -- ============================================================================
 process (clk_video)
     variable screen_index: integer range 0 to 15;
+    variable overlay_pixel_index: integer range 0 to 15;
     variable system_index: integer range 0 to 31;
     variable vdata: Std_logic_vector(23 downto 0);
     variable px, px_next: natural range 0 to 2047:=0;
@@ -293,7 +308,8 @@ begin
             VR <= (others => '0');
             VG <= (others => '0');
             VB <= (others => '0');
-            vaddress <= (others => '0');
+            vaddress_main <= (others => '0');
+            vaddress_overlay <= (others => '0');
             palette0_video <= "01111" & "01110" & "01101" & "01100" & "01011" & "01010" & "01001" & "01000" &
                               "00111" & "00110" & "00101" & "00100" & "00011" & "00010" & "00001" & "00000";
             palette1_video <= "01111" & "01110" & "01101" & "01100" & "01011" & "01010" & "01001" & "01000" &
@@ -321,7 +337,7 @@ begin
             else
                 VSB <= '1';
             end if;
-            
+
             if pixel < 136 then
                 HS <= '0';
             else
@@ -344,29 +360,45 @@ begin
                 px := (pixel - p1) / 6;
                 ln := (lin - l1) / 6;
                 px_next := px + 1;
-                vaddress <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
+
+                vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
+                vaddress_overlay <= '0' & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
             else
                 px := 800;
                 ln := 300;
-                vaddress <= (others => '0');
+                vaddress_main <= (others => '0');
+                vaddress_overlay <= (others => '0');
             end if;
 
             -- Pixel output logic
             if pixel >= p1 and pixel < p2 and lin >= l1 and lin < l2 then
                 iblank <= '0';
-                
+
                 case px mod 4 is
-                    when 0 => screen_index := to_integer(unsigned(vdin(11 downto 8)));
-                    when 1 => screen_index := to_integer(unsigned(vdin(15 downto 12)));
-                    when 2 => screen_index := to_integer(unsigned(vdin(3 downto 0)));
-                    when 3 => screen_index := to_integer(unsigned(vdin(7 downto 4)));
-                    when others => screen_index := 0;
+                    when 0 =>
+                        screen_index := to_integer(unsigned(vdin_main(11 downto 8)));
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(11 downto 8)));
+                    when 1 =>
+                        screen_index := to_integer(unsigned(vdin_main(15 downto 12)));
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(15 downto 12)));
+                    when 2 =>
+                        screen_index := to_integer(unsigned(vdin_main(3 downto 0)));
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(3 downto 0)));
+                    when 3 =>
+                        screen_index := to_integer(unsigned(vdin_main(7 downto 4)));
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(7 downto 4)));
+                    when others =>
+                        screen_index := 0;
+                        overlay_pixel_index := 0;
                 end case;
-                
-                if vfront = '1' then
-                    system_index := to_integer(unsigned(palette1_video_d(screen_index*5+4 downto screen_index*5)));
+                if overlay_enable = '1' and overlay_pixel_index /= to_integer(unsigned(overlay_key_colour)) then
+                    system_index := overlay_pixel_index;
                 else
-                    system_index := to_integer(unsigned(palette0_video_d(screen_index*5+4 downto screen_index*5)));
+                    if vfront = '1' then
+                        system_index := to_integer(unsigned(palette1_video_d(screen_index*5+4 downto screen_index*5)));
+                    else
+                        system_index := to_integer(unsigned(palette0_video_d(screen_index*5+4 downto screen_index*5)));
+                    end if;
                 end if;
 
                 vdata := SystemPalette(system_index);
