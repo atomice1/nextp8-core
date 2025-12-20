@@ -159,6 +159,38 @@ pll_hdmi pl2
 // -------------------------------------- reset ------------------------------------
 // ---------------------------------------------------------------------------------
 
+localparam RESET_TYPE_POWER_ON = 2'b00;  // Power-on reset
+localparam RESET_TYPE_BUTTON   = 2'b01;  // Physical reset button
+localparam RESET_TYPE_SW       = 2'b10;  // Software-triggered reset
+
+// Reset tyoe signals (clk_sys domain)
+reg [1:0] reset_type_sys = RESET_TYPE_POWER_ON;
+reg power_on_flag = 1'b1;
+
+// Reset control signal (mclk domain)
+reg reset_request_toggle_mclk = 1'b0;
+
+// Reset type signals (mclk domain)
+(* ASYNC_REG = "TRUE" *) reg [1:0] reset_type_mclk_d = RESET_TYPE_POWER_ON;
+(* ASYNC_REG = "TRUE" *) reg [1:0] reset_type_mclk_q = RESET_TYPE_POWER_ON;
+
+// Toggle CDC synchronizers - clk_sys domain
+(* ASYNC_REG = "TRUE" *) reg reset_request_toggle_d = 1'b0;
+(* ASYNC_REG = "TRUE" *) reg reset_request_toggle_q = 1'b0;
+reg reset_request_toggle_prev = 1'b0;
+wire reset_request_edge = (reset_request_toggle_q != reset_request_toggle_prev);
+
+always @(posedge clk_sys) begin
+    reset_request_toggle_d <= reset_request_toggle_mclk;
+    reset_request_toggle_q <= reset_request_toggle_d;
+    reset_request_toggle_prev <= reset_request_toggle_q;
+end
+
+always @(posedge mclk) begin
+    reset_type_mclk_d <= reset_type_sys;
+    reset_type_mclk_q <= reset_type_mclk_d;
+end
+
 // -------------------------------------- reset ------------------------------------
 // Button debounce logic: require button to be stable for ~12ms at 11MHz (2^17 cycles)
 parameter DEBOUNCE_CNT = 17'd131071;  // ~11.9ms at 11MHz
@@ -186,9 +218,18 @@ reg [14:0] reset_cnt = RESET_CNT;
 reg reset_reg = 1'b1;
 
 always @(posedge clk_sys) begin
-    if (!pll_locked || !btn_reset_n_stable) begin
+    if (!pll_locked || !btn_reset_n_stable || reset_request_edge) begin
         reset_cnt <= RESET_CNT;
         reset_reg <= 1'b1;
+
+        if (power_on_flag) begin
+            reset_type_sys <= RESET_TYPE_POWER_ON;
+            power_on_flag <= 1'b0;
+        end else if (!btn_reset_n_stable) begin
+            reset_type_sys <= RESET_TYPE_BUTTON;
+        end else if (reset_request_edge) begin
+            reset_type_sys <= RESET_TYPE_SW;
+        end
     end else if(reset_cnt != 15'h0) begin
         reset_cnt <= reset_cnt - 15'h1;
         reset_reg <= 1'b1;
@@ -1475,6 +1516,8 @@ begin
             //--------------- QLSD --------------------------------------------------
             if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800006
             if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
+            //--------------- reset ----------------------------------
+            if (cpu_addr[6:1]==6'b000110 && cpu_rd && !cpu_ds[0]) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q}; //h80000D
             // ------------ video ----------------------------------------------------
             if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
             //--------------- overlay ----------------------------------
@@ -1522,6 +1565,10 @@ begin
             if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000a
             //------------- post code -------------------------------------------------------
             if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
+            //--------------- reset ----------------------------------
+            if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[0]) begin  //h80000D
+                reset_request_toggle_mclk <= ~reset_request_toggle_mclk;
+            end
             // ------------ video ----------------------------------------------------
             if (cpu_addr[6:1]==6'b000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
             //--------------- overlay ----------------------------------
