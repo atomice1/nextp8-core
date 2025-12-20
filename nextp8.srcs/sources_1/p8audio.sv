@@ -122,13 +122,11 @@ reg [7:0] hwfx_5f40, hwfx_5f41, hwfx_5f42, hwfx_5f43;  // mclk: PICO-8 hardware 
 // SFX API
 localparam [6:0] ADDR_SFX_CMD       = 7'h0A;
 localparam [6:0] ADDR_SFX_LEN       = 7'h0B;
-reg [15:0] reg_sfx_cmd;                 // mclk: SFX command register
 reg [15:0] reg_sfx_len;                 // mclk: SFX length override
 
 // MUSIC API
 localparam [6:0] ADDR_MUSIC_CMD     = 7'h0C;
 localparam [6:0] ADDR_MUSIC_FADE    = 7'h0D;
-reg [15:0] reg_music_cmd;               // mclk: Music command register
 reg [15:0] reg_music_fade;              // mclk: Music fade time (frames for crossfade)
 
 // stat(46..49): sfx index per channel
@@ -152,9 +150,7 @@ always @(posedge mclk) begin
         reg_sfx_base    <= 0;
         reg_music_base  <= 0;
         reg_version     <= VERSION;
-        reg_sfx_cmd     <= 0;
         reg_sfx_len     <= 0;
-        reg_music_cmd   <= 0;
         reg_music_fade  <= DEFAULT_MUS_FADE;
         hwfx_5f40       <= 0;
         hwfx_5f41       <= 0;
@@ -167,9 +163,7 @@ always @(posedge mclk) begin
             ADDR_SFX_BASE_LO:   reg_sfx_base[15:0]      <= din;
             ADDR_MUSIC_BASE_HI: reg_music_base[31:16]   <= din;
             ADDR_MUSIC_BASE_LO: reg_music_base[15:0]    <= din;
-            ADDR_SFX_CMD:       reg_sfx_cmd             <= din;
             ADDR_SFX_LEN:       reg_sfx_len             <= din;
-            ADDR_MUSIC_CMD:     reg_music_cmd           <= din;
             ADDR_MUSIC_FADE:    reg_music_fade          <= din;
             ADDR_HWFX_5F40: begin
                 if (!nUDS) hwfx_5f40 <= din[15:8];
