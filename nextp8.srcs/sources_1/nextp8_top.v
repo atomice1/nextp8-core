@@ -1514,8 +1514,8 @@ begin
     if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
             //--------------- QLSD --------------------------------------------------
-            if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800006
-            if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800008
+            if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800007
+            if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800009
             //--------------- reset ----------------------------------
             if (cpu_addr[6:1]==6'b000110 && cpu_rd && !cpu_ds[0]) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q}; //h80000D
             // ------------ video ----------------------------------------------------
@@ -1559,10 +1559,10 @@ begin
     if (memio_go && memio_rd && cpu_wr) begin
         if (cpu_addr[8] == 1'b0) begin
             // ------------  ql-sd io -------------------------------------------------
-            if (cpu_addr[6:1]==6'b000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800004
-            if (cpu_addr[6:1]==6'b000000 && cpu_wr ) ql_sd_w <= cpu_dout[0];       //h800000
-            if (cpu_addr[6:1]==6'b000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800002
-            if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000a
+            if (cpu_addr[6:1]==6'b000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800005
+            if (cpu_addr[6:1]==6'b000000 && cpu_wr ) ql_sd_w <= cpu_dout[0];       //h800001
+            if (cpu_addr[6:1]==6'b000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800003
+            if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000b
             //------------- post code -------------------------------------------------------
             if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
             //--------------- reset ----------------------------------
