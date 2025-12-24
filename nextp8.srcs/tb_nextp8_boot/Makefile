@@ -159,4 +159,4 @@ help:
 	@echo ""
 	@echo "This testbench instantiates the full nextp8_top module"
 	@echo "with simulated external interfaces (SRAM, UART etc.)"
-	@echo "Exits successfully when POST code reaches 5 and the expected UART is output."
+	@echo "Exits successfully when POST code reaches 10 and the expected UART is output."

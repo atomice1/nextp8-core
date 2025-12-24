@@ -269,7 +269,7 @@ wire [5:0] post_code;
 
 assign post_code = postcode_o;
 
-parameter POST_TARGET = 5;
+parameter POST_TARGET = 10;
 
 // UART receiver using UART module instance
 parameter EXPECTED_MSG = "Hello, world!\n";

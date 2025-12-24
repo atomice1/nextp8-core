@@ -40,7 +40,8 @@ SIM_DIRS = nextp8.srcs/tb_nextp8_boot \
            nextp8.srcs/tb_ps2_keyboard \
            nextp8.srcs/tb_p8audio_music \
            nextp8.srcs/tb_nextp8_p8audio \
-           nextp8.srcs/tb_waveform_gen
+           nextp8.srcs/tb_waveform_gen \
+           nextp8.srcs/tb_memaccess
 
 # Output files
 BITSTREAM = $(IMPL_DIR)/$(TOP_MODULE).bit
@@ -75,6 +76,7 @@ help:
 	@echo "  make test-tb_p8audio_music    - Run tb_p8audio_music (audio music test)"
 	@echo "  make test-tb_nextp8_p8audio   - Run tb_nextp8_p8audio (integrated audio test)"
 	@echo "  make test-tb_waveform_gen     - Run tb_waveform_gen (waveform generation test)"
+	@echo "  make test-tb_memaccess        - Run tb_memaccess (memory access validation)"
 	@echo ""
 	@echo "Utility Targets:"
 	@echo "  make clean      - Remove all generated files"
@@ -192,7 +194,8 @@ clean: clean-test
 	@echo "Clean complete"
 
 # Phony targets for common typos
-.PHONY: tests synthesis syn impl
+.PHONY: tests synthesis syn impl test-memaccess
 tests: test
 syn: synth
 impl: implement
+test-memaccess: test-tb_memaccess

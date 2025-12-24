@@ -279,6 +279,8 @@ wire cpu_act = cpu_rd || cpu_wr;
 wire cpu_ram = cpu_addr[23:22] == 2'b00;
 wire cpu_rom = 1'b0;
 wire cpu_mem = cpu_ram || cpu_rom;
+wire sram_access = (estate == 3'b000 && cpu_mem && !cpu_idle);
+reg [15:0] sram_rdata;  // SRAM read data latched on falling edge
 wire memio_rd = cpu_act && (cpu_addr[23:20] == 4'b1000);
 wire p8audio_mem = memio_rd && cpu_addr[8];                              // $800100 - $8001ff
 wire vid_mem = cpu_act && (cpu_addr[23:15] ==  9'b110000000);            // $c00000 - $c07fff
@@ -286,7 +288,7 @@ wire back_mem  = cpu_addr[23:13] == 11'b11000000000;                     // $c00
 wire front_mem = cpu_addr[23:13] == 11'b11000000001;                     // $c02000 - $c03fff
 wire overlay_back_mem  = cpu_addr[23:13] == 11'b11000000010;             // $c04000 - $c05fff
 wire overlay_front_mem = cpu_addr[23:13] == 11'b11000000011;             // $c06000 - $c07fff
-wire pal_mem = cpu_act && (cpu_addr[23:6]  == 18'b110000001000000000);   // $c08000 - $c0803f
+wire pal_mem = cpu_act && (cpu_addr[23:5]  == 19'b1100000010000000000);  // $c08000 - $c0801f
 wire da_mem  = cpu_act && (cpu_addr[23:14] == 10'b1100000011);           // $c0c000 - $c0ffff
 
 reg [15:0] rdata;
@@ -305,9 +307,12 @@ assign pal_write_en = pal_mem && cpu_wr;
 assign pal_read_en = pal_mem && cpu_rd;
 
 // demultiplex the various data sources
+// For SRAM (cpu_mem) in state 000: use sram_rdata latched on falling edge (1-cycle access)
+// For MMIO/BRAM (!cpu_mem): use rdata from state 001/010 (3-cycle access)
 wire [15:0] cpu_din =
     memio_rd?{ memio_out}:
-    cpu_mem? rdata:
+    sram_access ? sram_rdata :
+    (pal_mem || da_mem) ? rdata:
     (back_mem || front_mem)? {vdout1_main} :
     (overlay_back_mem || overlay_front_mem)? {vdout1_overlay} :
     16'hffff;
@@ -1019,18 +1024,26 @@ wire [15:0] sys_dout =  cpu_dout;
 wire        sys_wr   =  (cpu_wr && cpu_ram);
 wire        sys_oe   =  (cpu_rd && cpu_mem);
 
-assign ram_addr_o = raddr;
-assign ram_we_n_o = ramwe;
-assign ram_cs_n_o = ramce;
-assign ram_oe_n_o = ramoe;
-assign ram_lb_n_o = rds[0];
-assign ram_ub_n_o = rds[1];
-assign ram_data_io = ramwe ? 16'bZZZZZZZZZZZZZZZZ : rdout;
+assign ram_addr_o = sram_access ? cpu_addr[21:1] : raddr;
+assign ram_we_n_o = sram_access ? ~sys_wr : ramwe;
+assign ram_cs_n_o = sram_access ? 1'b0 : ramce;
+assign ram_oe_n_o = sram_access ? ~sys_oe : ramoe;
+assign ram_lb_n_o = sram_access ? cpu_ds[0] : rds[0];
+assign ram_ub_n_o = sram_access ? cpu_ds[1] : rds[1];
+assign ram_data_io = (sram_access && sys_wr) ? cpu_dout : 
+                     (ramwe ? 16'bZZZZZZZZZZZZZZZZ : rdout);
 
-// cpu_enable generation: combinational logic to avoid one-cycle delay
-// Must be LOW when CPU is performing memory access (not idle)
-// and we're in wait states (estate 001 or early in 000)
-wire cpu_enable = pll_locked && ((estate == 3'b000 && cpu_idle) || estate == 3'b010);
+// cpu_enable generation: combinational logic
+// For SRAM (cpu_mem): stays in state 000, cpu_enable HIGH (1-cycle access)
+// For MMIO/BRAM (!cpu_mem): goes through 000->001->010 (3-cycle access)
+wire cpu_enable = pll_locked && ((estate == 3'b000 && (cpu_idle || (cpu_mem && !cpu_idle))) || estate == 3'b010);
+
+// Latch SRAM data on falling edge of clock
+// This gives the SRAM time to respond to address changes while ensuring
+// data is stable before the CPU samples it on the next rising edge
+always @(negedge mclk) begin
+    sram_rdata = ram_data_io;  // Blocking assignment for immediate update
+end
 
 // P8 Audio DMA arbiter signals (depend on estate)
 // Acknowledge is a single-cycle pulse in state 3'b100 (after data latched in state 011)
@@ -1075,32 +1088,34 @@ begin
                 estate <= 3'b011;  // DMA state
             end else begin
                 // Normal CPU access - latch address when busstate changes from idle
-                ramce <= 1'b0;
-                ramoe <= ~sys_oe;
+                ramce <= 1'b1;
+                ramoe <= 1'b1;
+                ramwe <= 1'b1;
                 raddr <= cpu_addr[21:1];
                 if (back_mem)
-                    vaddr1_main <= {^vfront, cpu_addr[12:1]};
+                    vaddr1_main <= {~vfront, cpu_addr[12:1]};
                 else if (front_mem)
                     vaddr1_main <= {vfront, cpu_addr[12:1]};
                 if (overlay_back_mem)
                     vaddr1_overlay <= {1'b0, cpu_addr[12:1]};
                 else if (overlay_front_mem)
                     vaddr1_overlay <= {1'b1, cpu_addr[12:1]};
-                if (cpu_addr[5:4] == 2'b00)
-                    pal_sel <= ^vfront;
-                else if (cpu_addr[5:4] == 2'b01)
+                if (cpu_addr[4] == 1'b0)
+                    pal_sel <= ~vfront;
+                else if (cpu_addr[4] == 1'b1)
                     pal_sel <= vfront;
-                else
-                    pal_sel <= cpu_addr[4];
                 rds <= cpu_ds;
                 memio_go<=1'b1;
-                if (sys_wr) rdout<=cpu_dout; ramwe <= ~sys_wr;
                 if (cpu_idle) begin
                     // CPU idle - cpu_enable automatically HIGH (combinational)
                     estate <= 3'b000;
-                end else begin
-                    // CPU starting memory access - cpu_enable automatically LOW (combinational)
+                end else if (!cpu_mem) begin
+                    // MMIO/BRAM access - use 3-cycle path (000->001->010)
                     estate <= 3'b001;
+                end else begin
+                    // SRAM access - 1-cycle: stay in 000, cpu_enable is HIGH
+                    // Data sampling handled combinatorially below
+                    estate <= 3'b000;
                 end
             end
         end
@@ -1116,7 +1131,6 @@ begin
                 end
             end
             memio_go<=1'b0;
-            if (!sys_wr) rdata <= ram_data_io;
             if (da_mem && !cpu_wr) begin
                  if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
                  if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
@@ -1543,6 +1557,9 @@ begin
             if (cpu_addr[6:1]==6'b011010 && cpu_rd) memio_out <= utbuf_1khz;  //h800034
             //------------- digital audio -----------------------------
             if (cpu_addr[6:1]==6'b011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
+            //------------- debug registers ------------------------------
+            if (cpu_addr[6:1]==6'b110001 && cpu_rd) memio_out <= debug_reg[31:16]; //h800062 read
+            if (cpu_addr[6:1]==6'b110010 && cpu_rd) memio_out <= debug_reg[15:0];  //h800064 read
             //------------- keyboard ----------------------------- h800040-h80005f
             if (cpu_addr[6:5]==2'b10 && cpu_rd) memio_out <= {kbd_matrix_q[{cpu_addr[4:1], 1'b0}], kbd_matrix_q[{cpu_addr[4:1], 1'b1}]};
             //------------- joystick -----------------------------
@@ -1594,11 +1611,11 @@ begin
             if (cpu_addr[6:1]==6'b011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
             //------------------ debug ------------------------------
             if (cpu_addr[6:1]==6'b110001 && cpu_wr) begin
-                debug_reg[31:16] <= cpu_dout; //h800062
+                debug_reg[31:16] <= cpu_dout; //h800062 write
                 $display("Debug reg hi write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
             end
             if (cpu_addr[6:1]==6'b110010 && cpu_wr) begin
-                debug_reg[15:0]  <= cpu_dout; //h800064
+                debug_reg[15:0]  <= cpu_dout; //h800064 write
                 $display("Debug reg lo write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
             end
         end

@@ -1,0 +1,52 @@
+# Makefile for building memtest ROM
+# Requires m68k-elf toolchain in PATH
+
+# Toolchain
+TOOLCHAIN = m68k-elf-
+AS = $(TOOLCHAIN)as
+LD = $(TOOLCHAIN)ld
+OBJCOPY = $(TOOLCHAIN)objcopy
+OBJDUMP = $(TOOLCHAIN)objdump
+
+# Flags
+ASFLAGS = -m68000
+LDFLAGS = -T memtest.ld
+
+# Files
+SRC = memtest.s
+OBJ = memtest.o
+ELF = memtest.elf
+BIN = memtest.bin
+MEM = memtest_rom.mem
+LST = memtest.lst
+
+.PHONY: all clean
+
+all: $(MEM)
+
+# Assemble
+$(OBJ): $(SRC)
+	$(AS) $(ASFLAGS) -o $@ $<
+
+# Link
+$(ELF): $(OBJ) memtest.ld
+	$(LD) $(LDFLAGS) -o $@ $(OBJ)
+
+# Create binary
+$(BIN): $(ELF)
+	$(OBJCOPY) -O binary $< $@
+
+# Create listing
+$(LST): $(ELF)
+	$(OBJDUMP) -d $< > $@
+
+# Convert to memory hex file
+# The .mem file format is word-addressed hex format for $readmemh
+$(MEM): $(BIN) $(LST)
+	@echo "Converting binary to .mem format..."
+	@od -v -w2 -Ax -tx2 --endian=big $< | cut -d' ' -f2 -s > $@
+	@echo "ROM created: $@"
+	@echo "Size: $$(stat -c%s $(BIN)) bytes"
+
+clean:
+	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
