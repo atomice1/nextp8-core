@@ -271,6 +271,7 @@ wire [1:0] cpu_busstate;
 wire cpu_rd = (cpu_busstate == 2'b00) || (cpu_busstate == 2'b10);
 wire cpu_wr = (cpu_busstate == 2'b11) && !cpu_rw;
 wire cpu_idle = (cpu_busstate == 2'b01);
+reg [2:0] estate =3'b000;
 
 // address decoding
 wire cpu_act = cpu_rd || cpu_wr;
@@ -1025,7 +1026,6 @@ assign ram_oe_n_o = ramoe;
 assign ram_lb_n_o = rds[0];
 assign ram_ub_n_o = rds[1];
 assign ram_data_io = ramwe ? 16'bZZZZZZZZZZZZZZZZ : rdout;
-reg [2:0] estate =3'b000;
 
 // cpu_enable generation: combinational logic to avoid one-cycle delay
 // Must be LOW when CPU is performing memory access (not idle)
