@@ -478,9 +478,12 @@ always @(posedge clk_sys) begin
 end
 
 always @(posedge mclk) begin
+    // Read path: Register address for 1-cycle BRAM latency (used in 3-cycle state machine)
     da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
 
-    if (da_mem && cpu_wr && estate == 3'b001) begin
+    // Write path: Optimized to 1-cycle - write immediately when da_mem && cpu_wr
+    // No state machine dependency - CPU writes complete in state 000
+    if (da_mem && cpu_wr) begin
         if (~cpu_ds[0]) da_memory[cpu_addr[13:1]][7:0] <= cpu_dout[7:0];
         if (~cpu_ds[1]) da_memory[cpu_addr[13:1]][15:8] <= cpu_dout[15:8];
     end
@@ -700,15 +703,21 @@ reg  [12:0] vaddr1_main;
 wire [12:0] vaddr2_main;
 wire [15:0] vdout2_main;
 reg [15:0] vdin1_main;
-reg [1:0] vw1_main = 2'b00;
 
 reg  [12:0] vaddr1_overlay;
 wire [12:0] vaddr2_overlay;
 wire [15:0] vdout2_overlay;
 reg [15:0] vdin1_overlay;
-reg [1:0] vw1_overlay = 2'b00;
+
+// VRAM write enables: Combinatorial to match write conditions exactly
+wire [1:0] vw1_main;
+wire [1:0] vw1_overlay;
 
 reg vfrontreq=1'b0;
+
+// Combinatorial write enables for VRAM - asserted only when writing in state 000
+assign vw1_main = (estate == 3'b000 && cpu_wr && (back_mem || front_mem)) ? ~cpu_ds : 2'b00;
+assign vw1_overlay = (estate == 3'b000 && cpu_wr && (overlay_back_mem || overlay_front_mem)) ? ~cpu_ds : 2'b00;
 
 // overlay control register (clk_sys)
 reg [7:0] overlay_ctrl_sys = 8'h00;  // [6]=enable, [3:0]=key_colour
@@ -1035,8 +1044,9 @@ assign ram_data_io = (sram_access && sys_wr) ? cpu_dout :
 
 // cpu_enable generation: combinational logic
 // For SRAM (cpu_mem): stays in state 000, cpu_enable HIGH (1-cycle access)
-// For MMIO/BRAM (!cpu_mem): goes through 000->001->010 (3-cycle access)
-wire cpu_enable = pll_locked && ((estate == 3'b000 && (cpu_idle || (cpu_mem && !cpu_idle))) || estate == 3'b010);
+// For BRAM writes (da_mem/vid_mem/pal_mem && cpu_wr): stays in state 000, cpu_enable HIGH (1-cycle access, optimized)
+// For MMIO/BRAM reads (!cpu_mem): goes through 000->001->010 (3-cycle access)
+wire cpu_enable = pll_locked && ((estate == 3'b000 && (cpu_idle || (cpu_mem && !cpu_idle) || ((da_mem || vid_mem || pal_mem) && cpu_wr && !cpu_idle))) || estate == 3'b010);
 
 // Latch SRAM data on falling edge of clock
 // This gives the SRAM time to respond to address changes while ensuring
@@ -1106,11 +1116,21 @@ begin
                     pal_sel <= vfront;
                 rds <= cpu_ds;
                 memio_go<=1'b1;
+                // Optimized BRAM writes: Write data registered, write enables are combinatorial
+                if (cpu_wr && vid_mem) begin
+                    if (back_mem || front_mem)
+                        vdin1_main <= cpu_dout;
+                    else if (overlay_back_mem || overlay_front_mem)
+                        vdin1_overlay <= cpu_dout;
+                end
                 if (cpu_idle) begin
                     // CPU idle - cpu_enable automatically HIGH (combinational)
                     estate <= 3'b000;
+                end else if ((da_mem || vid_mem || pal_mem) && cpu_wr) begin
+                    // BRAM write - optimized 1-cycle: stay in 000, write completes immediately
+                    estate <= 3'b000;
                 end else if (!cpu_mem) begin
-                    // MMIO/BRAM access - use 3-cycle path (000->001->010)
+                    // MMIO/BRAM read - use 3-cycle path (000->001->010)
                     estate <= 3'b001;
                 end else begin
                     // SRAM access - 1-cycle: stay in 000, cpu_enable is HIGH
@@ -1121,15 +1141,8 @@ begin
         end
         3'b001: begin
             // Memory access in progress - data propagating from SRAM/BRAM
-            if (vid_mem) begin
-                if (back_mem || front_mem) begin
-                    vdin1_main <= cpu_dout;
-                    vw1_main <= cpu_wr ? ~cpu_ds : 2'b00;
-                end else if (overlay_back_mem || overlay_front_mem) begin
-                    vdin1_overlay <= cpu_dout;
-                    vw1_overlay <= cpu_wr ? ~cpu_ds : 2'b00;
-                end
-            end
+            // Note: SRAM read/writes and BRAM writes are optimized to happen in state 000 (1-cycle)
+            // This state is only reached for BRAM reads and MMIO accesses (3-cycle)
             memio_go<=1'b0;
             if (da_mem && !cpu_wr) begin
                  if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
@@ -1150,8 +1163,7 @@ begin
             // Data valid, CPU sampled on rising edge entering this state
             // Clean up and return to idle
             ramwe <= 1'b1;
-            vw1_main <= 2'b00;
-            vw1_overlay <= 2'b00;
+            // vw1_main and vw1_overlay are combinatorial, no need to clear
             // Keep cpu_enable HIGH - state 000 will control it based on cpu_idle
             estate<=3'b000;
              end
