@@ -15,8 +15,8 @@ namespace {
 
     class SDSPI {
     public:
-        SDSPI() {
-            sim0.load("sdcard.img");
+        SDSPI(const char *sdcard_path = "sdcard.img") {
+            sim0.load(sdcard_path);
         }
         void operator()() {
             int rcounter_ = rcounter, ready_ = ready, SCLK_ = SCLK, ww_ = ww, state_ = state, MOSI_ = MOSI, MISO_ = MISO;
@@ -121,9 +121,10 @@ namespace {
         int ww = 0;
     };
 
-    SDSPI spi;
+    SDSPI *spi = nullptr;
 
     void Advance() {
+        if (!spi) return;
         if (prev_pc != 0) {
             uint32_t pc_inc = (prev_pc < pc) ? (pc - prev_pc) : (prev_pc - pc);
             if (pc_inc == 0)
@@ -131,46 +132,58 @@ namespace {
             if (pc_inc > 100)
                 pc_inc = 100;
             for (uint32_t i=0;i<pc_inc * CPI;++i)
-                spi();
+                (*spi)();
         }
         prev_pc = pc;
     }
 }
 
+extern "C" void SDSPI_Init(const char *sdcard_path = nullptr)
+{
+    if (spi) delete spi;
+    spi = new SDSPI(sdcard_path ? sdcard_path : "sdcard.img");
+}
+
 extern "C" void SDSPI_SetChipSelect(unsigned cs)
 {
+    if (!spi) SDSPI_Init();
     Advance();
     //printf("SDSPI_SetChipSelect(%d)\n", cs);
-    spi.chip_select = cs;
+    spi->chip_select = cs;
 }
 
 extern "C" void SDSPI_SetDataIn(uint8_t data)
 {
+    if (!spi) SDSPI_Init();
     Advance();
-    spi.data_in = data;
+    spi->data_in = data;
 }
 
 extern "C" void SDSPI_SetDivider(uint8_t div)
 {
+    if (!spi) SDSPI_Init();
     Advance();
-    spi.divider = div;
+    spi->divider = div;
 }
 
 extern "C" void SDSPI_SetWriteEnable(int enable)
 {
+    if (!spi) SDSPI_Init();
     Advance();
     //printf("SDSPI_SetWriteEnable(%d)\n", enable);
-    spi.w = enable;
+    spi->w = enable;
 }
 
 extern "C" uint8_t SDSPI_GetDataOut(void)
 {
+    if (!spi) SDSPI_Init();
     Advance();
-    return spi.data_out;
+    return spi->data_out;
 }
 
 extern "C" int SDSPI_GetReady(void)
 {
+    if (!spi) SDSPI_Init();
     Advance();
-    return spi.ready;
+    return spi->ready;
 }

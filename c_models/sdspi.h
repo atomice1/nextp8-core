@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+extern void SDSPI_Init(const char *sdcard_path);
 extern void SDSPI_SetChipSelect(unsigned cs);
 extern void SDSPI_SetDataIn(uint8_t data);
 extern void SDSPI_SetDivider(uint8_t divider);
