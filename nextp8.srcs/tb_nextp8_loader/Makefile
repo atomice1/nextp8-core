@@ -31,6 +31,7 @@ SYSTEMVERILOG_SOURCES = \
 	$(SRC_DIR)/hdmi/hdmidelay.sv \
 	$(SRC_DIR)/p8audio.sv \
 	$(SRC_DIR)/p8sfx_core_mux.sv \
+	$(TB_DIR)/spi_slave.sv \
 	$(TB_DIR)/tb_nextp8_loader.sv \
 	$(TB_DIR)/sdspi_model.sv
 
