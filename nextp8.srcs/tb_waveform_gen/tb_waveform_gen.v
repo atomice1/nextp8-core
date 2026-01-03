@@ -200,8 +200,8 @@ module tb_waveform_gen;
                 end
             end else begin
                 pass_count = pass_count + 1;
-                $display("PASS: Test %0d - instrument=%0d, pitch=%0d, phase=0x%06x -> sample=%d",
-                         test_count, instrument, pitch, phase_u22f18, $signed(actual_sample));
+                //$display("PASS: Test %0d - instrument=%0d, pitch=%0d, phase=0x%06x -> sample=%d",
+                //         test_count, instrument, pitch, phase_u22f18, $signed(actual_sample));
                 combo_pass[instrument][buzz][noiz] = combo_pass[instrument][buzz][noiz] + 1;
             end
         end
