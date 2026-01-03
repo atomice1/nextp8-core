@@ -105,9 +105,9 @@ module tb_p8audio_music;
         end else begin
             if (dma_req && !dma_ack) begin
                 dma_ack   <= 1'b1;
-                $display("TB DMA: word_addr=0x%08h, byte_addr=0x%04h, mem[%04h]=0x%02h, mem[%04h]=0x%02h, rdata=0x%04h",
+                /*$display("TB DMA: word_addr=0x%08h, byte_addr=0x%04h, mem[%04h]=0x%02h, mem[%04h]=0x%02h, rdata=0x%04h",
                          dma_addr, byte_addr, byte_addr, base_mem[byte_addr], byte_addr+16'd1, base_mem[byte_addr+16'd1],
-                         {base_mem[byte_addr], base_mem[byte_addr+16'd1]});
+                         {base_mem[byte_addr], base_mem[byte_addr+16'd1]});*/
             end else begin
                 dma_ack <= 1'b0;
             end
