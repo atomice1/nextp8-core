@@ -35,9 +35,28 @@ PICO8 ?= pico8
 # Build directory
 WORK_DIR = xsim.dir
 
-.PHONY: all sim run clean wave help ref
+# Python environment
+PYTHON3 = python3
+VENV_DIR = venv
+VENV_PYTHON = $(VENV_DIR)/bin/python3
+VENV_PIP = $(VENV_DIR)/bin/pip
+REQUIREMENTS = ../../scripts/requirements.txt
+
+.PHONY: all sim run clean wave help ref compare check venv
 
 all: sim
+
+# Create Python virtual environment
+venv:
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "=== Creating Python virtual environment ==="; \
+		$(PYTHON3) -m venv $(VENV_DIR); \
+		echo "=== Installing Python dependencies ==="; \
+		$(VENV_PIP) install -r $(REQUIREMENTS); \
+		echo ""; \
+	else \
+		echo "Virtual environment already exists. Use 'make clean' to recreate."; \
+	fi
 
 # Compile Verilog sources
 compile: $(SRCS)
@@ -52,7 +71,7 @@ elaborate: compile
 	@echo ""
 
 # Run simulation
-sim: elaborate
+sim: elaborate venv
 	@echo "=== Running simulation with cart: $(CART) (timeout: $(TIMEOUT)s) ==="
 	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall -testplusarg CART=$(CART) || \
 		(if [ $$? -eq 124 ]; then \
@@ -63,7 +82,13 @@ sim: elaborate
 		fi)
 	@echo ""
 	@echo "=== Simulation complete ==="
-	@echo "WAV files generated: tb_p8audio_music.wav"
+	@echo "WAV file generated: tb_p8audio_music_out.wav"
+	@echo ""
+	@echo "=== Checking audio output against reference ==="
+	@$(VENV_PYTHON) ../../scripts/check_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav" 0.15 5.0 || \
+		(echo ""; echo "ERROR: Audio check failed. Run 'make compare' to see detailed comparison."; exit 1)
+	@echo ""
+	@echo "=== Audio check PASSED ==="
 
 # Alternative: just run (if already compiled)
 run:
@@ -97,20 +122,25 @@ ref:
 	@echo "Reference WAV files exported: tb_p8audio_music_ref.wav"
 	@echo ""
 
-compare:
-	@echo "=== Comparing audio output with reference ==="
+compare: venv
+	@echo "=== Comparing audio output with reference (visual) ==="
 	@if [ ! -f ../../scripts/compare_audio.py ]; then \
 		echo "ERROR: compare_audio.py not found in ../../scripts/"; \
 		exit 1; \
 	fi
-	python3 ../../scripts/compare_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music.wav"
+	$(VENV_PYTHON) ../../scripts/compare_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav"
 	@echo "Comparison complete. Check audio_comparison.png"
+
+check: venv
+	@echo "=== Checking audio output against reference (pass/fail) ==="
+	@$(VENV_PYTHON) ../../scripts/check_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav" 0.15 5.0
 
 # Clean generated files
 clean:
 	@echo "=== Cleaning generated files ==="
 	rm -rf $(WORK_DIR)
 	rm -rf .Xil
+	rm -rf $(VENV_DIR)
 	rm -f *.jou *.log *.pb
 	rm -f *.wdb
 	rm -f tb_p8audio_music*.wav
@@ -123,12 +153,13 @@ help:
 	@echo "Makefile for tb_p8audio_music - P8 Audio Music Testbench"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make          - Compile, elaborate, and run simulation"
+	@echo "  make          - Compile, elaborate, and run simulation with audio check"
 	@echo "  make compile  - Compile all sources"
 	@echo "  make elaborate- Elaborate the design"
 	@echo "  make sim      - Run simulation"
+	@echo "  make check    - Check audio quality (amplitude/spectrum diff)"
+	@echo "  make compare  - Compare reference vs simulation output (visual)"
 	@echo "  make ref      - Export reference WAV files from PICO-8"
-	@echo "  make compare  - Compare reference vs simulation output"
 	@echo "  make wave     - Open waveform viewer"
 	@echo "  make clean    - Remove generated files"
 	@echo ""
@@ -136,10 +167,16 @@ help:
 	@echo "  CART=<path>   - Specify cart file (default: tb_p8audio_music.p8)"
 	@echo "  PICO8=<path>  - Specify reference platform executable (default: pico8)"
 	@echo ""
+	@echo "Audio Check Tolerances:"
+	@echo "  Mean Amplitude Difference: <= 0.15 (15% of full scale)"
+	@echo "  Mean Spectrum Difference:  <= 5.0  (normalized FFT magnitude)"
+	@echo ""
 	@echo "Examples:"
-	@echo "  make                              # Run with default cart"
+	@echo "  make                              # Run with default cart + audio check"
 	@echo "  make CART=../../carts/jelpi.p8    # Run with specific cart"
 	@echo "  make ref                          # Export reference WAVs from PICO-8"
+	@echo "  make check                        # Check audio quality manually"
+	@echo "  make compare                      # Generate visual comparison (audio_comparison.png)"
 	@echo "  make clean && make                # Clean rebuild"
 	@echo ""
 	@echo "Output:"
