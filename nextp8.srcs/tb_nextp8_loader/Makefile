@@ -68,9 +68,28 @@ XSIM = xsim
 # Build directory
 WORK_DIR = xsim.dir
 
-.PHONY: all sim run clean wave help sdcard app test_sdspi sdspi_wave
+# Python environment
+PYTHON3 = python3
+VENV_DIR = venv
+VENV_PYTHON = $(VENV_DIR)/bin/python3
+VENV_PIP = $(VENV_DIR)/bin/pip
+REQUIREMENTS = ../../scripts/requirements.txt
+
+.PHONY: all sim run clean wave help sdcard app test_sdspi sdspi_wave venv
 
 all: app sdcard sim
+
+# Create Python virtual environment
+venv:
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "=== Creating Python virtual environment ==="; \
+		$(PYTHON3) -m venv $(VENV_DIR); \
+		echo "=== Installing Python dependencies ==="; \
+		$(VENV_PIP) install -r $(REQUIREMENTS); \
+		echo ""; \
+	else \
+		echo "Virtual environment already exists. Use 'make clean' to recreate."; \
+	fi
 
 # Build application binary
 app:
@@ -79,9 +98,9 @@ app:
 	@echo ""
 
 # Create SD card image
-sdcard: app
+sdcard: app venv
 	@echo "=== Creating SD card image ==="
-	#@./make-sdcard-image.sh
+	@$(VENV_PYTHON) make-sdcard-image.py -o sdcard.img nextp8.bin
 	@echo ""
 
 # Note: loader.mem should be provided by user before running simulation
@@ -214,6 +233,7 @@ help:
 	@echo "Targets:"
 	@echo "  make          - Build app, create SD card image, and run simulation"
 	@echo "  make app      - Build hello test application binary"
+	@echo "  make venv     - Create Python virtual environment (done automatically)"
 	@echo "  make sdcard   - Create SD card image with application"
 	@echo "  make sim      - Compile and run simulation"
 	@echo "  make run      - Run simulation (skip recompile)"
@@ -235,6 +255,12 @@ help:
 	@echo "This testbench instantiates the full nextp8_top module"
 	@echo "with simulated external interfaces (SRAM, UART etc.)"
 	@echo "Exits successfully when POST code reaches 25 and the expected UART is output."
-	rm -f xsim.ini
+
+# Clean generated files
+clean:
+	@echo "=== Cleaning testbench files ==="
+	rm -rf $(WORK_DIR) *.jou *.log *.pb *.wdb *.ini
+	rm -f sdcard.img
+	rm -rf $(VENV_DIR)
 	@$(MAKE) -f Makefile.app clean
 	@echo "Clean complete"
