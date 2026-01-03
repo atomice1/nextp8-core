@@ -81,7 +81,8 @@ module tb_waveform_gen;
     p8sfx_core_mux dut (
         .clk_sys(clk_sys),
         .clk_pcm_8x(clk_pcm_8x),
-        .resetn(resetn),
+        .resetn_sys(resetn),
+        .resetn_pcm_8x(resetn),
         .run(1'b1),
         .base_addr(32'h0),
         .sfx_index_in('{sfx_index_in_0, sfx_index_in_1, sfx_index_in_2, sfx_index_in_3}),
@@ -148,6 +149,7 @@ module tb_waveform_gen;
 
             dut.phase_acc_8x[0] = phase_u22f18;
             dut.brown_state_8x[0] = brown_s8f7;
+            dut.lfsr_sample_8x[0] = brown_s8f7;
             dut.cur_wave_8x[0] = instrument;
             dut.cur_pitch_8x[0] = pitch;
             dut.note_idx_8x[0] = 6'd0;  // Note index for SAW waveform saw_offset calculation
@@ -895,55 +897,55 @@ module tb_waveform_gen;
         // instrument 6 cur_pitch 9 noiz 0 phase 2.339844 brown_state 0.250000 => 0.650510
         test_case(6, 9, 0, 0, 19628032, 2097152, 5456875);
         // instrument 6 cur_pitch 48 noiz 1 phase 1.882812 brown_state -0.289062 => 0.107385
-        test_case(6, 48, 0, 1, 15794176, -2424832, 900806);
+        test_case(6, 48, 0, 1, 15794176, -2424832, -606208);
         // instrument 6 cur_pitch 12 noiz 1 phase 3.195312 brown_state 0.296875 => 0.287945
-        test_case(6, 12, 0, 1, 26804224, 2490368, 2415455);
+        test_case(6, 12, 0, 1, 26804224, 2490368, 622592);
         // instrument 6 cur_pitch 26 noiz 1 phase 2.855469 brown_state -0.363281 => 0.211848
-        test_case(6, 26, 0, 1, 23953408, -3047424, 1777106);
+        test_case(6, 26, 0, 1, 23953408, -3047424, -761856);
         // instrument 6 cur_pitch 27 noiz 1 phase 3.050781 brown_state 0.136719 => 0.027629
-        test_case(6, 27, 0, 1, 25591808, 1146880, 231771);
+        test_case(6, 27, 0, 1, 25591808, 1146880, 286720);
         // instrument 6 cur_pitch 13 noiz 1 phase 1.625000 brown_state 0.058594 => -0.107438
-        test_case(6, 13, 0, 1, 13631488, 491520, -901259);
+        test_case(6, 13, 0, 1, 13631488, 491520, 122880);
         // instrument 6 cur_pitch 11 noiz 1 phase 3.328125 brown_state -0.480469 => -0.795180
-        test_case(6, 11, 0, 1, 27918336, -4030464, -6670457);
+        test_case(6, 11, 0, 1, 27918336, -4030464, -1007616);
         // instrument 6 cur_pitch 33 noiz 1 phase 3.562500 brown_state -0.476562 => 0.767322
-        test_case(6, 33, 0, 1, 29884416, -3997696, 6436766);
+        test_case(6, 33, 0, 1, 29884416, -3997696, -999424);
         // instrument 6 cur_pitch 15 noiz 1 phase 0.382812 brown_state 0.125000 => 0.226888
-        test_case(6, 15, 0, 1, 3211264, 1048576, 1903274);
+        test_case(6, 15, 0, 1, 3211264, 1048576, 262144);
         // instrument 6 cur_pitch 18 noiz 1 phase 2.679688 brown_state 0.472656 => -0.685924
-        test_case(6, 18, 0, 1, 22478848, 3964928, -5753950);
+        test_case(6, 18, 0, 1, 22478848, 3964928, 991232);
         // instrument 6 cur_pitch 53 noiz 1 phase 0.781250 brown_state -0.488281 => 0.328508
-        test_case(6, 53, 0, 1, 6553600, -4096000, 2755724);
+        test_case(6, 53, 0, 1, 6553600, -4096000, -1024000);
         // instrument 6 cur_pitch 21 noiz 1 phase 3.761719 brown_state 0.039062 => -0.040334
-        test_case(6, 21, 0, 1, 31555584, 327680, -338346);
+        test_case(6, 21, 0, 1, 31555584, 327680, 81920);
         // instrument 6 cur_pitch 51 noiz 1 phase 2.460938 brown_state 0.046875 => 0.067171
-        test_case(6, 51, 0, 1, 20643840, 393216, 563471);
+        test_case(6, 51, 0, 1, 20643840, 393216, 98304);
         // instrument 6 cur_pitch 60 noiz 1 phase 0.636719 brown_state 0.117188 => -0.128006
-        test_case(6, 60, 0, 1, 5341184, 983040, -1073789);
+        test_case(6, 60, 0, 1, 5341184, 983040, 245760);
         // instrument 6 cur_pitch 30 noiz 1 phase 1.007812 brown_state 0.027344 => 0.000817
-        test_case(6, 30, 0, 1, 8454144, 229376, 6851);
+        test_case(6, 30, 0, 1, 8454144, 229376, 57344);
         // instrument 6 cur_pitch 37 noiz 1 phase 2.035156 brown_state -0.480469 => -0.059305
-        test_case(6, 37, 0, 1, 17072128, -4030464, -497488);
+        test_case(6, 37, 0, 1, 17072128, -4030464, -1007616);
         // instrument 6 cur_pitch 34 noiz 1 phase 3.906250 brown_state 0.253906 => -0.086543
-        test_case(6, 34, 0, 1, 32768000, 2129920, -725971);
+        test_case(6, 34, 0, 1, 32768000, 2129920, 532480);
         // instrument 6 cur_pitch 36 noiz 1 phase 3.375000 brown_state -0.007812 => -0.010403
-        test_case(6, 36, 0, 1, 28311552, -65536, -87269);
+        test_case(6, 36, 0, 1, 28311552, -65536, -16384);
         // instrument 6 cur_pitch 8 noiz 1 phase 3.156250 brown_state -0.046875 => -0.038719
-        test_case(6, 8, 0, 1, 26476544, -393216, -324800);
+        test_case(6, 8, 0, 1, 26476544, -393216, -98304);
         // instrument 6 cur_pitch 26 noiz 1 phase 0.582031 brown_state -0.019531 => 0.032938
-        test_case(6, 26, 0, 1, 4882432, -163840, 276301);
+        test_case(6, 26, 0, 1, 4882432, -163840, -40960);
         // instrument 6 cur_pitch 38 noiz 1 phase 3.925781 brown_state -0.316406 => 0.081544
-        test_case(6, 38, 0, 1, 32931840, -2654208, 684037);
+        test_case(6, 38, 0, 1, 32931840, -2654208, -663552);
         // instrument 6 cur_pitch 59 noiz 1 phase 0.367188 brown_state 0.343750 => 0.380189
-        test_case(6, 59, 0, 1, 3080192, 2883584, 3189253);
+        test_case(6, 59, 0, 1, 3080192, 2883584, 720896);
         // instrument 6 cur_pitch 40 noiz 1 phase 2.585938 brown_state 0.289062 => -0.406928
-        test_case(6, 40, 0, 1, 21692416, 2424832, -3413557);
+        test_case(6, 40, 0, 1, 21692416, 2424832, 606208);
         // instrument 6 cur_pitch 42 noiz 1 phase 0.898438 brown_state 0.300781 => -0.101827
-        test_case(6, 42, 0, 1, 7536640, 2523136, -854186);
+        test_case(6, 42, 0, 1, 7536640, 2523136, 630784);
         // instrument 6 cur_pitch 24 noiz 1 phase 1.417969 brown_state 0.429688 => 0.745262
-        test_case(6, 24, 0, 1, 11894784, 3604480, 6251711);
+        test_case(6, 24, 0, 1, 11894784, 3604480, 901120);
         // instrument 6 cur_pitch 7 noiz 1 phase 2.699219 brown_state -0.375000 => 0.605740
-        test_case(6, 7, 0, 1, 22642688, -3145728, 5081315);
+        test_case(6, 7, 0, 1, 22642688, -3145728, -786432);
         // instrument 6 cur_pitch 14 noiz 0 phase 3.808594 brown_state 0.488281 => 1.175492
         test_case(6, 14, 1, 0, 31948800, 4096000, 9860741);
         // instrument 6 cur_pitch 43 noiz 0 phase 0.582031 brown_state -0.394531 => -0.651439
@@ -995,55 +997,55 @@ module tb_waveform_gen;
         // instrument 6 cur_pitch 37 noiz 0 phase 3.726562 brown_state -0.359375 => -0.630876
         test_case(6, 37, 1, 0, 31260672, -3014656, -5292168);
         // instrument 6 cur_pitch 59 noiz 1 phase 1.621094 brown_state -0.273438 => 0.312075
-        test_case(6, 59, 1, 1, 13598720, -2293760, 2617871);
+        test_case(6, 59, 1, 1, 13598720, -2293760, -573440);
         // instrument 6 cur_pitch 7 noiz 1 phase 2.722656 brown_state 0.093750 => -0.139635
-        test_case(6, 7, 1, 1, 22839296, 786432, -1171342);
+        test_case(6, 7, 1, 1, 22839296, 786432, 196608);
         // instrument 6 cur_pitch 49 noiz 1 phase 1.625000 brown_state 0.027344 => -0.032281
-        test_case(6, 49, 1, 1, 13631488, 229376, -270791);
+        test_case(6, 49, 1, 1, 13631488, 229376, 57344);
         // instrument 6 cur_pitch 35 noiz 1 phase 3.210938 brown_state 0.339844 => 0.257538
-        test_case(6, 35, 1, 1, 26935296, 2850816, 2160384);
+        test_case(6, 35, 1, 1, 26935296, 2850816, 712704);
         // instrument 6 cur_pitch 54 noiz 1 phase 0.906250 brown_state 0.460938 => -0.132284
-        test_case(6, 54, 1, 1, 7602176, 3866624, -1109681);
+        test_case(6, 54, 1, 1, 7602176, 3866624, 966656);
         // instrument 6 cur_pitch 49 noiz 1 phase 1.417969 brown_state 0.023438 => 0.030840
-        test_case(6, 49, 1, 1, 11894784, 196608, 258702);
+        test_case(6, 49, 1, 1, 11894784, 196608, 49152);
         // instrument 6 cur_pitch 33 noiz 1 phase 0.546875 brown_state -0.488281 => 0.814269
-        test_case(6, 33, 1, 1, 4587520, -4096000, 6830585);
+        test_case(6, 33, 1, 1, 4587520, -4096000, -1024000);
         // instrument 6 cur_pitch 49 noiz 1 phase 2.878906 brown_state 0.035156 => -0.013402
-        test_case(6, 49, 1, 1, 24150016, 294912, -112426);
+        test_case(6, 49, 1, 1, 24150016, 294912, 73728);
         // instrument 6 cur_pitch 15 noiz 1 phase 0.593750 brown_state -0.187500 => 0.361169
-        test_case(6, 15, 1, 1, 4980736, -1572864, 3029702);
+        test_case(6, 15, 1, 1, 4980736, -1572864, -393216);
         // instrument 6 cur_pitch 57 noiz 1 phase 2.769531 brown_state 0.160156 => -0.111737
-        test_case(6, 57, 1, 1, 23232512, 1343488, -937321);
+        test_case(6, 57, 1, 1, 23232512, 1343488, 335872);
         // instrument 6 cur_pitch 28 noiz 1 phase 3.671875 brown_state -0.476562 => 0.613905
-        test_case(6, 28, 1, 1, 30801920, -3997696, 5149810);
+        test_case(6, 28, 1, 1, 30801920, -3997696, -999424);
         // instrument 6 cur_pitch 48 noiz 1 phase 1.441406 brown_state -0.230469 => -0.322492
-        test_case(6, 48, 1, 1, 12091392, -1933312, -2705260);
+        test_case(6, 48, 1, 1, 12091392, -1933312, -483328);
         // instrument 6 cur_pitch 10 noiz 1 phase 2.625000 brown_state -0.285156 => 0.547843
-        test_case(6, 10, 1, 1, 22020096, -2392064, 4595638);
+        test_case(6, 10, 1, 1, 22020096, -2392064, -598016);
         // instrument 6 cur_pitch 60 noiz 1 phase 1.914062 brown_state -0.089844 => 0.023215
-        test_case(6, 60, 1, 1, 16056320, -753664, 194744);
+        test_case(6, 60, 1, 1, 16056320, -753664, -188416);
         // instrument 6 cur_pitch 10 noiz 1 phase 0.718750 brown_state -0.414062 => 0.596623
-        test_case(6, 10, 1, 1, 6029312, -3473408, 5004838);
+        test_case(6, 10, 1, 1, 6029312, -3473408, -868352);
         // instrument 6 cur_pitch 0 noiz 1 phase 0.843750 brown_state -0.250000 => 0.234375
-        test_case(6, 0, 1, 1, 7077888, -2097152, 1966080);
+        test_case(6, 0, 1, 1, 7077888, -2097152, -524288);
         // instrument 6 cur_pitch 13 noiz 1 phase 3.746094 brown_state 0.308594 => -0.383123
-        test_case(6, 13, 1, 1, 31424512, 2588672, -3213865);
+        test_case(6, 13, 1, 1, 31424512, 2588672, 647168);
         // instrument 6 cur_pitch 54 noiz 1 phase 1.125000 brown_state -0.242188 => -0.092674
-        test_case(6, 54, 1, 1, 9437184, -2031616, -777404);
+        test_case(6, 54, 1, 1, 9437184, -2031616, -507904);
         // instrument 6 cur_pitch 27 noiz 1 phase 1.101562 brown_state -0.167969 => -0.067889
-        test_case(6, 27, 1, 1, 9240576, -1409024, -569495);
+        test_case(6, 27, 1, 1, 9240576, -1409024, -352256);
         // instrument 6 cur_pitch 27 noiz 1 phase 2.742188 brown_state 0.359375 => -0.368715
-        test_case(6, 27, 1, 1, 23003136, 3014656, -3093002);
+        test_case(6, 27, 1, 1, 23003136, 3014656, 753664);
         // instrument 6 cur_pitch 61 noiz 1 phase 1.281250 brown_state -0.460938 => -0.389308
-        test_case(6, 61, 1, 1, 10747904, -3866624, -3265751);
+        test_case(6, 61, 1, 1, 10747904, -3866624, -966656);
         // instrument 6 cur_pitch 23 noiz 1 phase 2.109375 brown_state -0.289062 => -0.133084
-        test_case(6, 23, 1, 1, 17694720, -2424832, -1116392);
+        test_case(6, 23, 1, 1, 17694720, -2424832, -606208);
         // instrument 6 cur_pitch 4 noiz 1 phase 2.558594 brown_state 0.242188 => -0.601986
-        test_case(6, 4, 1, 1, 21463040, 2031616, -5049827);
+        test_case(6, 4, 1, 1, 21463040, 2031616, 507904);
         // instrument 6 cur_pitch 21 noiz 1 phase 0.140625 brown_state 0.390625 => 0.238037
-        test_case(6, 21, 1, 1, 1179648, 3276800, 1996799);
+        test_case(6, 21, 1, 1, 1179648, 3276800, 819200);
         // instrument 6 cur_pitch 53 noiz 1 phase 1.339844 brown_state 0.320312 => 0.334797
-        test_case(6, 53, 1, 1, 11239424, 2686976, 2808477);
+        test_case(6, 53, 1, 1, 11239424, 2686976, 671744);
         // instrument 7 buzz 0 phase 3.570312 => 0.381013
         test_case(7, 0, 0, 0, 29949952, 0, 3196170);
         // instrument 7 buzz 0 phase 3.160156 => -0.198840
