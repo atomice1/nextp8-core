@@ -68,9 +68,9 @@ XSIM = xsim
 # Build directory
 WORK_DIR = xsim.dir
 
-# Python environment
+# Python environment (shared venv at top level)
 PYTHON3 = python3
-VENV_DIR = venv
+VENV_DIR = ../../venv
 VENV_PYTHON = $(VENV_DIR)/bin/python3
 VENV_PIP = $(VENV_DIR)/bin/pip
 REQUIREMENTS = ../../scripts/requirements.txt
@@ -261,6 +261,5 @@ clean:
 	@echo "=== Cleaning testbench files ==="
 	rm -rf $(WORK_DIR) *.jou *.log *.pb *.wdb *.ini
 	rm -f sdcard.img
-	rm -rf $(VENV_DIR)
 	@$(MAKE) -f Makefile.app clean
 	@echo "Clean complete"
