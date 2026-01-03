@@ -337,6 +337,8 @@ module tb_p8audio_sfx;
     initial begin : init_and_run
         integer i;
         integer plusarg_found;
+        integer quick_mode;
+        integer sfx_start, sfx_end;
         // Init signals
         address=0; din=0; write_en=0; read_en=0; nUDS=1'b1; nLDS=1'b1; dma_ack=0; dma_rdata=0;
         for (i=0;i<65536;i=i+1) base_mem[i]=8'h00;
@@ -345,6 +347,21 @@ module tb_p8audio_sfx;
         p8_path = "tb_p8audio_sfx.p8";
         plusarg_found = $value$plusargs("CART=%s", p8_path);
         $display("Using P8 cart: %0s", p8_path);
+        
+        // Check for QUICK mode (only run SFX 8)
+        quick_mode = 0;
+        plusarg_found = $value$plusargs("QUICK=%d", quick_mode);
+        
+        if (quick_mode) begin
+            sfx_start = 8;
+            sfx_end = 8;
+            $display("QUICK mode: Testing only SFX 8");
+        end else begin
+            sfx_start = 8;
+            sfx_end = 21;
+            $display("Full mode: Testing SFX 8-21");
+        end
+        
         // Load SFX from PICO-8 cart file
         load_p8_sfx(p8_path);
 
@@ -365,9 +382,9 @@ module tb_p8audio_sfx;
         mmio_write(ADDR_NOTE_ATK,    16'd20);
         mmio_write(ADDR_NOTE_REL,    16'd20);
 
-        // Sweep SFX 8..21, capture duration derived from SFX speed (byte 65)
+        // Sweep SFX, capture duration derived from SFX speed (byte 65)
 
-        for (sfx_idx=10; sfx_idx<=10; sfx_idx=sfx_idx+1) begin
+        for (sfx_idx=sfx_start; sfx_idx<=sfx_end; sfx_idx=sfx_idx+1) begin
             integer speed, ticks, quot, rem;
             // speed byte is at offset 65 within each 68-byte SFX slot
             speed = {24'd0, base_mem[{16'd0, SFX_BASE} + sfx_idx*SFX_BYTES + 65]};

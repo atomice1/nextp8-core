@@ -48,7 +48,7 @@ BITSTREAM = $(IMPL_DIR)/$(TOP_MODULE).bit
 TIMING_RPT = timing_summary.rpt
 UTIL_RPT = utilization.rpt
 
-.PHONY: all help clean lint compile synth synthesis implement bitstream test
+.PHONY: all help clean lint compile synth synthesis implement bitstream test test-quick test-slow test-all
 
 # Default target
 all: bitstream
@@ -67,11 +67,15 @@ help:
 	@echo "  make all        - Run complete build flow (default)"
 	@echo ""
 	@echo "Test Targets:"
-	@echo "  make test                     - Run all testbenches"
+	@echo "  make test                     - Run quick tests (alias for test-quick)"
+	@echo "  make test-quick               - Run all quick tests (excludes slow tests)"
+	@echo "  make test-slow                - Run only slow tests (loader + full audio)"
+	@echo "  make test-all                 - Run all tests (quick + slow)"
 	@echo "  make test-tb_nextp8_boot      - Run exec_tb (full system boot test)"
-	@echo "  make test-tb_nextp8_loader    - Run tb_nextp8_loader (bootloader test)"
+	@echo "  make test-tb_nextp8_loader    - Run tb_nextp8_loader (bootloader test) [SLOW]"
 	@echo "  make test-tb_p8video          - Run p8video_tb (video module test)"
-	@echo "  make test-tb_p8audio_sfx      - Run tb_p8audio_sfx (audio SFX test)"
+	@echo "  make test-tb_p8audio_sfx      - Run tb_p8audio_sfx (audio SFX test, full)"
+	@echo "  make test-tb_p8audio_sfx-quick - Run tb_p8audio_sfx (audio SFX test, SFX 8 only)"
 	@echo "  make test-tb_ps2_keyboard     - Run tb_ps2_read_keyboard (PS/2 test)"
 	@echo "  make test-tb_p8audio_music    - Run tb_p8audio_music (audio music test)"
 	@echo "  make test-tb_nextp8_p8audio   - Run tb_nextp8_p8audio (integrated audio test)"
@@ -126,7 +130,19 @@ bitstream: implement
 	fi
 
 # Test targets
-test: test-tb_nextp8_boot test-tb_nextp8_loader test-tb_p8video test-tb_p8audio_sfx test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen
+# test is an alias for test-quick (fast tests for typical development)
+test: test-quick
+
+# test-quick runs all quick tests (excludes slow tests)
+test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen
+	@echo "=== Quick tests complete ==="
+
+# test-slow runs only slow tests
+test-slow: test-tb_nextp8_loader test-tb_p8audio_sfx
+	@echo "=== Slow tests complete ==="
+
+# test-all runs all tests (quick + slow)
+test-all: test-quick test-slow
 	@echo "=== All tests complete ==="
 
 test-tb_nextp8_boot:
@@ -145,8 +161,13 @@ test-tb_p8video:
 	@echo ""
 
 test-tb_p8audio_sfx:
-	@echo "=== Running tb_p8audio_sfx: tb_p8audio_sfx (audio SFX test) ==="
-	@$(MAKE) -C nextp8.srcs/tb_p8audio_sfx || (echo "ERROR: tb_p8audio_sfx failed"; exit 1)
+	@echo "=== Running tb_p8audio_sfx: tb_p8audio_sfx (audio SFX test - FULL) ==="
+	@$(MAKE) -C nextp8.srcs/tb_p8audio_sfx QUICK=0 || (echo "ERROR: tb_p8audio_sfx failed"; exit 1)
+	@echo ""
+
+test-tb_p8audio_sfx-quick:
+	@echo "=== Running tb_p8audio_sfx: tb_p8audio_sfx (audio SFX test - QUICK: SFX 8 only) ==="
+	@$(MAKE) -C nextp8.srcs/tb_p8audio_sfx QUICK=1 || (echo "ERROR: tb_p8audio_sfx failed"; exit 1)
 	@echo ""
 
 test-tb_ps2_keyboard:

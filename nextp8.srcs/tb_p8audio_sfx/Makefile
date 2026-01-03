@@ -23,6 +23,7 @@ CART ?= tb_p8audio_sfx.p8
 TOP = tb_p8audio_sfx
 SNAPSHOT = tb_p8audio_sfx_snap
 TIMEOUT ?= 240
+QUICK ?= 0
 
 # xsim commands
 XVLOG = xvlog
@@ -53,8 +54,8 @@ elaborate: compile
 
 # Run simulation
 sim: elaborate
-	@echo "=== Running simulation with cart: $(CART) (timeout: $(TIMEOUT)s) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall -testplusarg CART=$(CART) || \
+	@echo "=== Running simulation with cart: $(CART) (QUICK=$(QUICK), timeout: $(TIMEOUT)s) ==="
+	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall -testplusarg CART=$(CART) -testplusarg QUICK=$(QUICK) || \
 		(if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
 			exit 1; \
@@ -137,10 +138,12 @@ help:
 	@echo ""
 	@echo "Options:"
 	@echo "  CART=<path>   - Specify cart file (default: tb_p8audio_sfx.p8)"
+	@echo "  QUICK=1       - Run only SFX 8 for fast testing (default: 0)"
 	@echo "  PICO8=<path>  - Specify reference platform executable (default: pico8)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make                              # Run with default cart"
+	@echo "  make                              # Run with default cart (all SFX)"
+	@echo "  make QUICK=1                      # Run quick test (SFX 8 only)"
 	@echo "  make CART=../../carts/jelpi.p8    # Run with specific cart"
 	@echo "  make ref                          # Export reference WAVs from PICO-8"
 	@echo "  make clean && make                # Clean rebuild"
