@@ -15,7 +15,7 @@
 #   make clean      - Clean all generated files
 
 # Project settings
-PROJECT = nextp8
+PROJECT = nextp8-issue5
 PROJECT_FILE = $(PROJECT).xpr
 PART = xc7a35tcsg324-2
 TOP_MODULE = nextp8_top_issue5
