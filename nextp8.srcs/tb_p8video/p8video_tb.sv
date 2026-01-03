@@ -300,7 +300,7 @@ always @(posedge clk_video) begin
             $display("  Got RGB:      %02h %02h %02h", video_r, video_g, video_b);
             $stop(1);
          end else begin
-            if ((px % 10 == 0) && (py % 10 == 0)) begin
+            if ((px % 32 == 0) && (py % 32 == 0)) begin
                 $display("OK at time %t: x=%0d, y=%0d, px=%0d, py=%0d, index=%0d",
                          $time, x, y, px, py, expected_system_index);
             end
