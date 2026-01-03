@@ -29,7 +29,8 @@ module p8sfx_core_mux (
     // Clocks & Reset
     input         clk_sys,                    // System clock for DMA (33 MHz)
     input         clk_pcm_8x,                 // 8x PCM sample clock (176.4 kHz)
-    input         resetn,                     // Active-low async reset
+    input         resetn_sys,                 // Active-low reset synchronized to clk_sys
+    input         resetn_pcm_8x,              // Active-low reset synchronized to clk_pcm_8x
 
     // Control (clk_sys domain)
     input         run,                        // clk_sys: Global run enable
@@ -140,7 +141,7 @@ endfunction
 reg clock_toggle; // Clock toggle for HWFX half-clock-rate
 
 always @(posedge clk_pcm_8x) begin
-    if (!resetn) begin
+    if (!resetn_pcm_8x) begin
         ctx_idx <= 3'd0;
         // Reset clock cycle toggle for HWFX processing
         clock_toggle <= 1'b0;
@@ -554,7 +555,7 @@ reg [7:0] load_done_toggle_sys;  // clk_sys: Toggle when context load completes
 // DMA Request Capture (clk_sys domain)
 //==============================================================
 always @(posedge clk_sys) begin
-    if (!resetn) begin
+    if (!resetn_sys) begin
         pending_load_sys <= 8'd0;
         for (i=0; i<8; i=i+1) begin
             sfx_index_req_8x[i] <= 6'd0;
@@ -597,7 +598,7 @@ end
 // DMA Arbiter FSM (clk_sys domain)
 //==============================================================
 always @(posedge clk_sys) begin
-    if (!resetn) begin
+    if (!resetn_sys) begin
         dma_state <= L_IDLE;
         dma_req <= 1'b0;
         dma_addr <= 31'd0;
@@ -767,7 +768,7 @@ reg [7:0] force_release_pcm_sticky;  // Sticky flags for force_release (persist 
 
 // Generate toggles on force_stop/force_release inputs (clk_sys domain)
 always @(posedge clk_sys) begin
-    if (!resetn) begin
+    if (!resetn_sys) begin
         force_stop_toggle_sys <= 8'd0;
         force_release_toggle_sys <= 8'd0;
     end else begin
@@ -784,7 +785,7 @@ end
 
 // HWFX synchronizers (clk_sys -> clk_pcm_8x)
 always @(posedge clk_sys) begin
-    if (!resetn) begin
+    if (!resetn_sys) begin
         hwfx_5f40_sys <= 8'd0;
         hwfx_5f41_sys <= 8'd0;
         hwfx_5f42_sys <= 8'd0;
@@ -799,7 +800,7 @@ end
 
 // Synchronize custom load request to clk_sys
 always @(posedge clk_sys) begin
-    if (!resetn) begin
+    if (!resetn_sys) begin
         custom_load_toggle_sys <= 4'd0;
         custom_load_toggle_sys_q <= 4'd0;
     end else begin
@@ -810,7 +811,7 @@ end
 
 // Synchronize to clk_pcm_8x and detect edges
 always @(posedge clk_pcm_8x) begin
-    if (!resetn) begin
+    if (!resetn_pcm_8x) begin
         load_done_toggle_pcm <= 8'd0;
         load_done_toggle_pcm_q <= 8'd0;
         force_stop_toggle_pcm <= 8'd0;
@@ -831,7 +832,7 @@ always @(posedge clk_pcm_8x) begin
 end
 
 always @(posedge clk_pcm_8x) begin
-    if (!resetn) begin
+    if (!resetn_pcm_8x) begin
         hwfx_5f40_pcm <= 8'd0;
         hwfx_5f40_pcm_q <= 8'd0;
         hwfx_5f41_pcm <= 8'd0;
@@ -1820,7 +1821,7 @@ assign should_check_arpeggio_effect = !is_waveform_inst && is_two_samples_before
 assign should_decode_note = !is_waveform_inst && ((!arp_active && is_one_sample_before_main_note_tick) || is_one_sample_before_arp_note_tick);
 
 always @(posedge clk_pcm_8x) begin
-    if (!resetn) begin
+    if (!resetn_pcm_8x) begin
         // Reset control signals
         sfx_done <= 4'd0;
         force_stop_pcm_sticky <= 8'd0;

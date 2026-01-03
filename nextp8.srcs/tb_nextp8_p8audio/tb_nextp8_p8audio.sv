@@ -17,7 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //================================================================
-`timescale 1ns/1ps
+`timescale 1ns/1ns
 
 module tb_nextp8_p8audio;
     //====================
@@ -127,7 +127,7 @@ module tb_nextp8_p8audio;
     //====================
     wire read_en_i;
     wire write_en_i;
-    wire [19:0] addr_i;
+    wire [20:0] addr_i;
     wire lb_i;
     wire ub_i;
     wire [15:0] data_in_i;
@@ -284,13 +284,13 @@ module tb_nextp8_p8audio;
     //====================
     integer wav_file;
     integer sample_count;
-    localparam integer TEST_DURATION_SAMPLES = 44100; // 2 seconds at 22050 Hz
+    localparam integer TEST_DURATION_SAMPLES = 10; // Minimal test - DMA should complete by sample 10
 
     initial begin
-        // Wait for system to come out of reset
-        #10000;
-        $display("[%0t] System initialized, postcode=%d", $time, postcode_o);
-        
+        // Wait for post code 6 here (p8audio init)
+        wait (postcode_o == 6);
+        $display("[%0t] Reached postcode 6 (p8audio init), postcode=%d", $time, postcode_o);
+
         // Open WAV file for PCM capture
         wav_file = $fopen("tb_nextp8_p8audio_out.wav", "wb");
         wav_write_header(wav_file, TEST_DURATION_SAMPLES);
@@ -304,10 +304,9 @@ module tb_nextp8_p8audio;
             $fwrite(wav_file, "%c%c", pcm_out[7:0], pcm_out[15:8]);
             sample_count = sample_count + 1;
             
-            // Display progress every 1000 samples
-            if (sample_count % 1000 == 0) begin
-                $display("Captured %0d samples, postcode=%d", sample_count, postcode_o);
-            end
+            // Display every sample since we're only capturing 10
+            $display("[%0t] Captured sample %0d: pcm_out=%d (0x%04x), postcode=%d",
+                     $time, sample_count, $signed(pcm_out), pcm_out, postcode_o);
         end
         
         $fclose(wav_file);

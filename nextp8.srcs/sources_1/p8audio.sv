@@ -290,7 +290,8 @@ reg  [3:0]  force_release_sys;    // mclk: One-cycle pulse to release voice from
 p8sfx_core_mux core_mux_inst (
     .clk_sys             (mclk),
     .clk_pcm_8x          (clk_pcm_8x),
-    .resetn              (resetn_pcm_8x_q),
+    .resetn_sys          (resetn_sys_q),
+    .resetn_pcm_8x       (resetn_pcm_8x_q),
     .run                 (reg_ctrl[0]),
     .base_addr           (reg_sfx_base),
     .sfx_index_in        (play_sfx_index),

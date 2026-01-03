@@ -27,10 +27,10 @@
 
 _start:
     /* Initialize stack pointer */
-    move.l  #0x00001000, %sp
+    move.l  #0x00010000, %sp
 
-    /* Signal: Initializing p8audio (post_code = 3) */
-    move.b  #3, POST_CODE
+    /* Signal: Initializing p8audio (post_code = 4) */
+    move.b  #4, POST_CODE
 
     /* Configure SFX base address using sfx_data label */
     move.l  #sfx_data, %d0         /* Load address of sfx_data into d0 */
@@ -48,8 +48,8 @@ _start:
     /* Set note release time = 20 */
     move.w  #20, NOTE_REL
 
-    /* Signal: Configuration complete (post_code = 4) */
-    move.b  #4, POST_CODE
+    /* Signal: Configuration complete (post_code = 5) */
+    move.b  #5, POST_CODE
 
     /* Trigger SFX 8 on channel 0 with full length
      * SFX_CMD format:
@@ -63,8 +63,8 @@ _start:
     /* Set SFX length = 0 (play full SFX) */
     move.w  #0, SFX_LEN
 
-    /* Signal: SFX triggered (post_code = 5) */
-    move.b  #5, POST_CODE
+    /* Signal: SFX triggered (post_code = 6) */
+    move.b  #6, POST_CODE
 
     /* Wait a bit for SFX to play */
     move.l  #0x100000, %d0
@@ -72,8 +72,8 @@ wait_loop:
     subq.l  #1, %d0
     bne     wait_loop
 
-    /* Signal: Test complete (post_code = 6) */
-    move.b  #6, POST_CODE
+    /* Signal: Test complete (post_code = 7) */
+    move.b  #7, POST_CODE
 
     /* Loop forever */
 infinite_loop:
@@ -82,7 +82,7 @@ infinite_loop:
 
 /* Reset vectors at beginning of ROM */
     .section .vectors, "a"
-    .long   0x00001000      /* Initial SP */
+    .long   0x00010000      /* Initial SP */
     .long   _start          /* Initial PC */
 
 /* SFX data */

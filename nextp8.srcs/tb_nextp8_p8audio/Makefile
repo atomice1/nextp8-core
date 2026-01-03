@@ -19,11 +19,11 @@ SIM_DIR = .
 VERILOG_SOURCES = \
 	$(SOURCES_DIR)/nextp8_top.v \
 	$(SOURCES_DIR)/dma_arbiter.v \
-	$(SRC_DIR)/hdmi/encoder.v \
-	$(SRC_DIR)/hdmi/hdmidataencoder.v \
-	$(SRC_DIR)/hdmi/hdmi.v \
-	$(SRC_DIR)/keyboard.v \
-	$(SRC_DIR)/mkeyboard.v
+	$(SOURCES_DIR)/hdmi/encoder.v \
+	$(SOURCES_DIR)/hdmi/hdmidataencoder.v \
+	$(SOURCES_DIR)/hdmi/hdmi.v \
+	$(SOURCES_DIR)/keyboard.v \
+	$(SOURCES_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)
 IP_SOURCES = \
@@ -33,7 +33,7 @@ IP_SOURCES = \
 
 # SystemVerilog source files
 SYSTEMVERILOG_SOURCES = \
-	$(SRC_DIR)/hdmi/hdmidelay.sv \
+	$(SOURCES_DIR)/hdmi/hdmidelay.sv \
 	$(SOURCES_DIR)/p8audio.sv \
 	$(SOURCES_DIR)/p8sfx_core_mux.sv
 
@@ -41,15 +41,15 @@ SYSTEMVERILOG_SOURCES = \
 VHDL_SOURCES = \
 	$(SOURCES_DIR)/p8video.vhd \
 	$(SOURCES_DIR)/ps2_read_keyboard.vhd \
-	$(SRC_DIR)/dac.vhd \
-	$(SRC_DIR)/hdmi_out_xilinx.vhd \
-	$(SRC_DIR)/i2c.vhd \
-	$(SRC_DIR)/ps2_in.vhd \
-	$(SRC_DIR)/spi.vhd \
-	$(SRC_DIR)/uart.vhd \
-	$(SRC_DIR)/TG68K.C-master/TG68K_Pack.vhd \
-	$(SRC_DIR)/TG68K.C-master/TG68K_ALU.vhd \
-	$(SRC_DIR)/TG68K.C-master/TG68KdotC_Kernel.vhd \
+	$(SOURCES_DIR)/dac.vhd \
+	$(SOURCES_DIR)/hdmi_out_xilinx.vhd \
+	$(SOURCES_DIR)/i2c.vhd \
+	$(SOURCES_DIR)/ps2_in.vhd \
+	$(SOURCES_DIR)/spi.vhd \
+	$(SOURCES_DIR)/uart.vhd \
+	$(SOURCES_DIR)/TG68K.C-master/TG68K_Pack.vhd \
+	$(SOURCES_DIR)/TG68K.C-master/TG68K_ALU.vhd \
+	$(SOURCES_DIR)/TG68K.C-master/TG68KdotC_Kernel.vhd
 
 TESTBENCH = $(SIM_DIR)/tb_nextp8_p8audio.sv
 
@@ -64,7 +64,14 @@ TOP = tb_nextp8_p8audio
 
 # Default target
 .PHONY: all
-all: sim
+all: rom sim
+
+# Build ROM
+.PHONY: rom
+rom:
+	@echo "=== Building p8audio test ROM ==="
+	@$(MAKE) -f Makefile.rom
+	@echo ""
 
 # Compile and elaborate
 .PHONY: compile
@@ -76,7 +83,7 @@ compile:
 	$(XVLOG) --sv -d SIMULATION $(SYSTEMVERILOG_SOURCES)
 	$(XVHDL) $(VHDL_SOURCES)
 	@echo "Elaborating design..."
-	$(XELAB) $(TOP) -s $(TOP)_snap -debug all \
+	$(XELAB) $(TOP) -s $(TOP)_snap \
 		--timescale 1ns/1ps \
 		-L unisims_ver -L unimacro_ver -L secureip \
 		-L blk_mem_gen_v8_4_11 -L xpm \
@@ -84,7 +91,7 @@ compile:
 
 # Run simulation
 .PHONY: sim
-sim: compile
+sim: rom compile
 	@echo "Running simulation with CART=$(CART) (timeout: $(TIMEOUT)s)..."
 	@timeout $(TIMEOUT) $(XSIM) $(TOP)_snap -runall -testplusarg CART=$(CART) || \
 		(if [ $$? -eq 124 ]; then \
@@ -93,6 +100,8 @@ sim: compile
 		else \
 			exit $$?; \
 		fi)
+	@echo "Checking WAV output for non-zero samples..."
+	@python3 check_wav.py tb_nextp8_p8audio_out.wav
 
 # Open waveform viewer
 .PHONY: wave
@@ -106,6 +115,7 @@ wave:
 # Clean generated files
 .PHONY: clean
 clean:
+	@echo "=== Cleaning testbench files ==="
 	rm -rf xsim.dir
 	rm -f xvlog.log xvlog.pb
 	rm -f xelab.log xelab.pb
@@ -113,7 +123,9 @@ clean:
 	rm -f webtalk*.jou webtalk*.log
 	rm -f *.wdb
 	rm -f tb_nextp8_p8audio_out.wav
-	rm -f .Xil
+	rm -rf .Xil
+	@$(MAKE) -f Makefile.rom clean
+	@echo "Clean complete"
 
 .PHONY: help
 help:
