@@ -146,7 +146,7 @@ clean:
 	rm -rf .Xil
 	rm -f *.jou *.log *.pb
 	rm -f *.wdb
-	rm -f tb_p8audio_sfx_*.wav
+	rm -f tb_p8audio_sfx_out_*.wav
 	rm -f audio_comparison.png
 	rm -f xsim.ini
 	@echo "Clean complete"
