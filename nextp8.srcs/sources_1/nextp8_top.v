@@ -282,6 +282,7 @@ wire cpu_mem = cpu_ram || cpu_rom;
 wire sram_access = (estate == 3'b000 && cpu_mem && !cpu_idle);
 reg [15:0] sram_rdata;  // SRAM read data latched on falling edge
 wire memio_rd = cpu_act && (cpu_addr[23:20] == 4'b1000);
+wire memio_go = (estate == 3'b001);
 wire p8audio_mem = memio_rd && cpu_addr[8];                              // $800100 - $8001ff
 wire vid_mem = cpu_act && (cpu_addr[23:15] ==  9'b110000000);            // $c00000 - $c07fff
 wire back_mem  = cpu_addr[23:13] == 11'b11000000000;                     // $c00000 - $c01fff
@@ -304,7 +305,7 @@ reg pal_sel = 1'b0;
 
 // Palette control signals
 assign pal_write_en = pal_mem && cpu_wr;
-assign pal_read_en = pal_mem && cpu_rd;
+assign pal_read_en = pal_mem && cpu_rd && memio_go;
 
 // demultiplex the various data sources
 // For SRAM (cpu_mem) in state 000: use sram_rdata latched on falling edge (1-cycle access)
@@ -537,8 +538,8 @@ assign p8audio_address  = cpu_addr[7:1];  // 7-bit word address from bits 7:1
 assign p8audio_din      = cpu_dout;
 assign p8audio_nUDS     = cpu_ds[1];
 assign p8audio_nLDS     = cpu_ds[0];
-assign p8audio_write_en = p8audio_mem && cpu_wr;
-assign p8audio_read_en  = p8audio_mem && cpu_rd;
+assign p8audio_write_en = p8audio_mem && cpu_wr && memio_go;
+assign p8audio_read_en  = p8audio_mem && cpu_rd && memio_go;
 
 // P8 Audio module instantiation
 p8audio p8audio_inst (
@@ -1017,7 +1018,6 @@ end
 reg [20:0] raddr;
 reg ramce=1'b1;
 reg [15:0] rdout;
-reg memio_go=1'b0;
 reg ramwe=1'b1;
 reg ramoe=1'b1;
 reg [1:0] rds;
@@ -1040,7 +1040,7 @@ assign ram_data_io = (sram_access && sys_wr) ? cpu_dout :
 // For SRAM (cpu_mem): stays in state 000, cpu_enable HIGH (1-cycle access)
 // For BRAM writes (da_mem/vid_mem/pal_mem && cpu_wr): stays in state 000, cpu_enable HIGH (1-cycle access, optimized)
 // For MMIO/BRAM reads (!cpu_mem): goes through 000->001->010 (3-cycle access)
-wire cpu_enable = pll_locked && ((estate == 3'b000 && (cpu_idle || (cpu_mem && !cpu_idle) || ((da_mem || vid_mem || pal_mem) && cpu_wr && !cpu_idle))) || estate == 3'b010);
+wire cpu_enable = pll_locked && ((estate == 3'b000 && (cpu_idle || cpu_mem || ((da_mem || vid_mem || pal_mem) && cpu_wr))) || estate == 3'b010);
 
 // Latch SRAM data on falling edge of clock
 // This gives the SRAM time to respond to address changes while ensuring
@@ -1088,7 +1088,6 @@ begin
                 ramwe <= 1'b1;  // DMA is read-only
                 raddr <= p8audio_dma_addr_latched[20:0];  // DMA address (word-addressed)
                 rds <= 2'b00;   // Both bytes enabled
-                memio_go <= 1'b0;
                 estate <= 3'b011;  // DMA state
             end else begin
                 // Normal CPU access - latch address when busstate changes from idle
@@ -1109,7 +1108,6 @@ begin
                 else if (cpu_addr[4] == 1'b1)
                     pal_sel <= vfront;
                 rds <= cpu_ds;
-                memio_go<=1'b1;
                 // Optimized BRAM writes: Write data registered, write enables are combinatorial
                 if (cpu_wr && vid_mem) begin
                     if (back_mem || front_mem)
@@ -1137,7 +1135,6 @@ begin
             // Memory access in progress - data propagating from SRAM/BRAM
             // Note: SRAM read/writes and BRAM writes are optimized to happen in state 000 (1-cycle)
             // This state is only reached for BRAM reads and MMIO accesses (3-cycle)
-            memio_go<=1'b0;
             if (da_mem && !cpu_wr) begin
                  if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
                  if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
@@ -1531,7 +1528,7 @@ reg [31:0] debug_reg;
 
 always @(posedge mclk)
 begin
-    if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
+    if (!reset_mclk_q && memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
             //--------------- QLSD --------------------------------------------------
             if (cpu_addr[7:1]==7'b0000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800007
@@ -1579,7 +1576,7 @@ begin
     end
 end
 
-always @(negedge mclk) // write memory mapped ports
+always @(posedge mclk) // write memory mapped ports
 begin
     if (reset_mclk_q) begin
         kbd_matrix_latched <= 256'd0;
@@ -1588,7 +1585,7 @@ begin
         kbd_matrix_latched <= kbd_matrix_latched | kbd_matrix_q;
     end
 
-    if (memio_go && memio_rd && cpu_wr) begin
+    if (!reset_mclk_q && memio_go && memio_rd && cpu_wr) begin
         if (cpu_addr[8] == 1'b0) begin
             // ------------  ql-sd io -------------------------------------------------
             if (cpu_addr[7:1]==7'b0000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800005
