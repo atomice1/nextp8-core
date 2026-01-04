@@ -1027,8 +1027,38 @@ wire [15:0] sys_dout =  cpu_dout;
 wire        sys_wr   =  (cpu_wr && cpu_ram);
 wire        sys_oe   =  (cpu_rd && cpu_mem);
 
+// SRAM WE# control using dual-edge toggle mechanism
+reg sram_we_active = 1'b0;
+reg sram_we_toggle_a = 1'b0;
+reg sram_we_toggle_b = 1'b0;
+
+// Negedge: Capture write request and toggle A
+always @(negedge mclk) begin
+    if (!pll_locked) begin
+        sram_we_active <= 1'b0;
+        sram_we_toggle_a <= 1'b0;
+    end else begin
+        sram_we_active <= sram_access && sys_wr;
+        if (sram_access && sys_wr) begin
+            sram_we_toggle_a <= ~sram_we_toggle_a;
+        end
+    end
+end
+
+// Posedge: If write was active, toggle B
+always @(posedge mclk) begin
+    if (!pll_locked) begin
+        sram_we_toggle_b <= 1'b0;
+    end else begin
+        if (sram_we_active) begin
+            sram_we_toggle_b <= ~sram_we_toggle_b;
+        end
+    end
+end
+
 assign ram_addr_o = sram_access ? cpu_addr[21:1] : raddr;
-assign ram_we_n_o = sram_access ? ~sys_wr : ramwe;
+// WE# is active (low) when toggles differ
+assign ram_we_n_o = sram_access ? ~(sram_we_toggle_a ^ sram_we_toggle_b) : ramwe;
 assign ram_cs_n_o = sram_access ? 1'b0 : ramce;
 assign ram_oe_n_o = sram_access ? ~sys_oe : ramoe;
 assign ram_lb_n_o = sram_access ? cpu_ds[0] : rds[0];
