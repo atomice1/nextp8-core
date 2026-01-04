@@ -629,12 +629,15 @@ mkeyboard mkeyb (
 );
 //-------------------------------------------------------------------
 
-wire [63:0] kbd_matrix;
+wire [255:0] kbd_matrix;
 
 assign kbd_matrix = ps2_kbd_matrix | meb_kbd_matrix;
 
 // CDC synchronizers for kbd_matrix
-(* ASYNC_REG = "TRUE" *) reg [63:0] kbd_matrix_d, kbd_matrix_q;
+(* ASYNC_REG = "TRUE" *) reg [255:0] kbd_matrix_d, kbd_matrix_q;
+
+// Latching keyboard matrix for btnp() support
+reg [255:0] kbd_matrix_latched;
 
 // ----------- Joystick ---------------
 // Generate ~84 Hz clock for joystick polling from clk_sys(11 MHz)
@@ -1540,42 +1543,44 @@ begin
     if (memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
             //--------------- QLSD --------------------------------------------------
-            if (cpu_addr[6:1]==6'b000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800007
-            if (cpu_addr[6:1]==6'b000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800009
+            if (cpu_addr[7:1]==7'b0000011 && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q }; //h800007
+            if (cpu_addr[7:1]==7'b0000100 && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready}; //h800009
             //--------------- reset ----------------------------------
-            if (cpu_addr[6:1]==6'b000110 && cpu_rd && !cpu_ds[0]) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q}; //h80000D
+            if (cpu_addr[7:1]==7'b0000110 && cpu_rd && !cpu_ds[0]) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q}; //h80000D
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[6:1]==6'b000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
+            if (cpu_addr[7:1]==7'b0000111 && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront}; //h80000E
             //--------------- overlay ----------------------------------
-            if (cpu_addr[6:1]==6'b001000 && cpu_rd && !cpu_ds[1]) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys}; //h800010
-            //--------------- Build Info --------------------------------------------------
-            if (cpu_addr[6:1]==6'b001010 && cpu_rd) memio_out <= build_timestamp[31:16]; // h800014
-            if (cpu_addr[6:1]==6'b001011 && cpu_rd) memio_out <= build_timestamp[15:0]; // h800016
-            if (cpu_addr[6:1]==6'b001100 && cpu_rd) memio_out <= VERSION[31:16]; // h800018
-            if (cpu_addr[6:1]==6'b001101 && cpu_rd) memio_out <= VERSION[15:0]; // h80001a
+            if (cpu_addr[7:1]==7'b0001000 && cpu_rd && !cpu_ds[1]) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys}; //h800010
+            //-------------- Build Info --------------------------------------------------
+            if (cpu_addr[7:1]==7'b0001010 && cpu_rd) memio_out <= build_timestamp[31:16]; // h800014
+            if (cpu_addr[7:1]==7'b0001011 && cpu_rd) memio_out <= build_timestamp[15:0]; // h800016
+            if (cpu_addr[7:1]==7'b0001100 && cpu_rd) memio_out <= VERSION[31:16]; // h800018
+            if (cpu_addr[7:1]==7'b0001101 && cpu_rd) memio_out <= VERSION[15:0]; // h80001a
             //--------------- I2C --------------------------------------------------
-            if (cpu_addr[6:1]==6'b010000 && cpu_rd ) memio_out <= {i2c_din_q,i2c_din_q}; //h800021
-            if (cpu_addr[6:1]==6'b010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
+            if (cpu_addr[7:1]==7'b0010000 && cpu_rd ) memio_out <= {i2c_din_q,i2c_din_q}; //h800021
+            if (cpu_addr[7:1]==7'b0010001 && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy }; //h800023
             //-------------- ESP UART ----------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout_q,esp_dout_q}; //h800029
-            if (cpu_addr[6:1]==6'b010100 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q, 4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q}; //h800028
+            if (cpu_addr[7:1]==7'b0010100 && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout_q,esp_dout_q}; //h800029
+            if (cpu_addr[7:1]==7'b0010100 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q, 4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q}; //h800028
             //-------------- Pi UART ----------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[0]) memio_out <= {uart_dout_q,uart_dout_q}; //h800025
-            if (cpu_addr[6:1]==6'b010010 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q, 4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q}; //h800024
+            if (cpu_addr[7:1]==7'b0010010 && cpu_rd && !cpu_ds[0]) memio_out <= {uart_dout_q,uart_dout_q}; //h800025
+            if (cpu_addr[7:1]==7'b0010010 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q, 4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q}; //h800024
             //------------- User timers -------------------------
-            if (cpu_addr[6:1]==6'b010111 && cpu_rd) memio_out <= utimer_1mhz_q[31:16]; utbuf_1mhz<=utimer_1mhz_q[15:0];  //h80002E
-            if (cpu_addr[6:1]==6'b011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
-            if (cpu_addr[6:1]==6'b011001 && cpu_rd) memio_out <= utimer_1khz_q[31:16]; utbuf_1khz<=utimer_1khz_q[15:0];  //h800032
-            if (cpu_addr[6:1]==6'b011010 && cpu_rd) memio_out <= utbuf_1khz;  //h800034
+            if (cpu_addr[7:1]==7'b0010111 && cpu_rd) memio_out <= utimer_1mhz_q[31:16]; utbuf_1mhz<=utimer_1mhz_q[15:0];  //h80002E
+            if (cpu_addr[7:1]==7'b0011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
+            if (cpu_addr[7:1]==7'b0011001 && cpu_rd) memio_out <= utimer_1khz_q[31:16]; utbuf_1khz<=utimer_1khz_q[15:0];  //h800032
+            if (cpu_addr[7:1]==7'b0011010 && cpu_rd) memio_out <= utbuf_1khz;  //h800034
             //------------- digital audio -----------------------------
-            if (cpu_addr[6:1]==6'b011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
+            if (cpu_addr[7:1]==7'b0011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
             //------------- debug registers ------------------------------
-            if (cpu_addr[6:1]==6'b110001 && cpu_rd) memio_out <= debug_reg[31:16]; //h800062 read
-            if (cpu_addr[6:1]==6'b110010 && cpu_rd) memio_out <= debug_reg[15:0];  //h800064 read
+            if (cpu_addr[7:1]==7'b0110001 && cpu_rd) memio_out <= debug_reg[31:16]; //h800062 read
+            if (cpu_addr[7:1]==7'b0110010 && cpu_rd) memio_out <= debug_reg[15:0];  //h800064 read
             //------------- keyboard ----------------------------- h800040-h80005f
-            if (cpu_addr[6:5]==2'b10 && cpu_rd) memio_out <= {kbd_matrix_q[{cpu_addr[4:1], 1'b0}], kbd_matrix_q[{cpu_addr[4:1], 1'b1}]};
+            if (cpu_addr[7:5]==3'b010 && cpu_rd) memio_out <= {kbd_matrix_q[{cpu_addr[4:1], 4'b0} +: 8], kbd_matrix_q[{cpu_addr[4:1], 4'b1000} +: 8]};
+            //------------- latching keyboard (btnp) ---------------- h800080-h80009f
+            if (cpu_addr[7:5]==3'b100 && cpu_rd) memio_out <= {kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8], kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8]};
             //------------- joystick -----------------------------
-            if (cpu_addr[6:1]==6'b110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
+            if (cpu_addr[7:1]==7'b0110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
         end else begin
             //------------- P8 Audio ----------------------------- h800100-h8001FF
             if (cpu_rd) memio_out <= p8audio_dout;
@@ -1585,50 +1590,64 @@ end
 
 always @(negedge mclk) // write memory mapped ports
 begin
+    if (reset_mclk_q) begin
+        kbd_matrix_latched <= 256'd0;
+    end else begin
+        // Latching keyboard: set bits when keys go down, keep them set until cleared
+        kbd_matrix_latched <= kbd_matrix_latched | kbd_matrix_q;
+    end
+
     if (memio_go && memio_rd && cpu_wr) begin
         if (cpu_addr[8] == 1'b0) begin
             // ------------  ql-sd io -------------------------------------------------
-            if (cpu_addr[6:1]==6'b000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800005
-            if (cpu_addr[6:1]==6'b000000 && cpu_wr ) ql_sd_w <= cpu_dout[0];       //h800001
-            if (cpu_addr[6:1]==6'b000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800003
-            if (cpu_addr[6:1]==6'b000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000b
+            if (cpu_addr[7:1]==7'b0000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800005
+            if (cpu_addr[7:1]==7'b0000000 && cpu_wr ) ql_sd_w <= cpu_dout[0];       //h800001
+            if (cpu_addr[7:1]==7'b0000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800003
+            if (cpu_addr[7:1]==7'b0000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000b
             //------------- post code -------------------------------------------------------
-            if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
+            if (cpu_addr[7:1]==7'b0000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
             //--------------- reset ----------------------------------
-            if (cpu_addr[6:1]==6'b000110 && cpu_wr && !cpu_ds[0]) begin  //h80000D
+            if (cpu_addr[7:1]==7'b0000110 && cpu_wr && !cpu_ds[0]) begin  //h80000D
                 reset_request_toggle_mclk <= ~reset_request_toggle_mclk;
             end
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[6:1]==6'b000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
+            if (cpu_addr[7:1]==7'b0000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
             //--------------- overlay ----------------------------------
-            if (cpu_addr[6:1]==6'b001000 && cpu_wr && !cpu_ds[1]) overlay_ctrl_sys <= cpu_dout[15:8]; //h800010
+            if (cpu_addr[7:1]==7'b0001000 && cpu_wr && !cpu_ds[1]) overlay_ctrl_sys <= cpu_dout[15:8]; //h800010
             // ------------ parameters -------------------------------------------------------
-            if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[0]) params[7:0] <= cpu_dout[7:0]; //h800013  bit0=key_ms
-            if (cpu_addr[6:1]==6'b001001 && cpu_wr && !cpu_ds[1]) params[15:8] <= cpu_dout[15:8]; //h800012
+            if (cpu_addr[7:1]==7'b0001001 && cpu_wr && !cpu_ds[0]) params[7:0] <= cpu_dout[7:0]; //h800013  bit0=key_ms
+            if (cpu_addr[7:1]==7'b0001001 && cpu_wr && !cpu_ds[1]) params[15:8] <= cpu_dout[15:8]; //h800012
             //-------------- RTC -------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010000 && cpu_wr ) i2c_dout <= cpu_dout[7:0]; //h800021
-            if (cpu_addr[6:1]==6'b010001 && cpu_wr ) begin i2c_rw <= cpu_dout[1];  i2c_ena <= cpu_dout[0]; end //h800023
+            if (cpu_addr[7:1]==7'b0010000 && cpu_wr ) i2c_dout <= cpu_dout[7:0]; //h800021
+            if (cpu_addr[7:1]==7'b0010001 && cpu_wr ) begin i2c_rw <= cpu_dout[1];  i2c_ena <= cpu_dout[0]; end //h800023
             //-------------- UART ------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[1]) begin uart_r <= cpu_dout[9]; uart_w <= cpu_dout[8]; end //h800024
-            if (cpu_addr[6:1]==6'b010010 && cpu_wr && !cpu_ds[0]) begin uart_din <= cpu_dout[7:0]; end //h800025
+            if (cpu_addr[7:1]==7'b0010010 && cpu_wr && !cpu_ds[1]) begin uart_r <= cpu_dout[9]; uart_w <= cpu_dout[8]; end //h800024
+            if (cpu_addr[7:1]==7'b0010010 && cpu_wr && !cpu_ds[0]) begin uart_din <= cpu_dout[7:0]; end //h800025
             // ---------- UART baud rate divider  ------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010011 && cpu_wr ) begin uart_div <= cpu_dout[14:0]; end //h800026
+            if (cpu_addr[7:1]==7'b0010011 && cpu_wr ) begin uart_div <= cpu_dout[14:0]; end //h800026
             //-------------- ESP UART ------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010100 && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end //h800028
-            if (cpu_addr[6:1]==6'b010100 && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end //h800029
+            if (cpu_addr[7:1]==7'b0010100 && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end //h800028
+            if (cpu_addr[7:1]==7'b0010100 && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end //h800029
             // ---------- esp baud rate divider  ------------------------------------------------------
-            if (cpu_addr[6:1]==6'b010101 && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end //h80002a
+            if (cpu_addr[7:1]==7'b0010101 && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end //h80002a
             // --------------- digital audio -----------------------------------------------------------
-            if (cpu_addr[6:1]==6'b011011 && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end //h800036
-            if (cpu_addr[6:1]==6'b011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
-            //------------------ debug ------------------------------
-            if (cpu_addr[6:1]==6'b110001 && cpu_wr) begin
-                debug_reg[31:16] <= cpu_dout; //h800062 write
-                $display("Debug reg hi write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
+            if (cpu_addr[7:1]==7'b0011011 && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end //h800036
+            if (cpu_addr[7:1]==7'b0011100 && cpu_wr ) begin da_period <= cpu_dout[11:0]; end //h800038
+            //------------- latching keyboard clear (btnp) ---------- h800080-h80009f
+            if (cpu_addr[7:5]==3'b100 && cpu_wr && !cpu_ds[0]) begin
+                kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8] <= kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8] & ~cpu_dout[7:0];
             end
-            if (cpu_addr[6:1]==6'b110010 && cpu_wr) begin
+            if (cpu_addr[7:5]==3'b100 && cpu_wr && !cpu_ds[1]) begin
+                kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8] <= kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8] & ~cpu_dout[15:8];
+            end
+            //------------------ debug ------------------------------
+            if (cpu_addr[7:1]==7'b0110001 && cpu_wr) begin
+                debug_reg[31:16] <= cpu_dout; //h800062 write
+                $display("Debug reg hi write: %h at time %t, debug reg is now %h", cpu_dout, $time, {cpu_dout, debug_reg[15:0]});
+            end
+            if (cpu_addr[7:1]==7'b0110010 && cpu_wr) begin
                 debug_reg[15:0]  <= cpu_dout; //h800064 write
-                $display("Debug reg lo write: %h at time %t, debug reg is now %h", cpu_dout, $time, debug_reg);
+                $display("Debug reg lo write: %h at time %t, debug reg is now %h", cpu_dout, $time, {debug_reg[31:16], cpu_dout});
             end
         end
     end

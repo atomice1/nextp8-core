@@ -41,7 +41,8 @@ SIM_DIRS = nextp8.srcs/tb_nextp8_boot \
            nextp8.srcs/tb_p8audio_music \
            nextp8.srcs/tb_nextp8_p8audio \
            nextp8.srcs/tb_waveform_gen \
-           nextp8.srcs/tb_memaccess
+           nextp8.srcs/tb_memaccess \
+           nextp8.srcs/tb_keyboard
 
 # Output files
 BITSTREAM = $(IMPL_DIR)/$(TOP_MODULE).bit
@@ -81,6 +82,7 @@ help:
 	@echo "  make test-tb_nextp8_p8audio   - Run tb_nextp8_p8audio (integrated audio test)"
 	@echo "  make test-tb_waveform_gen     - Run tb_waveform_gen (waveform generation test)"
 	@echo "  make test-tb_memaccess        - Run tb_memaccess (memory access validation)"
+	@echo "  make test-tb_keyboard         - Run tb_keyboard (keyboard matrix and latching test)"
 	@echo ""
 	@echo "Utility Targets:"
 	@echo "  make clean      - Remove all generated files"
@@ -134,7 +136,7 @@ bitstream: implement
 test: test-quick
 
 # test-quick runs all quick tests (excludes slow tests)
-test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen
+test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_ps2_keyboard test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen test-tb_keyboard
 	@echo "=== Quick tests complete ==="
 
 # test-slow runs only slow tests
@@ -188,6 +190,11 @@ test-tb_nextp8_p8audio:
 test-tb_waveform_gen:
 	@echo "=== Running tb_waveform_gen: tb_waveform_gen (waveform generation test) ==="
 	@$(MAKE) -C nextp8.srcs/tb_waveform_gen || (echo "ERROR: tb_waveform_gen failed"; exit 1)
+	@echo ""
+
+test-tb_keyboard:
+	@echo "=== Running tb_keyboard: tb_keyboard (keyboard matrix and latching test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_keyboard || (echo "ERROR: tb_keyboard failed"; exit 1)
 	@echo ""
 
 # Clean targets

@@ -30,9 +30,9 @@ module keyboard (
 	// ps2 interface	
 	input wire ps2_clk,
 	input wire ps2_data,
-	
+
 	output wire [255:0] matrix
-	
+
 );
 
 reg [255:0] p8matrix;
@@ -65,8 +65,8 @@ always @(posedge clk) begin
             else begin
 				key_extended <= 1'b0;
 				key_released <= 1'b0;
-				
-				p8matrix[byte | key_extended ? 8'h80 : 8'd0] <= key_released ? 1'b0 : 1'b1;
+
+				p8matrix[byte | (key_extended ? 8'h80 : 8'd0)] <= key_released ? 1'b0 : 1'b1;
 			end
 		end
 	end
@@ -76,11 +76,11 @@ end
 ps2_read_keyboard ps2_keyboard (
 	.CLK		 ( clk             ),
 	.nRESET	 ( !reset          ),
-	
+
 	// PS/2 interface
 	.PS2_CLK  ( ps2_clk         ),
 	.PS2_DATA ( ps2_data        ),
-	
+
 	// Byte-wide data interface - only valid for one clock
 	// so must be latched externally if required
 	.DATA		  ( byte   ),
