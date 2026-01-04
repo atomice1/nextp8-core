@@ -716,6 +716,7 @@
       </Config>
     </FileSet>
     <FileSet Name="tb_keyboard" Type="SimulationSrcs" RelSrcDir="$PSRCDIR/tb_keyboard" RelGenDir="$PGENDIR/tb_keyboard">
+      <Filter Type="Srcs"/>
       <File Path="$PPRDIR/nextp8.srcs/tb_keyboard/keyboard_test_rom.mem">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>

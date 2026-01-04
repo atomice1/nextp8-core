@@ -74,10 +74,48 @@ module tb_p8audio_music;
     reg         dma_ack;
 
     //====================
+    // Reset synchronizers
+    //====================
+    reg resetn_sys_d = 0, resetn_sys_q = 0;
+    reg resetn_pcm_d = 0, resetn_pcm_q = 0;
+    reg resetn_pcm_8x_d = 0, resetn_pcm_8x_q = 0;
+
+    always @(posedge clk_sys or negedge resetn) begin
+        if (!resetn) begin
+            resetn_sys_d <= 1'b0;
+            resetn_sys_q <= 1'b0;
+        end else begin
+            resetn_sys_d <= 1'b1;
+            resetn_sys_q <= resetn_sys_d;
+        end
+    end
+
+    always @(posedge clk_pcm or negedge resetn) begin
+        if (!resetn) begin
+            resetn_pcm_d <= 1'b0;
+            resetn_pcm_q <= 1'b0;
+        end else begin
+            resetn_pcm_d <= 1'b1;
+            resetn_pcm_q <= resetn_pcm_d;
+        end
+    end
+
+    always @(posedge clk_pcm_8x or negedge resetn) begin
+        if (!resetn) begin
+            resetn_pcm_8x_d <= 1'b0;
+            resetn_pcm_8x_q <= 1'b0;
+        end else begin
+            resetn_pcm_8x_d <= 1'b1;
+            resetn_pcm_8x_q <= resetn_pcm_8x_d;
+        end
+    end
+
+    //====================
     // DUT: p8audio
     //====================
     p8audio dut (
-        .mclk(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x), .resetn(resetn),
+        .mclk(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x),
+        .resetn_sys(resetn_sys_q), .resetn_pcm(resetn_pcm_q), .resetn_pcm_8x(resetn_pcm_8x_q),
         .address(address), .din(din), .dout(dout), .nUDS(nUDS), .nLDS(nLDS), .write_en(write_en), .read_en(read_en),
         .pcm_out(pcm_out),
         .dma_addr(dma_addr), .dma_rdata(dma_rdata), .dma_req(dma_req), .dma_ack(dma_ack)

@@ -25,7 +25,9 @@ module p8audio (
     input  wire        mclk,        // mclk: 33MHz system clock
     input  wire        clk_pcm,     // clk_pcm: 22.05kHz PCM sample clock
     input  wire        clk_pcm_8x,  // clk_pcm_8x: 176.4kHz (8× PCM sample clock for time-multiplexing)
-    input  wire        resetn,      // async: Active-low reset
+    input  wire        resetn_sys,     // mclk: Active-low reset (synchronized to mclk)
+    input  wire        resetn_pcm,     // clk_pcm: Active-low reset (synchronized to clk_pcm)
+    input  wire        resetn_pcm_8x,  // clk_pcm_8x: Active-low reset (synchronized to clk_pcm_8x)
 
     // MMIO (16-bit data path, 7-bit address) - mclk domain
     input  wire [6:0]    address,   // mclk: Register address
@@ -57,46 +59,6 @@ localparam [15:0] DEFAULT_NOTE_REL   = 16'd16;    // samples
 localparam [15:0] DEFAULT_MUS_FADE   = 16'd16;    // frames
 localparam [15:0] DEFAULT_MUSIC_RATE = 16'd16;    // frames / sec
 localparam [7:0]  NOTE_TICK_DIV      = 8'd183;    // global note tick divider (samples)
-
-//==============================================================
-// Reset Synchronizers for Multiple Clock Domains
-//==============================================================
-
-// Reset synchronizer for mclk domain
-(* ASYNC_REG = "TRUE" *) reg resetn_sys_d, resetn_sys_q;
-always @(posedge mclk or negedge resetn) begin
-    if (!resetn) begin
-        resetn_sys_d <= 1'b0;
-        resetn_sys_q <= 1'b0;
-    end else begin
-        resetn_sys_d <= 1'b1;
-        resetn_sys_q <= resetn_sys_d;
-    end
-end
-
-// Reset synchronizer for clk_pcm domain
-(* ASYNC_REG = "TRUE" *) reg resetn_pcm_d, resetn_pcm_q;
-always @(posedge clk_pcm or negedge resetn) begin
-    if (!resetn) begin
-        resetn_pcm_d <= 1'b0;
-        resetn_pcm_q <= 1'b0;
-    end else begin
-        resetn_pcm_d <= 1'b1;
-        resetn_pcm_q <= resetn_pcm_d;
-    end
-end
-
-// Reset synchronizer for clk_pcm_8x domain
-(* ASYNC_REG = "TRUE" *) reg resetn_pcm_8x_d, resetn_pcm_8x_q;
-always @(posedge clk_pcm_8x or negedge resetn) begin
-    if (!resetn) begin
-        resetn_pcm_8x_d <= 1'b0;
-        resetn_pcm_8x_q <= 1'b0;
-    end else begin
-        resetn_pcm_8x_d <= 1'b1;
-        resetn_pcm_8x_q <= resetn_pcm_8x_d;
-    end
-end
 
 //==============================================================
 // MMIO registers (mclk domain)
@@ -145,7 +107,7 @@ localparam [6:0] ADDR_STAT55        = 7'h17;
 localparam [6:0] ADDR_STAT56        = 7'h18;
 
 always @(posedge mclk) begin
-    if (!resetn_sys_q) begin
+    if (!resetn_sys) begin
         reg_ctrl        <= 0;
         reg_sfx_base    <= 0;
         reg_music_base  <= 0;
@@ -199,7 +161,7 @@ dma_arbiter #(
     .ADDR_WIDTH(31)
 ) u_dma_arbiter (
     .clk(mclk),
-    .resetn(resetn_sys_q),
+    .resetn(resetn_sys),
     // Concatenated addresses: {seq, core_mux}
     .mgr_dma_addr({seq_dma_addr, core_mux_dma_addr}),
     // Concatenated requests: {seq, core_mux}
@@ -244,7 +206,7 @@ wire [3:0] voice_done = voice_done_sys_q;    // mclk: Synchronized voice done pu
 integer k;
 
 always @(posedge mclk) begin
-    if (!resetn_sys_q) begin
+    if (!resetn_sys) begin
         voice_busy_sys_d <= 4'b0000;
         voice_busy_sys_q <= 4'b0000;
         voice_done_sys_d <= 4'b0000;
@@ -290,8 +252,8 @@ reg  [3:0]  force_release_sys;    // mclk: One-cycle pulse to release voice from
 p8sfx_core_mux core_mux_inst (
     .clk_sys             (mclk),
     .clk_pcm_8x          (clk_pcm_8x),
-    .resetn_sys          (resetn_sys_q),
-    .resetn_pcm_8x       (resetn_pcm_8x_q),
+    .resetn_sys          (resetn_sys),
+    .resetn_pcm_8x       (resetn_pcm_8x),
     .run                 (reg_ctrl[0]),
     .base_addr           (reg_sfx_base),
     .sfx_index_in        (play_sfx_index),
@@ -346,7 +308,7 @@ reg [15:0] music_fade_ctr_out_pcm;    // clk_pcm: Fade-out counter (managed in c
 (* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_ctr_out_init;   // clk_pcm: CDC stage 2 for initialization
 
 always @(posedge clk_pcm) begin
-    if (!resetn_pcm_q) begin
+    if (!resetn_pcm) begin
         music_fade_ctr_in_pcm    <= 16'd0;
         music_fade_ctr_out_pcm   <= 16'd0;
         music_fade_len_pcm_d     <= 16'd0;
@@ -408,7 +370,7 @@ reg signed [31:0] numo;     // clk_pcm: Signed numerator for fade-out calculatio
 reg signed [31:0] denom;    // clk_pcm: Signed denominator for fade calculation
 
 always @(posedge clk_pcm) begin
-    if (!resetn_pcm_q || !reg_ctrl[0]) begin
+    if (!resetn_pcm || !reg_ctrl[0]) begin
         pcm_out<=0;
     end else begin
         // Mix 4 voices: S8F7 + S8F7 + S8F7 + S8F7 = S10F7
@@ -507,7 +469,7 @@ reg [1:0] leftmost_nonloop;
 // SFX queueing + MUSIC sequencer + Note tick counter (mclk domain)
 //==============================================================
 always @(posedge mclk) begin
-    if (!resetn_sys_q) begin
+    if (!resetn_sys) begin
         // SFX queueing resets
         for (l=0;l<NUM_VOICES;l=l+1) begin
             q_valid[l]<=0; q_index[l]<=0; q_off[l]<=0; q_len[l]<=0;

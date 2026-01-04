@@ -71,6 +71,30 @@ wire vfront;
 
 reg reset = 0;
 
+// Reset synchronizers
+reg reset_mclk_d = 1, reset_mclk_q = 1;
+reg reset_video_d = 1, reset_video_q = 1;
+
+always @(posedge mclk or posedge reset) begin
+    if (reset) begin
+        reset_mclk_d <= 1'b1;
+        reset_mclk_q <= 1'b1;
+    end else begin
+        reset_mclk_d <= 1'b0;
+        reset_mclk_q <= reset_mclk_d;
+    end
+end
+
+always @(posedge clk_video or posedge reset) begin
+    if (reset) begin
+        reset_video_d <= 1'b1;
+        reset_video_q <= 1'b1;
+    end else begin
+        reset_video_d <= 1'b0;
+        reset_video_q <= reset_video_d;
+    end
+end
+
 reg [2:0] address = 0;
 reg [15:0] din = 0;
 wire [15:0] dout;
@@ -85,7 +109,8 @@ reg [4:0] screen_palette [0:15] = {
 p8video p8video (
 	.mclk(mclk),
 	.clk_video(clk_video),
-	.reset(reset),
+	.reset_sys(reset_mclk_q),
+	.reset_video(reset_video_q),
 	.address(address),
 	.din(din),
 	.dout(dout),

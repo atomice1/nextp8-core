@@ -47,7 +47,8 @@ port (
     -- Clock and reset
     mclk:         IN Std_logic;  -- CPU clock domain (~30MHz)
     clk_video:    IN Std_logic;  -- Video clock domain (10.78MHz = 64.71MHz/6)
-    reset:        IN Std_logic;  -- Async reset input
+    reset_sys:    IN Std_logic;  -- Synchronized reset for mclk domain
+    reset_video:  IN Std_logic;  -- Synchronized reset for clk_video domain
 
     -- MMIO palette interface (mclk domain)
     address:      IN Std_logic_vector(2 downto 0);   -- Palette register address (0-7)
@@ -163,43 +164,7 @@ attribute ASYNC_REG of vfronto_d : signal is "TRUE";
 signal overlay_vdin : Std_logic_vector(15 downto 0) := (others => '0');
 signal reading_overlay : Std_logic := '0';
 
--- Reset synchronizers for each clock domain
-signal reset_sys_d : Std_logic := '1';
-signal reset_sys_q : Std_logic := '1';
-signal reset_video_d : Std_logic := '1';
-signal reset_video_q : Std_logic := '1';
-attribute ASYNC_REG of reset_sys_d : signal is "TRUE";
-attribute ASYNC_REG of reset_sys_q : signal is "TRUE";
-attribute ASYNC_REG of reset_video_d : signal is "TRUE";
-attribute ASYNC_REG of reset_video_q : signal is "TRUE";
-
 begin
-
--- ============================================================================
--- Reset Synchronizers
--- ============================================================================
-
-process(mclk, reset)
-begin
-    if reset = '1' then
-        reset_sys_d <= '1';
-        reset_sys_q <= '1';
-    elsif rising_edge(mclk) then
-        reset_sys_d <= '0';
-        reset_sys_q <= reset_sys_d;
-    end if;
-end process;
-
-process(clk_video, reset)
-begin
-    if reset = '1' then
-        reset_video_d <= '1';
-        reset_video_q <= '1';
-    elsif rising_edge(clk_video) then
-        reset_video_d <= '0';
-        reset_video_q <= reset_video_d;
-    end if;
-end process;
 
 -- ============================================================================
 -- MMIO Register Interface (mclk domain)
@@ -208,7 +173,7 @@ process(mclk)
     variable addr_idx : integer;
 begin
     if rising_edge(mclk) then
-        if reset_sys_q='1' then
+        if reset_sys='1' then
             dout <= (others => '0');
             vfronto_q <= '0';
             vfronto_d <= '0';
@@ -297,7 +262,7 @@ process (clk_video)
     variable ln, lin: natural range 0 to 1023:=0;
 begin
     if rising_edge(clk_video) then
-        if reset_video_q='1' then
+        if reset_video='1' then
             pixel := 0;
             lin := 0;
             ln := 0;

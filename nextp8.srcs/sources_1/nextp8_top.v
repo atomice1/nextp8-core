@@ -546,7 +546,9 @@ p8audio p8audio_inst (
     .mclk       (mclk),
     .clk_pcm    (clk_pcm),          // 22.05 kHz sample clock (proper clock)
     .clk_pcm_8x (clk_pcm_8x),       // 176.4 kHz time-mux clock (proper clock)
-    .resetn     (~reset),           // Active-low reset
+    .resetn_sys     (~reset_mclk_q),    // Synchronized reset for mclk domain
+    .resetn_pcm     (~reset_pcm_q),     // Synchronized reset for clk_pcm domain
+    .resetn_pcm_8x  (~reset_pcm_8x_q),  // Synchronized reset for clk_pcm_8x domain
 
     // MMIO interface
     .address    (p8audio_address),
@@ -795,7 +797,8 @@ p8video p8video (
     // Clock and reset
     .mclk(mclk),
     .clk_video(clk_video),
-    .reset(reset),                 // Async reset
+    .reset_sys(reset_mclk_q),      // Synchronized reset for mclk domain
+    .reset_video(reset_video_q),   // Synchronized reset for clk_video domain
 
     // MMIO palette interface (clk_sys domain)
     .address(cpu_addr[3:1]),
@@ -933,6 +936,18 @@ always @(posedge clk_pcm or posedge reset) begin
     end
 end
 
+// Reset synchronizer for clk_pcm_8x domain (async reset from clk_sys)
+(* ASYNC_REG = "TRUE" *) reg reset_pcm_8x_d, reset_pcm_8x_q;
+always @(posedge clk_pcm_8x or posedge reset) begin
+    if (reset) begin
+        reset_pcm_8x_d <= 1'b1;
+        reset_pcm_8x_q <= 1'b1;
+    end else begin
+        reset_pcm_8x_d <= 1'b0;
+        reset_pcm_8x_q <= reset_pcm_8x_d;
+    end
+end
+
 // Reset synchronizer for mclk domain (async reset from clk_sys)
 (* ASYNC_REG = "TRUE" *) reg reset_mclk_d, reset_mclk_q;
 always @(posedge mclk or posedge reset) begin
@@ -945,18 +960,6 @@ always @(posedge mclk or posedge reset) begin
     end
 end
 
-// Reset synchronizer for clk_video domain (async reset from clk_sys)
-(* ASYNC_REG = "TRUE" *) reg reset_325_d, reset_325_q;
-always @(posedge clk_video or posedge reset) begin
-    if (reset) begin
-        reset_325_d <= 1'b1;
-        reset_325_q <= 1'b1;
-    end else begin
-        reset_325_d <= 1'b0;
-        reset_325_q <= reset_325_d;
-    end
-end
-
 // Reset synchronizer for clk_tmds domain (async reset from clk_sys)
 always @(posedge clk_tmds or posedge reset) begin
     if (reset) begin
@@ -965,18 +968,6 @@ always @(posedge clk_tmds or posedge reset) begin
     end else begin
         reset_tmds_d <= 1'b0;
         reset_tmds_q <= reset_tmds_d;
-    end
-end
-
-// Reset synchronizer for clk65 domain (async reset from clk_sys)
-(* ASYNC_REG = "TRUE" *) reg reset_65_d, reset_65_q;
-always @(posedge clk65 or posedge reset) begin
-    if (reset) begin
-        reset_65_d <= 1'b1;
-        reset_65_q <= 1'b1;
-    end else begin
-        reset_65_d <= 1'b0;
-        reset_65_q <= reset_65_d;
     end
 end
 
