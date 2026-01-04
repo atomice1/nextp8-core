@@ -147,34 +147,18 @@ wire ub2_i;
 wire [15:0] data_in2_i;
 wire [15:0] data_out2_o;
 
-wire sram_clk_i;
-
-assign sram_clk_i = clock_50_i;
-
-wire read_en_i;
-wire write_en_i;
-wire [20:0] addr_i;
-wire lb_i;
-wire ub_i;
-wire [15:0] data_in_i;
-wire [15:0] data_out_o;
-
-sram sram(sram_clk_i,
-    read_en_i,
-    write_en_i,
-    addr_i,
-    lb_i,
-    ub_i,
-    data_in_i,
-    data_out_o);
-
-assign addr_i = ram_addr_o;
-assign data_in_i = ~ram_we_n_o ? ram_data_io : 16'h0;
-assign ram_data_io = ram_we_n_o ? data_out_o : 'bz;
-assign lb_i = ~ram_lb_n_o;
-assign ub_i = ~ram_ub_n_o;
-assign read_en_i = ~ram_oe_n_o && ~ram_cs_n_o;
-assign write_en_i = ~ram_we_n_o && ~ram_cs_n_o;
+// SRAM model instance (IS61WV204816BLL-10BLI)
+sram #(
+    .MEM_FILE("hello_test_rom.mem")
+) sram_inst (
+    .addr(ram_addr_o),
+    .dq(ram_data_io),
+    .cs_n(ram_cs_n_o),
+    .we_n(ram_we_n_o),
+    .oe_n(ram_oe_n_o),
+    .lb_n(ram_lb_n_o),
+    .ub_n(ram_ub_n_o)
+);
 
 nextp8 nextp8(
     // Clock
@@ -357,50 +341,5 @@ always @(posedge clock_50_i) begin
         end
     end
 end
-
-endmodule
-
-module sram #(
-    parameter ADDR_WIDTH = 21,
-    parameter DATA_WIDTH = 16
-) (
-    input  wire                       clk_i,
-    input  wire                       read_en_i,
-    input  wire                       write_en_i,
-    input  wire [ADDR_WIDTH-1:0]      addr_i,
-    input  wire                       lb_i,
-    input  wire                       ub_i,
-    input  wire [DATA_WIDTH-1:0]      data_in_i,
-    output reg  [DATA_WIDTH-1:0]      data_out_o
-);
-
-    // Declare the memory array
-    reg [DATA_WIDTH-1:0] mem [2**ADDR_WIDTH-1:0];
-
-    // Behavioral model for read and write
-    always @(posedge clk_i) begin
-        if (write_en_i) begin
-            // Write operation
-            if (lb_i)
-                mem[addr_i][7:0] <= data_in_i[7:0];
-            if (ub_i)
-                mem[addr_i][15:7] <= data_in_i[15:7];
-        end
-    end
-
-    // Read operation (combinational) - triggered by addr_i or read_en_i changes
-    always @(addr_i or read_en_i or write_en_i) begin
-        if (read_en_i && ~write_en_i) begin
-            data_out_o = mem[addr_i];
-        end else begin
-            data_out_o = 16'h0000; // Drive zero when not reading
-        end
-    end
-
-    integer i;
-    initial begin
-        $display("Loading hello test ROM...");
-        $readmemh("hello_test_rom.mem", mem);
-    end
 
 endmodule
