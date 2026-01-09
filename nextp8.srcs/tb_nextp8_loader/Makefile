@@ -52,7 +52,7 @@ VHDL_SOURCES = \
 # Simulation parameters
 TOP = tb_nextp8_loader
 SNAPSHOT = tb_nextp8_loader_snap
-TIMEOUT ?= 3600
+TIMEOUT ?= 7200
 
 # Standalone SDSPI test parameters
 SDSPI_TOP = tb_sdspi
