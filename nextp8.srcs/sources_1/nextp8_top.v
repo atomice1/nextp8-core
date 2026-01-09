@@ -638,9 +638,14 @@ assign kbd_matrix = ps2_kbd_matrix | meb_kbd_matrix;
 
 // CDC synchronizers for kbd_matrix
 (* ASYNC_REG = "TRUE" *) reg [255:0] kbd_matrix_d, kbd_matrix_q;
+reg [255:0] kbd_matrix_q_prev;
 
 // Latching keyboard matrix for btnp() support
 reg [255:0] kbd_matrix_latched;
+
+// Latching joystick registers for btnp() support
+reg [7:0] js0_latched;
+reg [7:0] js1_latched;
 
 // ----------- Joystick ---------------
 // Generate ~84 Hz clock for joystick polling from clk_sys(11 MHz)
@@ -669,9 +674,11 @@ BUFG BUFG_joy_clock (.I(joy_clk_toggle), .O(joy_clock));
 reg [7:0] js1 = 7'd0;
 // CDC synchronizers for js1
 (* ASYNC_REG = "TRUE" *) reg [7:0] js1_d, js1_q;
+reg [7:0] js1_q_prev;
 reg [7:0] js0 = 7'd0;
 // CDC synchronizers for js0
 (* ASYNC_REG = "TRUE" *) reg [7:0] js0_d, js0_q;
+reg [7:0] js0_q_prev;
 reg joys=0;
 assign joyp7_o=1'bz;
 assign joysel_o=joys;
@@ -1508,6 +1515,7 @@ always @(posedge mclk)
 begin
     kbd_matrix_d <= kbd_matrix;
     kbd_matrix_q <= kbd_matrix_d;
+    kbd_matrix_q_prev <= kbd_matrix_q;
     i2c_din_d <= i2c_din;
     i2c_din_q <= i2c_din_d;
     da_data_d <= da_data;
@@ -1544,8 +1552,10 @@ begin
     qlsd_data_q <= qlsd_data_d;
     js0_d <= js0;
     js0_q <= js0_d;
+    js0_q_prev <= js0_q;
     js1_d <= js1;
     js1_q <= js1_d;
+    js1_q_prev <= js1_q;
 end
 
 // -------------------------------------------------------------------------
@@ -1599,6 +1609,10 @@ begin
             if (cpu_addr[7:5]==3'b100 && cpu_rd) memio_out <= {kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8], kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8]};
             //------------- joystick -----------------------------
             if (cpu_addr[7:1]==7'b0110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
+            //------------- latching joystick (btnp) -------------
+            if (cpu_addr[7:1]==7'b0110011 && cpu_rd) memio_out <= {jsp0_latched, js1_latched} //h800066
+            //------------- mouse buttons (not implemented yet) --------
+            if (cpu_addr[7:1]==7'b0110110 && cpu_rd) memio_out <= {16'd0}; //h80006c-h80006d
         end else begin
             //------------- P8 Audio ----------------------------- h800100-h8001FF
             if (cpu_rd) memio_out <= p8audio_dout;
@@ -1610,9 +1624,14 @@ always @(posedge mclk) // write memory mapped ports
 begin
     if (reset_mclk_q) begin
         kbd_matrix_latched <= 256'd0;
+        js0_latched <= 8'd0;
+        js1_latched <= 8'd0;
     end else begin
-        // Latching keyboard: set bits when keys go down, keep them set until cleared
-        kbd_matrix_latched <= kbd_matrix_latched | kbd_matrix_q;
+        // Latching input: only latch newly pressed keys/buttons (rising edge detection)
+        // Only set bits that are high in current state but were low in previous state
+        kbd_matrix_latched <= kbd_matrix_latched | (kbd_matrix_q & ~kbd_matrix_q_prev);
+        js0_latched <= js0_latched | (js0_q & ~js0_q_prev);
+        js1_latched <= js1_latched | (js1_q & ~js1_q_prev);
     end
 
     if (!reset_mclk_q && memio_go && memio_rd && cpu_wr) begin
@@ -1657,6 +1676,13 @@ begin
             end
             if (cpu_addr[7:5]==3'b100 && cpu_wr && !cpu_ds[1]) begin
                 kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8] <= kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8] & ~cpu_dout[15:8];
+            end
+            //------------- latching joystick clear (btnp) ---------- h800066-h800067
+            if (cpu_addr[7:1]==7'b0110011 && cpu_wr && !cpu_ds[0]) begin //h800067 (low byte)
+                js1_latched <= js1_latched & ~cpu_dout[7:0];
+            end
+            if (cpu_addr[7:1]==7'b0110011 && cpu_wr && !cpu_ds[1]) begin //h800066 (high byte)
+                js0_latched <= js0_latched & ~cpu_dout[15:8];
             end
             //------------------ debug ------------------------------
             if (cpu_addr[7:1]==7'b0110001 && cpu_wr) begin
