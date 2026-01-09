@@ -131,5 +131,5 @@ test_data:
 
 /* Reset vectors at beginning of ROM */
     .section .vectors, "a"
-    .long   0x00001000      /* Initial SP */
+    .long   0x00010000      /* Initial SP */
     .long   _start          /* Initial PC */

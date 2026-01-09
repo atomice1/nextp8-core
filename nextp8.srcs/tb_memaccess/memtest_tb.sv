@@ -418,12 +418,10 @@ initial begin
     $readmemh("memtest_rom.mem", mem);
 end
 
-// Asynchronous write (blocking assignment for immediate update)
-always @(write_en or addr or data_in or lb or ub) begin
-    if (write_en) begin
-        if (lb) mem[addr][7:0] = data_in[7:0];
-        if (ub) mem[addr][15:8] = data_in[15:8];
-    end
+// Write on posedge of write_en
+always @(posedge write_en) begin
+    if (lb) mem[addr][7:0] <= data_in[7:0];
+    if (ub) mem[addr][15:8] <= data_in[15:8];
 end
 
 // Asynchronous/combinatorial read

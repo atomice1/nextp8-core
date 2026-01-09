@@ -137,7 +137,6 @@ module tb_nextp8_p8audio;
     assign sram_clk_i = clock_50_i;
 
     sram sram_inst(
-        .clk_i(sram_clk_i),
         .read_en_i(read_en_i),
         .write_en_i(write_en_i),
         .addr_i(addr_i),
@@ -328,7 +327,6 @@ module sram #(
     parameter ADDR_WIDTH = 21,
     parameter DATA_WIDTH = 16
 ) (
-    input  wire                       clk_i,
     input  wire                       read_en_i,
     input  wire                       write_en_i,
     input  wire [ADDR_WIDTH-1:0]      addr_i,
@@ -342,14 +340,12 @@ module sram #(
     reg [DATA_WIDTH-1:0] mem [2**ADDR_WIDTH-1:0];
 
     // Behavioral model for read and write
-    always @(posedge clk_i) begin
-        if (write_en_i) begin
-            // Write operation
-            if (lb_i)
-                mem[addr_i][7:0] <= data_in_i[7:0];
-            if (ub_i)
-                mem[addr_i][15:8] <= data_in_i[15:8];
-        end
+    always @(posedge write_en_i) begin
+        // Write operation
+        if (lb_i)
+            mem[addr_i][7:0] <= data_in_i[7:0];
+        if (ub_i)
+            mem[addr_i][15:8] <= data_in_i[15:8];
     end
 
     // Read operation (combinational)
