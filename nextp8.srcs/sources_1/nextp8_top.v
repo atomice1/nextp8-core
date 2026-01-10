@@ -1610,9 +1610,9 @@ begin
             //------------- joystick -----------------------------
             if (cpu_addr[7:1]==7'b0110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
             //------------- latching joystick (btnp) -------------
-            if (cpu_addr[7:1]==7'b0110011 && cpu_rd) memio_out <= {jsp0_latched, js1_latched} //h800066
+            if (cpu_addr[7:1]==7'b0110011 && cpu_rd) memio_out <= {js0_latched, js1_latched}; //h800066
             //------------- mouse buttons (not implemented yet) --------
-            if (cpu_addr[7:1]==7'b0110110 && cpu_rd) memio_out <= {16'd0}; //h80006c-h80006d
+            if (cpu_addr[7:1]==7'b0110110 && cpu_rd) memio_out <= 16'd0; //h80006c-h80006d
         end else begin
             //------------- P8 Audio ----------------------------- h800100-h8001FF
             if (cpu_rd) memio_out <= p8audio_dout;
