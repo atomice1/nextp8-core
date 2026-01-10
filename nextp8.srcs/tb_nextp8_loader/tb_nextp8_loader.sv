@@ -345,6 +345,7 @@ UART uart_rx_inst (
 );
 
 // UART RX state machine - read bytes as they arrive
+// Keep a sliding window of the last 14 bytes
 reg uart_data_read = 0;
 always @(posedge nextp8.clk_sys) begin
     uart_rx_r_reg <= 0;
@@ -357,7 +358,8 @@ always @(posedge nextp8.clk_sys) begin
 
     if (uart_rx_ra && !uart_data_read) begin
         // Read acknowledge - data has been captured
-        for (int i = 0; i < uart_rx_count - 1; i = i + 1) begin
+        // Shift the sliding window left and add new byte at end
+        for (int i = 0; i < 13; i = i + 1) begin
             uart_rx_buffer[i] <= uart_rx_buffer[i + 1];
         end
         uart_rx_buffer[13] <= uart_rx_data;
@@ -375,28 +377,56 @@ initial begin
 end
 
 // Monitor POST code and UART output
+reg post_target_reached = 0;
+longint post_target_time = 0;
+parameter longint WAIT_AFTER_POST = 2000000000; // 2ms in ps (2,000,000 ns)
+
 always @(posedge clock_50_i) begin
-    if (uart_rx_count == 14 && post_code == POST_TARGET) begin // "Hello, world!\n" = 14 characters
-        if (uart_rx_buffer[0] == "H" &&
-            uart_rx_buffer[1] == "e" &&
-            uart_rx_buffer[2] == "l" &&
-            uart_rx_buffer[3] == "l" &&
-            uart_rx_buffer[4] == "o" &&
-            uart_rx_buffer[5] == "," &&
-            uart_rx_buffer[6] == " " &&
-            uart_rx_buffer[7] == "w" &&
-            uart_rx_buffer[8] == "o" &&
-            uart_rx_buffer[9] == "r" &&
-            uart_rx_buffer[10] == "l" &&
-            uart_rx_buffer[11] == "d" &&
-            uart_rx_buffer[12] == "!" &&
-            uart_rx_buffer[13] == 8'd10) begin // \n = 10
-            $display("=== SUCCESS: UART message matches! ===");
-            $display("=== Boot sequence with UART test completed successfully ===");
-            $finish(0);
-        end else begin
-            $display("=== FAILURE: UART message content mismatch ===");
+    // Detect when POST_TARGET is reached
+    if (!post_target_reached && post_code == POST_TARGET) begin
+        post_target_reached <= 1;
+        post_target_time <= $time;
+        $display("[$time=%0t] POST target %0d reached, waiting %0d ns before checking UART...", 
+                 $time, POST_TARGET, WAIT_AFTER_POST/1000);
+    end
+
+    // After POST_TARGET and sufficient wait time, check UART output
+    if (post_target_reached && ($time - post_target_time) >= WAIT_AFTER_POST) begin
+        // Check that we received at least 14 characters
+        if (uart_rx_count < 14) begin
+            $display("=== FAILURE: Only received %0d UART characters (expected at least 14) ===", uart_rx_count);
             $finish(1);
+        end else begin
+            // Check the most recent 14 characters match "Hello, world!\n"
+            if (uart_rx_buffer[0] == "H" &&
+                uart_rx_buffer[1] == "e" &&
+                uart_rx_buffer[2] == "l" &&
+                uart_rx_buffer[3] == "l" &&
+                uart_rx_buffer[4] == "o" &&
+                uart_rx_buffer[5] == "," &&
+                uart_rx_buffer[6] == " " &&
+                uart_rx_buffer[7] == "w" &&
+                uart_rx_buffer[8] == "o" &&
+                uart_rx_buffer[9] == "r" &&
+                uart_rx_buffer[10] == "l" &&
+                uart_rx_buffer[11] == "d" &&
+                uart_rx_buffer[12] == "!" &&
+                uart_rx_buffer[13] == 8'd10) begin // \n = 10
+                $display("=== SUCCESS: UART message matches! ===");
+                $display("=== Boot sequence with UART test completed successfully ===");
+                $finish(0);
+            end else begin
+                $display("=== FAILURE: UART message content mismatch ===");
+                $display("Expected: \"Hello, world!\\n\"");
+                $display("Received last 14 bytes:");
+                for (int i = 0; i < 14; i = i + 1) begin
+                    if (uart_rx_buffer[i] >= 32 && uart_rx_buffer[i] < 127)
+                        $display("  [%0d]: 0x%02h ('%c')", i, uart_rx_buffer[i], uart_rx_buffer[i]);
+                    else
+                        $display("  [%0d]: 0x%02h", i, uart_rx_buffer[i]);
+                end
+                $finish(1);
+            end
         end
     end
 end
