@@ -292,7 +292,8 @@ module sdspi_model #(
 
         // Detect rising edge of spi_rx_valid
         if (spi_rx_valid && !spi_rx_valid_q && !spi_cs_n) begin
-            $display("[SDSPI] <<< Received byte: 0x%02x (binary: %08b), cmd_idx=%0d", spi_rx_data, spi_rx_data, cmd_idx);
+            if (spi_rx_data != 8'hff || cmd_idx != 0)
+                $display("[SDSPI] <<< Received byte: 0x%02x (binary: %08b), cmd_idx=%0d", spi_rx_data, spi_rx_data, cmd_idx);
 
             // Skip 0xFF bytes when waiting for command start (sync/idle)
             if (cmd_idx == 0 && spi_rx_data == 8'hFF) begin
