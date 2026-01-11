@@ -17,7 +17,6 @@ VERILOG_SOURCES = \
 	$(SRC_DIR)/hdmi/encoder.v \
 	$(SRC_DIR)/hdmi/hdmidataencoder.v \
 	$(SRC_DIR)/hdmi/hdmi.v \
-	$(SRC_DIR)/keyboard.v \
 	$(SRC_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)
@@ -31,6 +30,7 @@ SYSTEMVERILOG_SOURCES = \
 	$(SRC_DIR)/hdmi/hdmidelay.sv \
 	$(SRC_DIR)/p8audio.sv \
 	$(SRC_DIR)/p8sfx_core_mux.sv \
+	$(SRC_DIR)/keyboard.sv \
 	$(TB_DIR)/spi_slave.sv \
 	$(TB_DIR)/tb_nextp8_loader.sv \
 	$(TB_DIR)/sdspi_model.sv \

@@ -1,459 +1,191 @@
-//////////////////////////////////////////////////////////////////////////////////
-// tb_keyboard.v
-// Keyboard matrix and latching keyboard testbench
-// Copyright (C) 2026 Chris January
-//////////////////////////////////////////////////////////////////////////////////
+// PS/2 Keyboard Testbench
+// Tests keyboard.sv (HOST) with keyboard_device.sv (DEVICE simulator)
 
 `timescale 1ns/1ns
 
-module tb_keyboard ();
+module tb_keyboard();
 
-//Clock - 50 MHz (20 ns period)
-reg clock_50_i = 0;
-always #10 clock_50_i = ~clock_50_i;
+// Clock - 11 MHz system clock
+reg clk = 0;
+always #45.45 clk = ~clk;  // ~11 MHz
 
-//SRAM
-wire [20:0] ram_addr_o;
-wire [15:0] ram_data_io;
-wire ram_lb_n_o;
-wire ram_ub_n_o;
-wire ram_oe_n_o;
-wire ram_we_n_o;
-wire ram_cs_n_o;
+// Reset
+reg reset = 1;
 
-// PS2 - use reg drivers with wire for inout ports
-reg ps2_clk_driver = 1'b1;
-reg ps2_data_driver = 1'b1;
-wire ps2_clk_io;
-wire ps2_data_io;
-assign ps2_clk_io = ps2_clk_driver;
-assign ps2_data_io = ps2_data_driver;
-wire ps2_pin6_io;
-wire ps2_pin2_io;
+// PS/2 signals (shared between device and host) with pullups
+tri1 ps2_clk;
+tri1 ps2_data;
 
-// SD Card
-wire sd_cs0_n_o;
-wire sd_cs1_n_o;
-wire sd_sclk_o;
-wire sd_mosi_o;
-wire sd_miso_i = 1'b1;
+// Sniffer intercepts between keyboard DUT and shared bus
+wire host_clk_from_dut;  // keyboard DUT ps2_clk_out
+wire host_data_from_dut; // keyboard DUT ps2_data_out
 
-// Flash
-wire flash_cs_n_o;
-wire flash_sclk_o;
-wire flash_mosi_o;
-wire flash_miso_i;
-wire flash_wp_o;
-wire flash_hold_o;
+// Device model outputs
+wire device_clk_out;
+wire device_data_out;
 
-// Joystick
-wire joyp1_i = 1'b1;
-wire joyp2_i = 1'b1;
-wire joyp3_i = 1'b1;
-wire joyp4_i = 1'b1;
-wire joyp6_i = 1'b1;
-wire joyp7_o;
-wire joyp9_i = 1'b1;
-wire joysel_o;
+// Connect host outputs directly to bus (open-drain)
+assign ps2_clk = (host_clk_from_dut === 1'b0) ? 1'b0 : 1'bz;
+assign ps2_data = (host_data_from_dut === 1'b0) ? 1'b0 : 1'bz;
 
-// Audio
-wire audioext_l_o;
-wire audioext_r_o;
-wire audioint_o;
+// Connect device outputs to bus (open-drain)
+assign ps2_clk = (device_clk_out === 1'b0) ? 1'b0 : 1'bz;
+assign ps2_data = (device_data_out === 1'b0) ? 1'b0 : 1'bz;
 
-// K7
-wire ear_port_i;
-wire mic_port_o;
+// Keyboard matrix output from DUT
+wire [255:0] matrix;
 
-// Buttons
-wire btn_divmmc_n_i = 1'b1;
-wire btn_multiface_n_i = 1'b1;
-wire btn_reset_n_i = 1'b1;
+// Pullup resistors for open-drain PS/2 lines (simulate 10k pullups)
+pullup(ps2_clk);
+pullup(ps2_data);
 
-// Matrix keyboard
-wire [7:0] keyb_row_o;
-reg [6:0] keyb_col_i;
-
-// Track which membrane keys are pressed: membrane_pressed[row][col]
-reg [6:0] membrane_pressed [0:7];
-
-// Bus
-wire bus_rst_n_io;
-wire bus_clk35_o;
-wire [15:0] bus_addr_o;
-wire [7:0] bus_data_io;
-wire bus_int_n_io;
-wire bus_nmi_n_i;
-wire bus_ramcs_i;
-wire bus_romcs_i;
-wire bus_wait_n_i;
-wire bus_halt_n_o;
-wire bus_iorq_n_o;
-wire bus_m1_n_o;
-wire bus_mreq_n_o;
-wire bus_rd_n_io;
-wire bus_wr_n_o;
-wire bus_rfsh_n_o;
-wire bus_busreq_n_i;
-wire bus_busack_n_o;
-wire bus_iorqula_n_i;
-wire bus_y_o;
-wire bus_p3_mtr_n_o;
-wire bus_p3_drd_n_o;
-wire bus_p3_dwr_n_o;
-
-// VGA
-wire [3:0] rgb_r_o;
-wire [3:0] rgb_g_o;
-wire [3:0] rgb_b_o;
-wire hsync_o;
-wire vsync_o;
-wire vgaclk_o;
-wire vgaclkn_o;
-
-// HDMI
-wire [3:0] hdmi_p_o;
-wire [3:0] hdmi_n_o;
-
-// I2C (RTC and HDMI)
-wire i2c_scl_io;
-wire i2c_sda_io;
-
-// ESP
-wire esp_rx_i = 1'b1;
-wire esp_tx_o;
-
-// Pi UART
-wire pi_uart_rx_i = 1'b1;
-wire pi_uart_tx_o;
-
-// XADC Analog to Digital Conversion
-wire XADC_VP;
-wire XADC_VN;
-wire XADC_15P;
-wire XADC_15N;
-wire XADC_7P;
-wire XADC_7N;
-
-// Postcode output
-wire [5:0] postcode_o;
-
-wire sram_clk_i;
-assign sram_clk_i = clock_50_i;
-
-wire read_en_i;
-wire write_en_i;
-wire [20:0] addr_i;
-wire lb_i;
-wire ub_i;
-wire [15:0] data_in_i;
-wire [15:0] data_out_o;
-
-sram_simple #(
-    .MEM_FILE("keyboard_test_rom.mem")
-) sram (
-    .read_en_i(read_en_i),
-    .write_en_i(write_en_i),
-    .addr_i(addr_i),
-    .lb_i(lb_i),
-    .ub_i(ub_i),
-    .data_in_i(data_in_i),
-    .data_out_o(data_out_o)
+// Instantiate keyboard device model (PS/2 DEVICE)
+keyboard_device #(
+    .CLOCK_DIV(1100)  // 11MHz / 10kHz = 1100
+) kbd_model (
+    .clk(clk),
+    .reset(reset),
+    .ps2_clk_in(ps2_clk),
+    .ps2_data_in(ps2_data),
+    .ps2_clk_out(device_clk_out),
+    .ps2_data_out(device_data_out)
 );
 
-assign addr_i = ram_addr_o;
-assign data_in_i = ~ram_we_n_o ? ram_data_io : 16'h0;
-assign ram_data_io = ram_we_n_o ? data_out_o : 'bz;
-assign lb_i = ~ram_lb_n_o;
-assign ub_i = ~ram_ub_n_o;
-assign read_en_i = ~ram_oe_n_o && ~ram_cs_n_o;
-assign write_en_i = ~ram_we_n_o && ~ram_cs_n_o;
-
-nextp8 nextp8(
-    // Clock
-    .clock_50_i(clock_50_i),
-
-    //SRAM
-    .ram_addr_o(ram_addr_o),
-    .ram_data_io(ram_data_io),
-    .ram_lb_n_o(ram_lb_n_o),
-    .ram_ub_n_o(ram_ub_n_o),
-    .ram_oe_n_o(ram_oe_n_o),
-    .ram_we_n_o(ram_we_n_o),
-    .ram_cs_n_o(ram_cs_n_o),
-
-    // PS2
-    .ps2_clk_io(ps2_clk_io),
-    .ps2_data_io(ps2_data_io),
-    .ps2_pin6_io(ps2_pin6_io),
-    .ps2_pin2_io(ps2_pin2_io),
-
-    // SD Card
-    .sd_cs0_n_o(sd_cs0_n_o),
-    .sd_cs1_n_o(sd_cs1_n_o),
-    .sd_sclk_o(sd_sclk_o),
-    .sd_mosi_o(sd_mosi_o),
-    .sd_miso_i(sd_miso_i),
-
-    // Joystick
-    .joyp1_i(joyp1_i),
-    .joyp2_i(joyp2_i),
-    .joyp3_i(joyp3_i),
-    .joyp4_i(joyp4_i),
-    .joyp6_i(joyp6_i),
-    .joyp7_o(joyp7_o),
-    .joyp9_i(joyp9_i),
-    .joysel_o(joysel_o),
-
-    // Audio
-    .audioext_l_o(audioext_l_o),
-    .audioext_r_o(audioext_r_o),
-
-    // K7
-    .ear_port_i(ear_port_i),
-
-    // Buttons
-    .btn_divmmc_n_i(btn_divmmc_n_i),
-    .btn_multiface_n_i(btn_multiface_n_i),
-    .btn_reset_n_i(btn_reset_n_i),
-
-    // Matrix keyboard
-    .keyb_row_o(keyb_row_o),
-    .keyb_col_i(keyb_col_i),
-
-    // I2C (RTC and HDMI)
-    .i2c_scl_io(i2c_scl_io),
-    .i2c_sda_io(i2c_sda_io),
-
-    // VGA
-    .rgb_r_o(rgb_r_o),
-    .rgb_g_o(rgb_g_o),
-    .rgb_b_o(rgb_b_o),
-    .hsync_o(hsync_o),
-    .vsync_o(vsync_o),
-    .vgaclk_o(vgaclk_o),
-    .vgaclkn_o(vgaclkn_o),
-
-    // HDMI
-    .hdmi_p_o(hdmi_p_o),
-    .hdmi_n_o(hdmi_n_o),
-
-    // ESP
-    .esp_rx_i(esp_rx_i),
-    .esp_tx_o(esp_tx_o),
-
-    // Pi UART
-    .pi_uart_rx_i(pi_uart_rx_i),
-    .pi_uart_tx_o(pi_uart_tx_o),
-
-    // XADC
-    .XADC_VP(XADC_VP),
-    .XADC_VN(XADC_VN),
-    .XADC_15P(XADC_15P),
-    .XADC_15N(XADC_15N),
-    .XADC_7P(XADC_7P),
-    .XADC_7N(XADC_7N),
-
-    // Postcode
-    .postcode_o(postcode_o)
+// Instantiate keyboard module (PS/2 HOST - DUT)
+keyboard #(
+    .SIM(1)
+) dut (
+    .clk(clk),
+    .reset(reset),
+    .ps2_clk_in(ps2_clk),
+    .ps2_data_in(ps2_data),
+    .ps2_clk_out(host_clk_from_dut),
+    .ps2_data_out(host_data_from_dut),
+    .matrix(matrix)
 );
 
-// Initialize membrane keyboard state
-initial begin
-    integer r;
-    for (r = 0; r < 8; r = r + 1) begin
-        membrane_pressed[r] = 7'b1111111; // All keys released (high)
-    end
-end
+// Instantiate PS/2 protocol sniffer (host intercept, device monitor-only)
+ps2_sniffer #(
+    .HOST_IS_TRISTATE(0),      // Host uses separate in/out (non-tristate)
+    .DEVICE_IS_TRISTATE(0)     // Device uses separate in/out (non-tristate)
+) sniffer (
+    // Host side (non-tristate): separate in/out monitoring
+    .host_ps2_clk_in_i(ps2_clk),              // Monitor shared bus CLK
+    .host_ps2_data_in_i(ps2_data),            // Monitor shared bus DATA
+    .host_ps2_clk_out_i(host_clk_from_dut),   // Monitor DUT CLK output (0=driving low, 1=released)
+    .host_ps2_data_out_i(host_data_from_dut), // Monitor DUT DATA output (0=driving low, 1=released)
 
-// Simulate membrane keyboard matrix scanning
-// When a row is driven low, set corresponding column low if key is pressed
-always @* begin
-    integer r;
-    reg[6:0] col = 7'b1111111; // Default: all columns high (no keys)
+    // Device side (non-tristate): separate in/out monitoring
+    .device_ps2_clk_in_i(ps2_clk),            // Monitor shared bus CLK
+    .device_ps2_data_in_i(ps2_data),          // Monitor shared bus DATA
+    .device_ps2_clk_out_i(device_clk_out),    // Monitor device CLK output
+    .device_ps2_data_out_i(device_data_out)   // Monitor device DATA output
+);
 
-    for (r = 0; r < 8; r = r + 1) begin
-        if (keyb_row_o[r] == 1'b0) begin // This row is being scanned
-            col = col & membrane_pressed[r]; // Update columns based on pressed keys
-        end
-    end
-    keyb_col_i <= col;
-end
-
-// Monitor postcode for test progress
-reg [5:0] last_postcode = 6'd0;
-always @(posedge clock_50_i) begin
-    if (postcode_o != last_postcode) begin
-        last_postcode <= postcode_o;
-        $display("Time %t: POST CODE = %d", $time, postcode_o);
-
-        // Test success
-        if (postcode_o == 6'd25) begin
-            $display("*************************************");
-            $display("*** KEYBOARD TEST PASSED! ***");
-            $display("*************************************");
-            #1000;
-            $finish;
-        end
-
-        // Test failure
-        if (postcode_o >= 6'd50) begin
-            $display("*************************************");
-            $display("*** KEYBOARD TEST FAILED! ***");
-            $display("*************************************");
-            #1000;
-            $finish;
-        end
-    end
-end
-
-// PS/2 keyboard stimulus
-// Task to send a PS/2 byte (LSB first, with start, parity, stop bits)
-task ps2_send_byte;
-    input [7:0] data;
+// Helper task to display set matrix bits
+task display_matrix_bits(input [255:0] m);
     integer i;
-    reg parity;
-    begin
-        parity = 1'b1; // Odd parity
-
-        // Calculate parity
-        for (i = 0; i < 8; i = i + 1) begin
-            parity = parity ^ data[i];
-        end
-
-        // Start bit
-        ps2_data_driver = 1'b0;
-        #1000; // ~1us per bit at 1MHz
-        ps2_clk_driver = 1'b0;
-        #1000;
-        ps2_clk_driver = 1'b1;
-        #1000;
-
-        // Data bits (LSB first)
-        for (i = 0; i < 8; i = i + 1) begin
-            ps2_data_driver = data[i];
-            #1000;
-            ps2_clk_driver = 1'b0;
-            #1000;
-            ps2_clk_driver = 1'b1;
-            #1000;
-        end
-
-        // Parity bit
-        ps2_data_driver = parity;
-        #1000;
-        ps2_clk_driver = 1'b0;
-        #1000;
-        ps2_clk_driver = 1'b1;
-        #1000;
-
-        // Stop bit
-        ps2_data_driver = 1'b1;
-        #1000;
-        ps2_clk_driver = 1'b0;
-        #1000;
-        ps2_clk_driver = 1'b1;
-        #1000;
+    $display("  Matrix bits set:");
+    for (i = 0; i < 256; i = i + 1) begin
+        if (m[i]) $display("    [0x%02X]", i);
     end
 endtask
 
-// Task to press a PS/2 key
-task ps2_press_key;
-    input [7:0] scancode;
-    begin
-        $display("Time %t: PS/2 pressing key scancode 0x%h", $time, scancode);
-        ps2_send_byte(scancode);
-        #1000; // 1us delay
-    end
-endtask
-
-// Task to release a PS/2 key
-task ps2_release_key;
-    input [7:0] scancode;
-    begin
-        $display("Time %t: PS/2 releasing key scancode 0x%h", $time, scancode);
-        ps2_send_byte(8'hF0); // Break code
-        ps2_send_byte(scancode);
-        #1000;
-    end
-endtask
-
-// Task to press a membrane keyboard key
-// Row: 0-7, Col: 0-6
-task membrane_press_key;
-    input [2:0] row;
-    input [2:0] col;
-    begin
-        $display("Time %t: Membrane pressing key row=%d col=%d", $time, row, col);
-        membrane_pressed[row][col] = 1'b0; // Mark key as pressed (active low)
-        #1000;
-    end
-endtask
-
-// Task to release a membrane keyboard key
-task membrane_release_key;
-    input [2:0] row;
-    input [2:0] col;
-    begin
-        $display("Time %t: Membrane releasing key row=%d col=%d", $time, row, col);
-        membrane_pressed[row][col] = 1'b1; // Mark key as released (high)
-        #1000;
-    end
-endtask
-
-// Keyboard test stimulus
+// Test sequence
 initial begin
-    $display("======================================");
-    $display("=== KEYBOARD TESTBENCH STARTING ===");
-    $display("======================================");
+    automatic integer pass_count = 0;
+    automatic integer fail_count = 0;
 
-    // Wait for system to boot
-    #15000; // 15us
+    $display("=== Starting Keyboard Interface Test ===");
 
-    // Wait for POST code 7 (waiting for first key)
-    wait(postcode_o == 6'd7);
-    $display("Time %t: ROM waiting for TEST_KEY_1 (0x1C = A key)", $time);
-    #10000; // 10us delay
-
-    // Press TEST_KEY_1 (scancode 0x1C = A key)
-    ps2_press_key(8'h1C);
-
-    // Wait for POST code 10 (waiting for key release)
-    wait(postcode_o == 6'd10);
-    $display("Time %t: ROM detected key, waiting for release", $time);
+    // Reset
+    reset = 1;
+    #1000;
+    reset = 0;
     #10000;
 
-    // Release TEST_KEY_1
-    ps2_release_key(8'h1C);
+    // Wait for initialization to complete
+    repeat(1000000) @(posedge clk);
 
-    // Wait for POST code 13 (waiting for second key)
-    wait(postcode_o == 6'd13);
-    $display("Time %t: ROM waiting for TEST_KEY_2 (0x23 = D key)", $time);
+    // Check that initialization actually completed
+    if (dut.init_state != 5'd16) begin  // 5'd16 = INIT_DONE
+        $display("FAIL: Keyboard initialization not complete. init_state=%0d (expected 15)", dut.init_state);
+        $finish(1);
+    end
+    $display("Keyboard initialization verified: init_state=INIT_DONE");
+
+    // Test 1: Send make code and verify matrix bit is set
+    $display("Test 1: Send make code 0x1C (A key) and verify matrix[0x1C] is set");
+    kbd_model.send_scancode(8'h1C);
+    repeat(50000) @(posedge clk);
+
+    if (matrix[8'h1C] == 1'b1) begin
+        $display("  PASS: Matrix bit [0x1C] set correctly");
+        pass_count = pass_count + 1;
+    end else begin
+        $display("  FAIL: Matrix bit [0x1C] = %b (expected 1)", matrix[8'h1C]);
+        display_matrix_bits(matrix);
+        fail_count = fail_count + 1;
+    end
     #10000;
 
-    // Press TEST_KEY_2 (scancode 0x23 = D key) via membrane keyboard
-    // Map scancode to membrane position (example: row 1, col 2)
-    membrane_press_key(3'd1, 3'd2);
+    // Test 2: Send break code and verify matrix bit is cleared
+    $display("Test 2: Send break code 0xF0 0x1C and verify matrix[0x1C] is cleared");
+    kbd_model.send_scancode(8'hF0);
+    kbd_model.send_scancode(8'h1C);
+    repeat(50000) @(posedge clk);
 
-    // Wait for POST code 14
-    wait(postcode_o == 6'd14);
-    $display("Time %t: ROM detected second key", $time);
+    if (matrix[8'h1C] == 1'b0) begin
+        $display("  PASS: Matrix bit [0x1C] cleared correctly");
+        pass_count = pass_count + 1;
+    end else begin
+        $display("  FAIL: Matrix bit [0x1C] = %b (expected 0)", matrix[8'h1C]);
+        display_matrix_bits(matrix);
+        fail_count = fail_count + 1;
+    end
     #10000;
 
-    // Release TEST_KEY_2
-    membrane_release_key(3'd1, 3'd2);
+    // Test 3: Send extended make code and verify matrix bit at 0x80|scancode
+    $display("Test 3: Send extended code 0xE0 0x74 (Right Arrow) and verify matrix[0xF4] is set");
+    kbd_model.send_scancode(8'hE0);
+    kbd_model.send_scancode(8'h74);
+    repeat(50000) @(posedge clk);
 
-    // Now wait for test completion
-    wait(postcode_o == 6'd25 || postcode_o >= 6'd50);
-end
+    if (matrix[8'h80 | 8'h74] == 1'b1) begin
+        $display("  PASS: Matrix bit [0xF4] set correctly for extended code");
+        pass_count = pass_count + 1;
+    end else begin
+        $display("  FAIL: Matrix bit [0xF4] = %b (expected 1)", matrix[8'h80 | 8'h74]);
+        display_matrix_bits(matrix);
+        fail_count = fail_count + 1;
+    end
+    #10000;
 
-// Timeout
-initial begin
-    #10000000; // 10ms timeout
-    $display("******************************");
-    $display("*** TIMEOUT - TEST FAILED! ***");
-    $display("******************************");
-    $finish;
+    // Test 4: Send extended break code and verify matrix bit is cleared
+    $display("Test 4: Send extended break 0xE0 0xF0 0x74 and verify matrix[0xF4] is cleared");
+    kbd_model.send_scancode(8'hE0);
+    kbd_model.send_scancode(8'hF0);
+    kbd_model.send_scancode(8'h74);
+    repeat(50000) @(posedge clk);
+
+    if (matrix[8'h80 | 8'h74] == 1'b0) begin
+        $display("  PASS: Matrix bit [0xF4] cleared correctly for extended break");
+        pass_count = pass_count + 1;
+    end else begin
+        $display("  FAIL: Matrix bit [0xF4] = %b (expected 0)", matrix[8'h80 | 8'h74]);
+        display_matrix_bits(matrix);
+        fail_count = fail_count + 1;
+    end
+    #10000;
+
+    $display("=== All tests completed ===");
+    if (fail_count == 0) begin
+        $display("ALL TESTS PASSED (%0d)", pass_count);
+        $finish(0);
+    end else begin
+        $display("SOME TESTS FAILED (%0d passed, %0d failed)", pass_count, fail_count);
+        $finish(1);
+    end
 end
 
 endmodule

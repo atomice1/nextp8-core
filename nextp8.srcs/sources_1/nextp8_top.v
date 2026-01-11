@@ -24,7 +24,9 @@
 
 `default_nettype none
 
- module nextp8
+ module nextp8 #(
+    parameter SIM = 0  // Set to 1 in simulation to reduce delays
+)
 (
     // Clocks
     input  wire clock_50_i,
@@ -602,23 +604,77 @@ rtc_i2c
 
 wire key_ms;
 assign key_ms = params[0];  //keyboard or mouse at ps/2 port
-wire ps2_key_clk, ps2_key_data;
 
-// key_ms red from configuration at init :  0 = keyboard, 1 = mouse
-assign ps2_key_clk =  key_ms ? ps2_pin6_io : ps2_clk_io;
-assign ps2_key_data = key_ms ? ps2_pin2_io : ps2_data_io;
+// PS/2 pad sampling
+wire ps2_main_clk_in, ps2_main_data_in;
+wire ps2_alt_clk_in, ps2_alt_data_in;
+
+assign ps2_main_clk_in = ps2_clk_io;
+assign ps2_main_data_in = ps2_data_io;
+assign ps2_alt_clk_in  = ps2_pin6_io;
+assign ps2_alt_data_in = ps2_pin2_io;
+
+// Per-function sampling
+wire ps2_key_clk_in, ps2_key_data_in;
+wire ps2_mouse_clk_in, ps2_mouse_data_in;
+
+// Drive outputs from HOST controllers (0/Z)
+wire ps2_key_clk_out;
+wire ps2_key_data_out;
+wire ps2_mouse_clk_out;
+wire ps2_mouse_data_out;
+
+// Select which controller owns each physical pad
+wire ps2_main_clk_out;
+wire ps2_main_data_out;
+wire ps2_alt_clk_out;
+wire ps2_alt_data_out;
+
+// SIM-ONLY: Force keyboard to main pins, mouse to ALT pins
+generate
+    if (SIM) begin
+        assign ps2_main_clk_out  = ps2_key_clk_out;
+        assign ps2_main_data_out = ps2_key_data_out;
+        assign ps2_alt_clk_out   = ps2_mouse_clk_out;   // Mouse on ALT pins (pin6/pin2)
+        assign ps2_alt_data_out  = ps2_mouse_data_out;
+        assign ps2_key_clk_in    = ps2_main_clk_in;
+        assign ps2_key_data_in   = ps2_main_data_in;
+        assign ps2_mouse_clk_in  = ps2_alt_clk_in;
+        assign ps2_mouse_data_in = ps2_alt_data_in;
+    end else begin
+// key_ms read from configuration at init :  0 = keyboard, 1 = mouse
+        assign ps2_main_clk_out  = key_ms ? ps2_mouse_clk_out  : ps2_key_clk_out;
+        assign ps2_main_data_out = key_ms ? ps2_mouse_data_out : ps2_key_data_out;
+        assign ps2_alt_clk_out   = key_ms ? ps2_key_clk_out    : ps2_mouse_clk_out;
+        assign ps2_alt_data_out  = key_ms ? ps2_key_data_out   : ps2_mouse_data_out;
+        assign ps2_key_clk_in    = key_ms ? ps2_alt_clk_in  : ps2_main_clk_in;
+        assign ps2_key_data_in   = key_ms ? ps2_alt_data_in : ps2_main_data_in;
+        assign ps2_mouse_clk_in  = key_ms ? ps2_main_clk_in : ps2_alt_clk_in;
+        assign ps2_mouse_data_in = key_ms ? ps2_main_data_in: ps2_alt_data_in;
+    end
+endgenerate
+
+// Open-drain pad driving (drive 0 or release Z)
+assign ps2_clk_io  = (ps2_main_clk_out  == 1'b0) ? 1'b0 : 1'bz;
+assign ps2_data_io = (ps2_main_data_out == 1'b0) ? 1'b0 : 1'bz;
+assign ps2_pin6_io = (ps2_alt_clk_out   == 1'b0) ? 1'b0 : 1'bz;
+assign ps2_pin2_io = (ps2_alt_data_out  == 1'b0) ? 1'b0 : 1'bz;
 
 wire [255:0] ps2_kbd_matrix;
 wire [255:0] meb_kbd_matrix;
 
-keyboard keyboard (
-    .reset    ( reset        ),
-    .clk      ( clk_sys        ),
+keyboard #(
+    .SIM        ( SIM          )
+) keyboard (
+    .reset      ( reset        ),
+    .clk        ( clk_sys      ),
 
-    .ps2_clk  ( ps2_key_clk  ),
-    .ps2_data ( ps2_key_data ),
+    .ps2_clk_in     ( ps2_key_clk_in      ),
+    .ps2_data_in    ( ps2_key_data_in     ),
+    .ps2_clk_out    ( ps2_key_clk_out     ),
+    .ps2_data_out   ( ps2_key_data_out    ),
 
-    .matrix   ( ps2_kbd_matrix  )
+    .matrix     ( ps2_kbd_matrix  )
 );
 
 //------------------------------Membrane Keyboard---------------------
@@ -642,6 +698,33 @@ reg [255:0] kbd_matrix_q_prev;
 
 // Latching keyboard matrix for btnp() support
 reg [255:0] kbd_matrix_latched;
+
+// ----------- Mouse ---------------
+wire signed [15:0] mouse_x_raw, mouse_y_raw, mouse_z_raw;
+wire [7:0] mouse_buttons_raw;
+
+// CDC synchronizers for mouse signals
+(* ASYNC_REG = "TRUE" *) reg signed [15:0] mouse_x_d, mouse_x_q;
+(* ASYNC_REG = "TRUE" *) reg signed [15:0] mouse_y_d, mouse_y_q;
+(* ASYNC_REG = "TRUE" *) reg signed [15:0] mouse_z_d, mouse_z_q;
+(* ASYNC_REG = "TRUE" *) reg [7:0] mouse_buttons_d, mouse_buttons_q;
+reg [7:0] mouse_buttons_q_prev;
+reg [7:0] mouse_buttons_latched;
+
+mouse #(
+    .SIM          ( SIM                )
+) mouse_inst (
+    .clk          ( clk_sys            ),
+    .reset        ( reset              ),
+    .ps2_clk_in   ( ps2_mouse_clk_in   ),
+    .ps2_data_in  ( ps2_mouse_data_in  ),
+    .ps2_clk_out  ( ps2_mouse_clk_out  ),
+    .ps2_data_out ( ps2_mouse_data_out ),
+    .mouse_x      ( mouse_x_raw        ),
+    .mouse_y      ( mouse_y_raw        ),
+    .mouse_z      ( mouse_z_raw        ),
+    .mouse_buttons( mouse_buttons_raw  )
+);
 
 // Latching joystick registers for btnp() support
 reg [7:0] js0_latched;
@@ -1070,7 +1153,7 @@ assign ram_cs_n_o = sram_access ? 1'b0 : ramce;
 assign ram_oe_n_o = sram_access ? ~sys_oe : ramoe;
 assign ram_lb_n_o = sram_access ? cpu_ds[0] : rds[0];
 assign ram_ub_n_o = sram_access ? cpu_ds[1] : rds[1];
-assign ram_data_io = (sram_access && sys_wr) ? cpu_dout : 
+assign ram_data_io = (sram_access && sys_wr) ? cpu_dout :
                      (ramwe ? 16'bZZZZZZZZZZZZZZZZ : rdout);
 
 // cpu_enable generation: combinational logic
@@ -1511,13 +1594,29 @@ end
 // ---------------- CDC synchronizers for clk_sys -> mclk crossings --
 // -------------------------------------------------------------------------
 
+(* ASYNC_REG = "TRUE" *) reg i2c_busy_d, i2c_busy_q;
+(* ASYNC_REG = "TRUE" *) reg i2c_err_d, i2c_err_q;
+
 always @(posedge mclk)
 begin
     kbd_matrix_d <= kbd_matrix;
     kbd_matrix_q <= kbd_matrix_d;
     kbd_matrix_q_prev <= kbd_matrix_q;
+    mouse_x_d <= mouse_x_raw;
+    mouse_x_q <= mouse_x_d;
+    mouse_y_d <= mouse_y_raw;
+    mouse_y_q <= mouse_y_d;
+    mouse_z_d <= mouse_z_raw;
+    mouse_z_q <= mouse_z_d;
+    mouse_buttons_d <= mouse_buttons_raw;
+    mouse_buttons_q <= mouse_buttons_d;
+    mouse_buttons_q_prev <= mouse_buttons_q;
     i2c_din_d <= i2c_din;
     i2c_din_q <= i2c_din_d;
+    i2c_busy_d <= i2c_busy;
+    i2c_busy_q <= i2c_busy_d;
+    i2c_err_d <= i2c_err;
+    i2c_err_q <= i2c_err_d;
     da_data_d <= da_data;
     da_data_q <= da_data_d;
     da_playing_d <= da_playing;
@@ -1611,8 +1710,11 @@ begin
             if (cpu_addr[7:1]==7'b0110000 && cpu_rd) memio_out <= {js0_q, js1_q}; //h800060
             //------------- latching joystick (btnp) -------------
             if (cpu_addr[7:1]==7'b0110011 && cpu_rd) memio_out <= {js0_latched, js1_latched}; //h800066
-            //------------- mouse buttons (not implemented yet) --------
-            if (cpu_addr[7:1]==7'b0110110 && cpu_rd) memio_out <= 16'd0; //h80006c-h80006d
+            //------------- mouse (16-bit accumulators) ----------
+            if (cpu_addr[7:1]==7'b0110100 && cpu_rd) memio_out <= mouse_x_q; //h800068-h800069
+            if (cpu_addr[7:1]==7'b0110101 && cpu_rd) memio_out <= mouse_y_q; //h80006a-h80006b
+            if (cpu_addr[7:1]==7'b0110110 && cpu_rd) memio_out <= mouse_z_q; //h80006c-h80006d
+            if (cpu_addr[7:1]==7'b0110111 && cpu_rd) memio_out <= {mouse_buttons_latched, mouse_buttons_q}; //h80006e-h80006f
         end else begin
             //------------- P8 Audio ----------------------------- h800100-h8001FF
             if (cpu_rd) memio_out <= p8audio_dout;
@@ -1626,12 +1728,14 @@ begin
         kbd_matrix_latched <= 256'd0;
         js0_latched <= 8'd0;
         js1_latched <= 8'd0;
+        mouse_buttons_latched <= 8'd0;
     end else begin
         // Latching input: only latch newly pressed keys/buttons (rising edge detection)
         // Only set bits that are high in current state but were low in previous state
         kbd_matrix_latched <= kbd_matrix_latched | (kbd_matrix_q & ~kbd_matrix_q_prev);
         js0_latched <= js0_latched | (js0_q & ~js0_q_prev);
         js1_latched <= js1_latched | (js1_q & ~js1_q_prev);
+        mouse_buttons_latched <= mouse_buttons_latched | (mouse_buttons_q & ~mouse_buttons_q_prev);
     end
 
     if (!reset_mclk_q && memio_go && memio_rd && cpu_wr) begin
@@ -1683,6 +1787,10 @@ begin
             end
             if (cpu_addr[7:1]==7'b0110011 && cpu_wr && !cpu_ds[1]) begin //h800066 (high byte)
                 js0_latched <= js0_latched & ~cpu_dout[15:8];
+            end
+            //------------- latching mouse buttons clear (btnp) ----- h80006c-h80006d
+            if (cpu_addr[7:1]==7'b0110110 && cpu_wr && !cpu_ds[1]) begin //h80006c (high byte)
+                mouse_buttons_latched <= mouse_buttons_latched & ~cpu_dout[15:8];
             end
             //------------------ debug ------------------------------
             if (cpu_addr[7:1]==7'b0110001 && cpu_wr) begin

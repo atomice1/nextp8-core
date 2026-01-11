@@ -22,7 +22,7 @@ VERILOG_SOURCES = \
 	$(SOURCES_DIR)/hdmi/encoder.v \
 	$(SOURCES_DIR)/hdmi/hdmidataencoder.v \
 	$(SOURCES_DIR)/hdmi/hdmi.v \
-	$(SOURCES_DIR)/keyboard.v \
+	$(SOURCES_DIR)/keyboard.sv \
 	$(SOURCES_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)
@@ -36,6 +36,9 @@ SYSTEMVERILOG_SOURCES = \
 	$(SOURCES_DIR)/hdmi/hdmidelay.sv \
 	$(SOURCES_DIR)/p8audio.sv \
 	$(SOURCES_DIR)/p8sfx_core_mux.sv \
+	$(SOURCES_DIR)/ps2_interface.sv \
+	$(SOURCES_DIR)/keyboard.sv \
+	$(SOURCES_DIR)/mouse.sv \
 	../models/sram_simple.sv
 
 # VHDL source files

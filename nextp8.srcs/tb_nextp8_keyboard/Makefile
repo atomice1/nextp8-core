@@ -1,4 +1,4 @@
-# Makefile for tb_nextp8_boot - Full nextp8_top boot testbench
+# Makefile for tb_keyboard - Keyboard matrix and latching keyboard testbench
 #
 # Usage:
 #   make		  - Compile and run simulation
@@ -17,9 +17,7 @@ VERILOG_SOURCES = \
 	$(SRC_DIR)/hdmi/encoder.v \
 	$(SRC_DIR)/hdmi/hdmidataencoder.v \
 	$(SRC_DIR)/hdmi/hdmi.v \
-	$(SRC_DIR)/keyboard.sv \
-	$(SRC_DIR)/mkeyboard.v \
-	exec_tb.v
+	$(SRC_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)
 IP_SOURCES = \
@@ -35,12 +33,15 @@ SYSTEMVERILOG_SOURCES = \
 	$(SRC_DIR)/ps2_interface.sv \
 	$(SRC_DIR)/keyboard.sv \
 	$(SRC_DIR)/mouse.sv \
-	../models/sram.sv
+	$(SRC_DIR)/../models/ps2_interface_device.sv \
+	$(SRC_DIR)/../models/keyboard_device.sv \
+	$(SRC_DIR)/../models/ps2_sniffer.sv \
+	../models/sram_simple.sv \
+	tb_nextp8_keyboard.sv
 
 # VHDL source files
 VHDL_SOURCES = \
 	$(SRC_DIR)/p8video.vhd \
-	$(SRC_DIR)/ps2_read_keyboard.vhd \
 	$(SRC_DIR)/dac.vhd \
 	$(SRC_DIR)/hdmi_out_xilinx.vhd \
 	$(SRC_DIR)/i2c.vhd \
@@ -52,9 +53,9 @@ VHDL_SOURCES = \
 	$(SRC_DIR)/TG68K.C-master/TG68KdotC_Kernel.vhd
 
 # Simulation parameters
-TOP = exec_tb
-SNAPSHOT = exec_tb_snap
-TIMEOUT ?= 60
+TOP = tb_nextp8_keyboard
+SNAPSHOT = tb_nextp8_keyboard_snap
+TIMEOUT ?= 1000
 
 # xsim commands
 XVLOG = xvlog
@@ -71,7 +72,7 @@ all: rom sim
 
 # Build ROM
 rom:
-	@echo "=== Building hello test ROM ==="
+	@echo "=== Building keyboard test ROM ==="
 	@$(MAKE) -f Makefile.rom
 	@echo ""
 
@@ -100,36 +101,28 @@ elaborate: compile_verilog
 
 # Run simulation
 sim: elaborate
-	@echo "=== Running simulation (timeout: $(TIMEOUT)s) ==="
+	@echo "=== Running simulation (timeout=$(TIMEOUT)s) ==="
 	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
-		(if [ $$? -eq 124 ]; then \
+		if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
 			exit 1; \
 		else \
 			exit $$?; \
-		fi)
+		fi
 	@echo ""
 	@echo "=== Simulation complete ==="
 
-# Alternative: just run (if already compiled)
+# Run simulation without recompiling
 run:
-	@echo "=== Running simulation (assuming already compiled) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
-		(if [ $$? -eq 124 ]; then \
-			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
-			exit 1; \
-		else \
-			exit $$?; \
-		fi)
+	@echo "=== Running simulation ==="
+	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall
+	@echo ""
 
 # Open waveform viewer
 wave:
-	@if [ -f $(SNAPSHOT).wdb ]; then \
-		echo "=== Opening waveform viewer ==="; \
-		$(XSIM) --gui $(SNAPSHOT).wdb & \
-	else \
-		echo "ERROR: No waveform database found. Run simulation first."; \
-	fi
+	@echo "=== Opening waveform viewer ==="
+	$(XSIM) $(SNAPSHOT) --gui &
+	@echo ""
 
 # Clean generated files
 clean:
@@ -138,29 +131,31 @@ clean:
 	rm -rf .Xil
 	rm -f *.jou *.log *.pb
 	rm -f *.wdb
-	rm -f xsim.ini
 	@$(MAKE) -f Makefile.rom clean
 	@echo "Clean complete"
 
-# Help target
+# Help
 help:
-	@echo "Makefile for exec_tb - Full nextp8_top Execution Testbench"
+	@echo "Makefile for tb_keyboard - Keyboard matrix and latching keyboard testbench"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make		  - Compile and run simulation"
-	@echo "  make sim	  - Same as 'make'"
+	@echo "  make		  - Build ROM, compile, and run simulation"
+	@echo "  make rom	  - Build keyboard test ROM"
+	@echo "  make sim	  - Compile and run simulation"
 	@echo "  make run	  - Run simulation (skip recompile)"
 	@echo "  make wave	 - Open waveform viewer"
 	@echo "  make clean	- Remove all generated files"
 	@echo "  make help	 - Show this help message"
 	@echo ""
 	@echo "Options:"
-	@echo "  TIMEOUT=<sec>	  - Simulation timeout in seconds (default: 60)"
+	@echo "  TIMEOUT=N	 - Set simulation timeout in seconds (default: 100)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make						  # Run with defaults"
-	@echo "  make sim TIMEOUT=120		  # Run with 120 second timeout"
+	@echo "  make					# Run with defaults"
+	@echo "  make sim TIMEOUT=120	# Run with 120 second timeout"
 	@echo ""
-	@echo "This testbench instantiates the full nextp8_top module"
-	@echo "with simulated external interfaces (SRAM, UART etc.)"
-	@echo "Exits successfully when POST code reaches 10 and the expected UART is output."
+	@echo "This testbench tests:"
+	@echo "  - PS/2 keyboard matrix reading"
+	@echo "  - Membrane keyboard matrix reading"
+	@echo "  - Latching keyboard matrix (btnp support)"
+	@echo "  - Selective key clearing via MMIO writes"
