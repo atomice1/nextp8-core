@@ -11,7 +11,7 @@ module sram #(
     parameter ADDR_WIDTH = 21,      // 2M x 16 = 21 address bits
     parameter DATA_WIDTH = 16,      // 16-bit data bus
     parameter SPEED_GRADE = 10,     // 10ns (default), 12ns available
-    parameter VERBOSE = 1,          // Debug output enable
+    parameter VERBOSE = 0,          // Debug output enable
     parameter MEM_FILE = ""         // Memory initialization file (.mem format)
 ) (
     // Address bus
@@ -185,6 +185,7 @@ module sram #(
     //==========================================================================
 
     integer i;
+    integer mem_fd;
     initial begin
         // Initialize memory to zero (real SRAM power-on state)
         for (i = 0; i < 2**ADDR_WIDTH; i = i + 1) begin
@@ -193,8 +194,44 @@ module sram #(
 
         // Load memory initialization file if specified
         if (MEM_FILE != "") begin
+            mem_fd = $fopen(MEM_FILE, "r");
+            if (mem_fd == 0) begin
+                $fatal(1, "[SRAM] ERROR: Memory init file %s not found; aborting simulation", MEM_FILE);
+            end
+            $fclose(mem_fd);
             $display("[SRAM] Loading memory from %s", MEM_FILE);
             $readmemh(MEM_FILE, mem);
+            
+            // ROM sanity checks (68K boot vector validation)
+            begin
+                reg [31:0] initial_sp, initial_pc, third_word;
+                reg [15:0] code_at_pc;
+                
+                initial_sp = {mem[0], mem[1]};  // First 32-bit word: initial SP
+                initial_pc = {mem[2], mem[3]};  // Second 32-bit word: initial PC
+                third_word = {mem[4], mem[5]};  // Third 32-bit word: should be zero
+                
+                if (initial_sp == 32'h0) begin
+                    $fatal(1, "[SRAM] ERROR: ROM validation failed - Initial SP is zero");
+                end
+                if (initial_pc == 32'h0) begin
+                    $fatal(1, "[SRAM] ERROR: ROM validation failed - Initial PC is zero");
+                end
+                if (initial_pc >= initial_sp) begin
+                    $fatal(1, "[SRAM] ERROR: ROM validation failed - Initial PC (0x%08x) >= Initial SP (0x%08x)", initial_pc, initial_sp);
+                end
+                if (third_word != 32'h0) begin
+                    $fatal(1, "[SRAM] ERROR: ROM validation failed - Third longword is non-zero (0x%08x)", third_word);
+                end
+                
+                // Check that there's actual code at the PC address (word-addressed)
+                code_at_pc = mem[initial_pc[20:1]];
+                if (code_at_pc == 16'h0) begin
+                    $fatal(1, "[SRAM] ERROR: ROM validation failed - Code at PC (0x%08x) is zero", initial_pc);
+                end
+                
+                $display("[SRAM] ROM validation passed: SP=0x%08x PC=0x%08x Code@PC=0x%04x", initial_sp, initial_pc, code_at_pc);
+            end
         end
 
         // Initialize state

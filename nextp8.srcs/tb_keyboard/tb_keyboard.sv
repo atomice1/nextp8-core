@@ -149,14 +149,17 @@ wire ub_i;
 wire [15:0] data_in_i;
 wire [15:0] data_out_o;
 
-sram sram(
-    read_en_i,
-    write_en_i,
-    addr_i,
-    lb_i,
-    ub_i,
-    data_in_i,
-    data_out_o);
+sram_simple #(
+    .MEM_FILE("keyboard_test_rom.mem")
+) sram (
+    .read_en_i(read_en_i),
+    .write_en_i(write_en_i),
+    .addr_i(addr_i),
+    .lb_i(lb_i),
+    .ub_i(ub_i),
+    .data_in_i(data_in_i),
+    .data_out_o(data_out_o)
+);
 
 assign addr_i = ram_addr_o;
 assign data_in_i = ~ram_we_n_o ? ram_data_io : 16'h0;
@@ -452,48 +455,5 @@ initial begin
     $display("******************************");
     $finish;
 end
-
-endmodule
-
-// SRAM behavioral model
-module sram #(
-    parameter ADDR_WIDTH = 21,
-    parameter DATA_WIDTH = 16
-) (
-    input  wire                       read_en_i,
-    input  wire                       write_en_i,
-    input  wire [ADDR_WIDTH-1:0]      addr_i,
-    input  wire                       lb_i,
-    input  wire                       ub_i,
-    input  wire [DATA_WIDTH-1:0]      data_in_i,
-    output reg  [DATA_WIDTH-1:0]      data_out_o
-);
-
-    // Declare the memory array
-    reg [DATA_WIDTH-1:0] mem [2**ADDR_WIDTH-1:0];
-
-    // Behavioral model for read and write
-    always @(posedge write_en_i) begin
-        // Write operation
-        if (lb_i)
-            mem[addr_i][7:0] <= data_in_i[7:0];
-        if (ub_i)
-            mem[addr_i][15:8] <= data_in_i[15:8];
-    end
-
-    // Read operation (combinational) - triggered by addr_i or read_en_i changes
-    always @(addr_i or read_en_i or write_en_i) begin
-        if (read_en_i && ~write_en_i) begin
-            data_out_o = mem[addr_i];
-        end else begin
-            data_out_o = 16'h0000; // Drive zero when not reading
-        end
-    end
-
-    integer i;
-    initial begin
-        $display("Loading keyboard test ROM...");
-        $readmemh("keyboard_test_rom.mem", mem);
-    end
 
 endmodule

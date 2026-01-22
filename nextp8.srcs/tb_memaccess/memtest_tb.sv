@@ -137,14 +137,17 @@ wire ub_i;
 wire [15:0] data_in_i;
 wire [15:0] data_out_o;
 
-sram sram(
-    read_en_i,
-    write_en_i,
-    addr_i,
-    lb_i,
-    ub_i,
-    data_in_i,
-    data_out_o);
+sram_simple #(
+    .MEM_FILE("memtest_rom.mem")
+) sram (
+    .read_en_i(read_en_i),
+    .write_en_i(write_en_i),
+    .addr_i(addr_i),
+    .lb_i(lb_i),
+    .ub_i(ub_i),
+    .data_in_i(data_in_i),
+    .data_out_o(data_out_o)
+);
 
 assign addr_i = ram_addr_o;
 assign data_in_i = ~ram_we_n_o ? ram_data_io : 16'h0;
@@ -392,39 +395,5 @@ initial begin
     $display("=== FAILURE: Test did not complete ===");
     $finish;
 end
-
-endmodule
-
-// Asynchronous SRAM model (combinatorial reads, asynchronous writes)
-module sram(
-    input read_en,
-    input write_en,
-    input [20:0] addr,
-    input lb,
-    input ub,
-    input [15:0] data_in,
-    output [15:0] data_out
-);
-
-reg [15:0] mem [0:2097151]; // 2MB SRAM
-integer i;
-
-initial begin
-    for (i = 0; i < 2097152; i = i + 1) begin
-        mem[i] = 16'h0000;
-    end
-    
-    // Load ROM image
-    $readmemh("memtest_rom.mem", mem);
-end
-
-// Write on posedge of write_en
-always @(posedge write_en) begin
-    if (lb) mem[addr][7:0] <= data_in[7:0];
-    if (ub) mem[addr][15:8] <= data_in[15:8];
-end
-
-// Asynchronous/combinatorial read
-assign data_out = read_en ? mem[addr] : 16'hzzzz;
 
 endmodule

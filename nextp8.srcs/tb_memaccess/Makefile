@@ -31,7 +31,8 @@ IP_SOURCES = \
 SYSTEMVERILOG_SOURCES = \
 	$(SRC_DIR)/hdmi/hdmidelay.sv \
 	$(SRC_DIR)/p8audio.sv \
-	$(SRC_DIR)/p8sfx_core_mux.sv
+	$(SRC_DIR)/p8sfx_core_mux.sv \
+	../models/sram_simple.sv
 
 # VHDL source files
 VHDL_SOURCES = \

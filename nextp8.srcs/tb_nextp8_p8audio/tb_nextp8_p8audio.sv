@@ -136,7 +136,9 @@ module tb_nextp8_p8audio;
 
     assign sram_clk_i = clock_50_i;
 
-    sram sram_inst(
+    sram_simple #(
+        .MEM_FILE("p8audio_test_rom.mem")
+    ) sram_inst(
         .read_en_i(read_en_i),
         .write_en_i(write_en_i),
         .addr_i(addr_i),
@@ -316,58 +318,6 @@ module tb_nextp8_p8audio;
     // Monitor post code changes
     always @(postcode_o) begin
         $display("[$monitor] time=%0t postcode=%d", $time, postcode_o);
-    end
-
-endmodule
-
-//====================
-// SRAM model (from sim_1)
-//====================
-module sram #(
-    parameter ADDR_WIDTH = 21,
-    parameter DATA_WIDTH = 16
-) (
-    input  wire                       read_en_i,
-    input  wire                       write_en_i,
-    input  wire [ADDR_WIDTH-1:0]      addr_i,
-    input  wire                       lb_i,
-    input  wire                       ub_i,
-    input  wire [DATA_WIDTH-1:0]      data_in_i,
-    output reg  [DATA_WIDTH-1:0]      data_out_o
-);
-
-    // Declare the memory array
-    reg [DATA_WIDTH-1:0] mem [2**ADDR_WIDTH-1:0];
-
-    // Behavioral model for read and write
-    always @(posedge write_en_i) begin
-        // Write operation
-        if (lb_i)
-            mem[addr_i][7:0] <= data_in_i[7:0];
-        if (ub_i)
-            mem[addr_i][15:8] <= data_in_i[15:8];
-    end
-
-    // Read operation (combinational)
-    always @(*) begin
-        if (read_en_i && ~write_en_i) begin
-            data_out_o = mem[addr_i];
-        end else begin
-            data_out_o = 'bz; // High impedance
-        end
-    end
-
-    integer i;
-    initial begin
-        // Initialize memory to zero
-        for (i=0; i<(2**ADDR_WIDTH); i=i+1) begin
-            mem[i] = 16'h0000;
-        end
-        
-        // Load ROM from .mem file if it exists
-        $display("Loading p8audio test ROM...");
-        $readmemh("p8audio_test_rom.mem", mem);
-        $display("ROM loaded");
     end
 
 endmodule

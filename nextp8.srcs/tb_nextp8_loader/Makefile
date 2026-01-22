@@ -33,7 +33,8 @@ SYSTEMVERILOG_SOURCES = \
 	$(SRC_DIR)/p8sfx_core_mux.sv \
 	$(TB_DIR)/spi_slave.sv \
 	$(TB_DIR)/tb_nextp8_loader.sv \
-	$(TB_DIR)/sdspi_model.sv
+	$(TB_DIR)/sdspi_model.sv \
+	../models/sram_simple.sv
 
 # VHDL source files
 VHDL_SOURCES = \
