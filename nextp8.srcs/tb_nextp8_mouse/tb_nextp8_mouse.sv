@@ -296,8 +296,10 @@ task send_mouse_movement;
             $finish(1);
         end
         mouse_model.send_movement_packet(left_btn, right_btn, middle_btn, x_movement, y_movement, z_movement);
-        // Wait for transmission to complete (~11us at 1MHz, ~550 cycles @ 50MHz)
-        repeat(550) @(posedge clock_50_i);
+        // Wait for transmission to complete
+        // 4-byte packet: 4 bytes × 11 bits × ~10μs/bit at 10kHz PS/2 clock = ~440μs
+        // Add margin for queuing and processing
+        #500000; // 500μs
     end
 endtask
 
@@ -376,7 +378,7 @@ initial begin
     // Wait for POST code 20 (waiting for TEST_3 - right button)
     wait(postcode_o == 6'd20);
     $display("Time %t: ROM waiting for right button TEST_3", $time);
-    #10000;
+    #100000; // Wait 100μs before sending
 
     // Send mouse packet with right button pressed
     $display("Time %t: Sending mouse movement with right button: X=+1, Y=+1", $time);

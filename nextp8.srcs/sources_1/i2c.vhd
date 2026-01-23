@@ -65,6 +65,7 @@ ARCHITECTURE logic OF i2c_master IS
   SIGNAL data_tx       : STD_LOGIC_VECTOR(7 DOWNTO 0);   --latched in data to write to slave
   SIGNAL data_rx       : STD_LOGIC_VECTOR(7 DOWNTO 0);   --data received from slave
   SIGNAL bit_cnt       : INTEGER RANGE 0 TO 7 := 7;      --tracks bit number in transaction
+  SIGNAL sample_idx    : INTEGER RANGE 0 TO 7 := 7;      --bit index for current falling edge sample
   SIGNAL stretch       : STD_LOGIC := '0';               --identifies if slave is stretching scl
 BEGIN
 
