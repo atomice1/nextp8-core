@@ -49,6 +49,7 @@ SIM_DIRS = nextp8.srcs/tb_nextp8_boot \
            nextp8.srcs/tb_mouse \
            nextp8.srcs/tb_nextp8_keyboard \
            nextp8.srcs/tb_nextp8_mouse \
+           nextp8.srcs/tb_i2c_rtc_test
 
 # Output files
 BITSTREAM = $(IMPL_DIR)/$(TOP_MODULE).bit
@@ -89,6 +90,7 @@ help:
 	@echo "  make test-tb_nextp8_p8audio   - Run tb_nextp8_p8audio (integrated audio test)"
 	@echo "  make test-tb_waveform_gen     - Run tb_waveform_gen (waveform generation test)"
 	@echo "  make test-tb_memaccess        - Run tb_memaccess (memory access validation)"
+	@echo "  make test-tb_i2c_rtc          - Run i2c_rtc_tb (I2C RTC readback test)"
 	@echo "  make test-tb_ps2_interface    - Run tb_ps2_interface (PS/2 HOST mode)"
 	@echo "  make test-tb_ps2_interface_device - Run tb_ps2_interface_device (PS/2 DEVICE mode)"
 	@echo "  make test-ps2_interface_comms - Run test_ps2_interface_comms (ps2_interface communication test)"
@@ -159,7 +161,7 @@ regenerate-ip:
 test: test-quick
 
 # test-quick runs all quick tests (excludes slow tests)
-test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen test-tb_ps2_interface test-tb_ps2_interface_device test-ps2_interface_comms test-keyboard_device test-mouse_device test-tb_keyboard test-tb_mouse
+test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen test-tb_ps2_interface test-tb_ps2_interface_device test-ps2_interface_comms test-keyboard_device test-mouse_device test-tb_keyboard test-tb_mouse test-tb_i2c_rtc
 	@echo "=== Quick tests complete ==="
 
 # test-slow runs only slow tests
@@ -208,6 +210,11 @@ test-tb_nextp8_p8audio:
 test-tb_waveform_gen:
 	@echo "=== Running tb_waveform_gen: tb_waveform_gen (waveform generation test) ==="
 	@$(MAKE) -C nextp8.srcs/tb_waveform_gen || (echo "ERROR: tb_waveform_gen failed"; exit 1)
+	@echo ""
+
+test-tb_i2c_rtc:
+	@echo "=== Running tb_i2c_rtc: i2c_rtc_tb (I2C RTC readback test) ==="
+	@$(MAKE) -C nextp8.srcs/tb_i2c_rtc_test || (echo "ERROR: tb_i2c_rtc failed"; exit 1)
 	@echo ""
 
 test-tb_ps2_interface:
