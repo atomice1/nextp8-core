@@ -1296,23 +1296,15 @@ end
 
 //-------------- user timer -----------------
 
-reg [31:0] utimer_1mhz=0;
-// CDC synchronizers for utimer_1mhz
-(* ASYNC_REG = "TRUE" *) reg [31:0] utimer_1mhz_d, utimer_1mhz_q;
-reg [31:0] utimer_1khz=0;
-// CDC synchronizers for utimer_1khz
-(* ASYNC_REG = "TRUE" *) reg [31:0] utimer_1khz_d, utimer_1khz_q;
+reg [63:0] utimer_64bit=0;
+// CDC synchronizers for utimer_64bit
+(* ASYNC_REG = "TRUE" *) reg [63:0] utimer_64bit_d, utimer_64bit_q;
 reg [3:0]  utcnt_1mhz=0;
-reg [13:0] utcnt_1khz=0;
 always @(negedge clk_sys)
 begin
-    if (utcnt_1mhz<4'd10) utcnt_1mhz<=utcnt_1mhz+6'd1; else begin
-        utimer_1mhz <= utimer_1mhz + 31'd1;
-        utcnt_1mhz<=6'd0;
-    end
-    if (utcnt_1khz<15'd10999) utcnt_1khz<=utcnt_1khz+6'd1; else begin
-        utimer_1khz <= utimer_1khz + 31'd1;
-        utcnt_1khz<=15'd0;
+    if (utcnt_1mhz<4'd10) utcnt_1mhz<=utcnt_1mhz+4'd1; else begin
+        utimer_64bit <= utimer_64bit + 64'd1;
+        utcnt_1mhz<=4'd0;
     end
 end
 
@@ -1643,10 +1635,8 @@ begin
     uart_ra_q <= uart_ra_d;
     uart_wa_d <= uart_wa;
     uart_wa_q <= uart_wa_d;
-    utimer_1mhz_d <= utimer_1mhz;
-    utimer_1mhz_q <= utimer_1mhz_d;
-    utimer_1khz_d <= utimer_1khz;
-    utimer_1khz_q <= utimer_1khz_d;
+    utimer_64bit_d <= utimer_64bit;
+    utimer_64bit_q <= utimer_64bit_d;
     qlsd_data_d <= qlsd_data;
     qlsd_data_q <= qlsd_data_d;
     js0_d <= js0;
@@ -1661,8 +1651,8 @@ end
 // ---------------- Memory mapped ports ------------------------------------
 // -------------------------------------------------------------------------
 
-reg [15:0] utbuf_1mhz;
-reg [15:0] utbuf_1khz;
+reg [63:0] utimer_latched;     // Latched value for atomic reads
+reg [1:0]  utimer_last_slice;  // Track last read slice
 reg [31:0] debug_reg;
 
 always @(posedge mclk)
@@ -1692,11 +1682,41 @@ begin
             //-------------- Pi UART ----------------------------------------------------------
             if (cpu_addr[7:1]==7'b0010010 && cpu_rd && !cpu_ds[0]) memio_out <= {uart_dout_q,uart_dout_q}; //h800025
             if (cpu_addr[7:1]==7'b0010010 && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q, 4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q}; //h800024
-            //------------- User timers -------------------------
-            if (cpu_addr[7:1]==7'b0010111 && cpu_rd) memio_out <= utimer_1mhz_q[31:16]; utbuf_1mhz<=utimer_1mhz_q[15:0];  //h80002E
-            if (cpu_addr[7:1]==7'b0011000 && cpu_rd) memio_out <= utbuf_1mhz;  //h800030
-            if (cpu_addr[7:1]==7'b0011001 && cpu_rd) memio_out <= utimer_1khz_q[31:16]; utbuf_1khz<=utimer_1khz_q[15:0];  //h800032
-            if (cpu_addr[7:1]==7'b0011010 && cpu_rd) memio_out <= utbuf_1khz;  //h800034
+            //------------- User timers (64-bit 1MHz) -------------------------
+            // Reading any of the upper 3 words latches the current timer value
+            // Subsequent reads of lower words use the latched value
+            if (cpu_addr[7:1]==7'b0010111 && cpu_rd) begin  //h80002E
+                utimer_latched <= utimer_64bit_q;
+                utimer_last_slice <= 2'd0;
+                memio_out <= utimer_64bit_q[63:48];
+            end
+            if (cpu_addr[7:1]==7'b0011000 && cpu_rd) begin  //h800030
+                if (utimer_last_slice != 2'd0) begin
+                    utimer_latched <= utimer_64bit_q;
+                    memio_out <= utimer_64bit_q[47:32];
+                end else begin
+                    memio_out <= utimer_latched[47:32];
+                end
+                utimer_last_slice <= 2'd1;
+            end
+            if (cpu_addr[7:1]==7'b0011001 && cpu_rd) begin  //h800032
+                if (utimer_last_slice != 2'd1) begin
+                    utimer_latched <= utimer_64bit_q;
+                    memio_out <= utimer_64bit_q[31:16];
+                end else begin
+                    memio_out <= utimer_latched[31:16];
+                end
+                utimer_last_slice <= 2'd2;
+            end
+            if (cpu_addr[7:1]==7'b0011010 && cpu_rd) begin  //h800034
+                if (utimer_last_slice != 2'd2) begin
+                    utimer_latched <= utimer_64bit_q;
+                    memio_out <= utimer_64bit_q[15:0];
+                end else begin
+                    memio_out <= utimer_latched[15:0];
+                end
+                utimer_last_slice <= 2'd3;
+            end
             //------------- digital audio -----------------------------
             if (cpu_addr[7:1]==7'b0011011 && cpu_rd) memio_out <= {3'd0,da_address}; //h800036
             //------------- debug registers ------------------------------
