@@ -267,7 +267,7 @@ USR_ACCESSE2 USR_ACCESS (
 wire [31:0] cpu_addr;
 wire [1:0] cpu_ds;
 wire [15:0] cpu_dout;
-wire [2:0] cpu_ipl = 3'b111;
+wire [2:0] cpu_ipl;
 wire cpu_rw;
 wire [1:0] cpu_busstate;
 wire cpu_rd = (cpu_busstate == 2'b00) || (cpu_busstate == 2'b10);
@@ -853,6 +853,12 @@ wire video_hs, video_vs;
 wire iblank;
 wire vfront;
 
+// Vblank interrupt control
+reg vsync_irq_enable;
+reg vsync_irq;
+reg vsync_ack;
+// CDC synchronizer for video_vs (clk_video -> mclk)
+(* ASYNC_REG = "TRUE" *) reg video_vs_mclk_d, video_vs_mclk_q;
 
 // Video RAM data synchronizer (RAM clk_video domain -> p8video clk_video domain)
 // The RAM has synchronous outputs with 1-cycle latency, so we register the data
@@ -918,20 +924,21 @@ p8video p8video (
     .VB(video_b)
     );
 
-// VGA outputs use clk65 domain CDC synchronizers (see video_r_q, video_g_q, etc.)
-assign vsync_o = video_vs_q;
-assign hsync_o = video_hs_q;
-//assign csync_o = vga_csync;
-
-assign rgb_r_o = video_r_q[7:4];
-assign rgb_g_o = video_g_q[7:4];
-assign rgb_b_o = video_b_q[7:4];
-
 // VGA clocks to latch RGB data in external DACs
 // vgaclk_o clocks ADV7125 (highest 4 bits), vgaclkn_o clocks 74ALVC574 (lowest 4 bits)
 // Use pixel clock for synchronous data transfer
 assign vgaclk_o = clk65;
 assign vgaclkn_o = ~clk65;
+
+// Vsync IRQ is set whenever vsync rises (in mclk domain)
+wire vsync_irq_reset = reset_mclk_q || vsync_ack;
+always @(posedge video_vs_mclk_q or posedge vsync_irq_reset) begin
+    if (vsync_irq_reset)        vsync_irq <= 1'b0;
+    else if (vsync_irq_enable)  vsync_irq <= 1'b1;
+end
+
+// IPL output: interrupt level 2 when vsync_irq is asserted
+assign cpu_ipl = { !vsync_irq, 1'b1, !vsync_irq };
 
 // -------------------------------------------------------------------------
 // ---------------------- Audio Subsystem Clocks ----------------------------
@@ -1628,6 +1635,12 @@ begin
     js1_q_prev <= js1_q;
 end
 
+// CDC synchronizer for video_vs (clk_video -> mclk)
+always @(posedge mclk) begin
+    video_vs_mclk_d <= video_vs;
+    video_vs_mclk_q <= video_vs_mclk_d;
+end
+
 // -------------------------------------------------------------------------
 // ---------------- Memory mapped ports ------------------------------------
 // -------------------------------------------------------------------------
@@ -1730,6 +1743,7 @@ begin
         js0_latched <= 8'd0;
         js1_latched <= 8'd0;
         mouse_buttons_latched <= 8'd0;
+        vsync_irq_enable <= 1'b0;
     end else begin
         // Latching input: only latch newly pressed keys/buttons (rising edge detection)
         // Only set bits that are high in current state but were low in previous state
@@ -1740,6 +1754,8 @@ begin
     end
 
     if (!reset_mclk_q && memio_go && memio_rd && cpu_wr) begin
+        // Default: clear vsync_ack, will be set on write to h80000F
+        vsync_ack <= 1'b0;
         if (cpu_addr[8] == 1'b0) begin
             // ------------  ql-sd io -------------------------------------------------
             if (cpu_addr[7:1]==7'b0000010 && cpu_wr ) qlsd_din <= cpu_dout[7:0];    //h800005
@@ -1754,6 +1770,10 @@ begin
             end
             // ------------ video ----------------------------------------------------
             if (cpu_addr[7:1]==7'b0000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[8]; //h80000E
+            if (cpu_addr[7:1]==7'b0000111 && cpu_wr && !cpu_ds[0]) begin  //h80000F (vsync interrupt control)
+                vsync_ack <= 1'b1;
+                vsync_irq_enable <= cpu_dout[0];
+            end
             //--------------- overlay ----------------------------------
             if (cpu_addr[7:1]==7'b0001000 && cpu_wr && !cpu_ds[1]) overlay_ctrl_sys <= cpu_dout[15:8]; //h800010
             // ------------ parameters -------------------------------------------------------
@@ -1849,6 +1869,15 @@ always @(posedge clk65) begin
     p8audio_pcm_out_65_d <= p8audio_pcm_out;
     p8audio_pcm_out_65_q <= p8audio_pcm_out_65_d;
 end
+
+// VGA outputs use clk65 domain CDC synchronizers
+assign vsync_o = video_vs_q;
+assign hsync_o = video_hs_q;
+//assign csync_o = vga_csync;
+
+assign rgb_r_o = video_r_q[7:4];
+assign rgb_g_o = video_g_q[7:4];
+assign rgb_b_o = video_b_q[7:4];
 
 // Mix digital audio (da_playing) with P8 audio (p8audio_pcm_out)
 // P8 audio is mono, send to both channels
