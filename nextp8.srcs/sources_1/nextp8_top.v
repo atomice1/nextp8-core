@@ -1766,13 +1766,13 @@ begin
             if (cpu_addr[7:1]==7'b0000001 && cpu_wr ) qlsd_div <= cpu_dout[7:0];    //h800003
             if (cpu_addr[7:1]==7'b0000101 && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end //h80000b
             //------------- post code -------------------------------------------------------
-            if (cpu_addr[7:1]==7'b0000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[5:0]; //h80000C
+            if (cpu_addr[7:1]==7'b0000110 && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[13:8]; //h80000C
             //--------------- reset ----------------------------------
             if (cpu_addr[7:1]==7'b0000110 && cpu_wr && !cpu_ds[0]) begin  //h80000D
                 reset_request_toggle_mclk <= ~reset_request_toggle_mclk;
             end
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[7:1]==7'b0000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[0]; //h80000E
+            if (cpu_addr[7:1]==7'b0000111 && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[8]; //h80000E
             //--------------- overlay ----------------------------------
             if (cpu_addr[7:1]==7'b0001000 && cpu_wr && !cpu_ds[1]) overlay_ctrl_sys <= cpu_dout[15:8]; //h800010
             // ------------ parameters -------------------------------------------------------
