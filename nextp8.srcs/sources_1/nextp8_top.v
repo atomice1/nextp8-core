@@ -320,7 +320,7 @@ wire [15:0] cpu_din =
     (overlay_back_mem || overlay_front_mem)? {vdout1_overlay} :
     16'hffff;
 
-TG68KdotC_Kernel #(0,0,0,0,0,0,0,1)
+TG68KdotC_Kernel #(0,1,0,0,0,0,0,1)
 tg68k (
     .clk            ( mclk              ),
     .nReset         ( ~reset         ),
