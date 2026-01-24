@@ -853,12 +853,6 @@ wire video_hs, video_vs;
 wire iblank;
 wire vfront;
 
-// Video CDC synchronizers (clk_video -> clk_sys for VGA outputs)
-(* ASYNC_REG = "TRUE" *) reg [7:0] video_r_sys_d, video_r_sys_q;
-(* ASYNC_REG = "TRUE" *) reg [7:0] video_g_sys_d, video_g_sys_q;
-(* ASYNC_REG = "TRUE" *) reg [7:0] video_b_sys_d, video_b_sys_q;
-(* ASYNC_REG = "TRUE" *) reg video_hs_sys_d, video_hs_sys_q;
-(* ASYNC_REG = "TRUE" *) reg video_vs_sys_d, video_vs_sys_q;
 
 // Video RAM data synchronizer (RAM clk_video domain -> p8video clk_video domain)
 // The RAM has synchronous outputs with 1-cycle latency, so we register the data
@@ -924,27 +918,14 @@ p8video p8video (
     .VB(video_b)
     );
 
-// Video CDC synchronizers (clk_video -> clk_sys for VGA outputs)
-always @(posedge mclk) begin
-    video_r_sys_d <= video_r;
-    video_r_sys_q <= video_r_sys_d;
-    video_g_sys_d <= video_g;
-    video_g_sys_q <= video_g_sys_d;
-    video_b_sys_d <= video_b;
-    video_b_sys_q <= video_b_sys_d;
-    video_hs_sys_d <= video_hs;
-    video_hs_sys_q <= video_hs_sys_d;
-    video_vs_sys_d <= video_vs;
-    video_vs_sys_q <= video_vs_sys_d;
-end
-
-assign vsync_o = video_vs_sys_q;
-assign hsync_o = video_hs_sys_q;
+// VGA outputs use clk65 domain CDC synchronizers (see video_r_q, video_g_q, etc.)
+assign vsync_o = video_vs_q;
+assign hsync_o = video_hs_q;
 //assign csync_o = vga_csync;
 
-assign rgb_r_o = video_r_sys_q[7:4];
-assign rgb_g_o = video_g_sys_q[7:4];
-assign rgb_b_o = video_b_sys_q[7:4];
+assign rgb_r_o = video_r_q[7:4];
+assign rgb_g_o = video_g_q[7:4];
+assign rgb_b_o = video_b_q[7:4];
 
 // VGA clocks to latch RGB data in external DACs
 // vgaclk_o clocks ADV7125 (highest 4 bits), vgaclkn_o clocks 74ALVC574 (lowest 4 bits)
