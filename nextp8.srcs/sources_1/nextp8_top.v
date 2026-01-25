@@ -860,6 +860,18 @@ reg vsync_ack;
 // CDC synchronizer for video_vs (clk_video -> mclk)
 (* ASYNC_REG = "TRUE" *) reg video_vs_mclk_d, video_vs_mclk_q;
 
+// Reset synchronizer for mclk domain (async reset from clk_sys)
+(* ASYNC_REG = "TRUE" *) reg reset_mclk_d, reset_mclk_q;
+always @(posedge mclk or posedge reset) begin
+    if (reset) begin
+        reset_mclk_d <= 1'b1;
+        reset_mclk_q <= 1'b1;
+    end else begin
+        reset_mclk_d <= 1'b0;
+        reset_mclk_q <= reset_mclk_d;
+    end
+end
+
 // Video RAM data synchronizer (RAM clk_video domain -> p8video clk_video domain)
 // The RAM has synchronous outputs with 1-cycle latency, so we register the data
 // to provide stable input to p8video's DDR timing logic
@@ -1024,18 +1036,6 @@ always @(posedge clk_pcm_8x or posedge reset) begin
     end else begin
         reset_pcm_8x_d <= 1'b0;
         reset_pcm_8x_q <= reset_pcm_8x_d;
-    end
-end
-
-// Reset synchronizer for mclk domain (async reset from clk_sys)
-(* ASYNC_REG = "TRUE" *) reg reset_mclk_d, reset_mclk_q;
-always @(posedge mclk or posedge reset) begin
-    if (reset) begin
-        reset_mclk_d <= 1'b1;
-        reset_mclk_q <= 1'b1;
-    end else begin
-        reset_mclk_d <= 1'b0;
-        reset_mclk_q <= reset_mclk_d;
     end
 end
 
