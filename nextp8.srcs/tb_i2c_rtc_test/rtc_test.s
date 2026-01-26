@@ -167,6 +167,7 @@ c6_rise:
     bne     fail
 
     /* Final clear: wait for year read to complete */
+    move.b  #0x00, I2C_CTRL
 c6_final:
     move.b  I2C_STATUS, %d7
     btst    #0, %d7
@@ -175,9 +176,6 @@ c6_final:
     bne     fail
     /* Capture year */
     move.b  I2C_DATA, %d3                /* d3 = year (BCD) */
-
-    /* Drop enable to complete transaction */
-    move.b  #0x00, I2C_CTRL
 
     /* POST 6: All data read, packing into 32-bit value */
     move.b  #6, POST_CODE
@@ -202,12 +200,114 @@ c6_final:
     /* POST 8: Success! */
     move.b  #8, POST_CODE
 
+wait_idle2:
+    /* Wait for I2C to be idle before starting */
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    bne.s   wait_idle2
+
+    /* POST 9: I2C idle, starting sequence */
+    move.b  #9, POST_CODE
+
+    /* Cmd1: write register address 0x04 (date) */
+    move.b  #0x04, I2C_DATA
+    move.b  #I2C_ENA_BIT, I2C_CTRL       /* ena=1, rw=0 (write) */
+addr_rise:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    beq.s   addr_rise                      /* wait busy rise */
+    btst    #1, %d7
+    bne     fail
+
+    /* POST 10: Cmd1 latched, Cmd2 (read date) */
+    move.b  #10, POST_CODE
+
+    /* Cmd2: read date */
+    move.b  #0x03, I2C_CTRL                     /* ena=1, rw=1 (0x01|0x02) */
+addr_clear:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    bne.s   addr_clear                         /* wait busy clear */
+    btst    #1, %d7
+    bne     fail
+date_rise:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    beq.s   date_rise                      /* wait busy rise */
+    btst    #1, %d7
+    bne     fail
+date_clear:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    bne.s   date_clear                     /* wait busy clear */
+    btst    #1, %d7
+    bne     fail
+    /* Capture date */
+    move.b  I2C_DATA, %d1                /* d1 = date (BCD) */
+    /* POST 11: Date read */
+    move.b  #11, POST_CODE
+month_rise:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    beq.s   month_rise                      /* wait busy rise */
+    btst    #1, %d7
+    bne     fail
+month_clear:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    bne.s   month_clear                     /* wait busy clear */
+    /* Capture month  */
+    move.b  I2C_DATA, %d2                /* d2 = month (BCD) */
+    /* POST 12: Month read */
+    move.b  #12, POST_CODE
+    btst    #1, %d7
+    bne     fail
+year_rise:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    beq.s   year_rise                      /* wait busy rise */
+    btst    #1, %d7
+    bne     fail
+    /* Final clear: wait for year read to complete */
+    move.b  #0x00, I2C_CTRL
+year_final:
+    move.b  I2C_STATUS, %d7
+    btst    #0, %d7
+    bne.s   year_final                     /* poll busy until clear */
+    btst    #1, %d7
+    bne     fail
+    /* Capture year */
+    move.b  I2C_DATA, %d3                /* d3 = year (BCD) */
+
+    /* POST 13: All data read, packing into 32-bit value */
+    move.b  #13, POST_CODE
+
+    /* Pack date into 32-bit value: 0xDDMM20YY format (DDMMYYYY in BCD) */
+    /* d1=date, d2=month, d3=year */
+    moveq   #0, %d4
+    move.b  %d1, %d4                     /* d4.L = date */
+    lsl.l   #8, %d4                      /* d4 = date << 8 (0x0000DD00) */
+    or.b    %d2, %d4                     /* d4 |= month in low byte (0x0000DDMM) */
+    lsl.l   #8, %d4                      /* d4 = (date,month) << 8 (0x00DDMM00) */
+    or.b    #0x20, %d4                   /* d4 |= 0x20 (0x00DDMM20) */
+    lsl.l   #8, %d4                      /* d4 = (date,month,20) << 8 (0xDDMM2000) */
+    or.b    %d3, %d4                     /* d4 |= year (0xDDMM20YY) */
+
+    /* POST 14: Date packed, writing to debug register */
+    move.b  #14, POST_CODE
+
+    /* Write packed date to debug register as 32-bit value */
+    move.l  %d4, DEBUG_REG
+
+    /* POST 15: Success! */
+    move.b  #15, POST_CODE
+
     /* Test complete - loop forever */
     bra     infinite_loop
 
 fail:
-    /* POST 15: Error occurred */
-    move.b  #15, POST_CODE
+    /* POST 16: Error occurred */
+    move.b  #16, POST_CODE
     /* Fall through to infinite loop */
 
 infinite_loop:

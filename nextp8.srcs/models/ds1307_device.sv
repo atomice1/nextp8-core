@@ -28,6 +28,7 @@ module ds1307_device (
     reg need_ack;       // Drive SDA low during ACK bit (9th clock)
     reg just_acked;     // Track that ACK period just completed, safe to transition state
     reg ack_bit_seen;   // Flag: have we seen the 9th posedge with ACK?
+    reg master_ack;     // Master's ACK (0) or NACK (1) during DATA_TX
     
     initial begin
         regs[8'h00] = 8'h56;  // Seconds
@@ -48,6 +49,7 @@ module ds1307_device (
         need_ack = 0;
         just_acked = 0;
         ack_bit_seen = 0;
+        master_ack = 1;
         // Output ports: 0 = drive low, 1 = release (high-Z)
         i2c_scl_out = 1'b1;
         i2c_sda_out = 1'b1;
@@ -147,19 +149,10 @@ module ds1307_device (
             bit_count <= bit_count + 1;
         end else if (state == DATA_TX) begin
             // Transmitting data to master
-            // On 9th bit, sample master's ACK
+            // On 9th bit, sample master's ACK/NACK
             if (bit_count == 8) begin
-                $display("[DS1307] %0t posedge DATA_TX: 9th bit (ACK), bit_count == 8 sda=%b", $time, i2c_sda_in);
-                if (i2c_sda_in == 1'b0) begin
-                    // Master ACK - continue sending next byte
-                    reg_addr <= reg_addr + 1;  // Auto-increment
-                    shift_reg <= regs[reg_addr + 1];
-                    bit_count <= 0;
-                    $display("[DS1307] %0t Master ACK, sending next byte from addr=0x%02x", $time, reg_addr + 1);
-                end else begin
-                    // Master NACK - end of read
-                    $display("[DS1307] %0t Master NACK, ending read", $time);
-                end
+                master_ack <= i2c_sda_in;  // Sample: 0=ACK, 1=NACK
+                $display("[DS1307] %0t posedge DATA_TX: 9th bit (master %s) sda=%b", $time, i2c_sda_in ? "NACK" : "ACK", i2c_sda_in);
             end
             $display("[DS1307] %0t posedge DATA_TX: bit_count=%d->%d", $time, bit_count, (bit_count + 1));
         end
@@ -215,6 +208,20 @@ module ds1307_device (
                 reg_addr <= reg_addr + 1;
                 bit_count <= 0;
                 $display("[DS1307] %0t Data stored to reg[0x%02x], auto-increment to 0x%02x", $time, reg_addr, reg_addr + 1);
+            end
+        end else if (state == DATA_TX && bit_count == 8) begin
+            // After 9th bit (master ACK/NACK sampled on posedge), act on negedge
+            if (master_ack == 1'b0) begin
+                // Master ACK - continue sending next byte
+                reg_addr <= reg_addr + 1;
+                shift_reg <= regs[reg_addr + 1];
+                bit_count <= 0;
+                $display("[DS1307] %0t Master ACK, sending next byte from addr=0x%02x", $time, reg_addr + 1);
+            end else begin
+                // Master NACK - end of read
+                state <= IDLE;
+                bit_count <= 0;
+                $display("[DS1307] %0t Master NACK, ending read", $time);
             end
         end else if (state == DATA_TX && bit_count < 8) begin
             // Shift out next data bit on negedge SCL

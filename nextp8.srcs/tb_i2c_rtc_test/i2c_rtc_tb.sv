@@ -283,7 +283,8 @@ nextp8 nextp8(
 wire [5:0] post_code;
 assign post_code = postcode_o;
 
-parameter POST_TARGET = 8;  // Success post code
+parameter POST_TARGET1 = 8;  // Success post code 1
+parameter POST_TARGET2 = 15;  // Success post code 2
 
 // Expected date value: 0x24122025 for 2025-12-24 (Christmas Eve 2025)
 parameter EXPECTED_DATE = 32'h24122025;
@@ -299,7 +300,7 @@ reg debug_reg_written = 0;
 initial begin
     $display("=== I2C RTC Test Starting ===");
     $display("Expected date: 0x%08x (2025-12-25)", EXPECTED_DATE);
-    $monitor("[$monitor] time=%0t POST=%0d (target=%0d)", $time, post_code, POST_TARGET);
+    $monitor("[$monitor] time=%0t POST=%0d (target=%0d)", $time, post_code, POST_TARGET2);
 end 
 
 // Timeout - fail if we don't complete in reasonable time
@@ -311,7 +312,7 @@ end
 
 // Monitor POST code
 always @(posedge clock_50_i) begin
-    if (post_code == POST_TARGET) begin
+    if (post_code == POST_TARGET1) begin
         // Success POST code reached
         // Now we need to read the debug register value
         // The debug register is at 0x800062 in the memory map
@@ -326,15 +327,21 @@ always @(posedge clock_50_i) begin
             i2c_sniffer_inst.print_statistics();
             $finish(1);
         end
-        $display("=== SUCCESS: POST code %0d reached ===", POST_TARGET);
+        $display("Debug register (0x800062) matched expected value 0x%08x", EXPECTED_DATE);
+    end else if (post_code == POST_TARGET2) begin
+        #1000;
+        
+        if (nextp8.debug_reg !== EXPECTED_DATE) begin
+            $error("RTC date mismatch: got 0x%08x expected 0x%08x", nextp8.debug_reg, EXPECTED_DATE);
+            i2c_sniffer_inst.print_statistics();
+            $finish(1);
+        end
+        $display("=== SUCCESS: POST code %0d reached ===", POST_TARGET2);
         $display("=== RTC date reading test completed successfully ===");
         $display("Debug register (0x800062) matched expected value 0x%08x", EXPECTED_DATE);
         
-        // Print I2C transaction statistics
-        i2c_sniffer_inst.print_statistics();
-        
         $finish(0);
-    end else if (post_code == 15) begin
+    end else if (post_code == 16) begin
         // Error POST code
         $display("=== FAILURE: Error POST code reached ===");
         i2c_sniffer_inst.print_statistics();

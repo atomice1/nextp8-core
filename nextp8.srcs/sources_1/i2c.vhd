@@ -32,6 +32,7 @@
 LIBRARY ieee;
 USE ieee.std_logic_1164.all;
 USE ieee.std_logic_unsigned.all;
+USE ieee.numeric_std.all;
 
 ENTITY i2c_master IS
   GENERIC(
@@ -217,7 +218,6 @@ BEGIN
               ack_error <= '0';                     --reset acknowledge error output
             END IF;
           WHEN slv_ack1 =>                          --receiving slave acknowledge (command)
-            ASSERT false REPORT "I2C slv_ack1: sda=" & STD_LOGIC'IMAGE(sda) SEVERITY note;
             IF(sda /= '0' OR ack_error = '1') THEN  --no-acknowledge or previous no-acknowledge
               ack_error <= '1';                     --set error output if no-acknowledge
             END IF;
