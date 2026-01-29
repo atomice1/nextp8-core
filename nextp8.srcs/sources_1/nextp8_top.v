@@ -131,52 +131,52 @@ parameter PATCH_VERSION = 8'h00;
 parameter VERSION = {API_VERSION, MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION};
 
 // MMIO register addresses
-localparam [7:0] ADDR_SDSPI_WRITE_ENABLE       = 8'h01;
-localparam [7:0] ADDR_SDSPI_DIVIDER            = 8'h03;
-localparam [7:0] ADDR_SDSPI_DATA_IN            = 8'h05;
-localparam [7:0] ADDR_SDSPI_DATA_OUT           = 8'h07;
-localparam [7:0] ADDR_SDSPI_READY              = 8'h09;
-localparam [7:0] ADDR_SDSPI_CHIP_SELECT        = 8'h0B;
-localparam [7:0] ADDR_POST_CODE                = 8'h0C;
-localparam [7:0] ADDR_RESET_TYPE               = 8'h0D;
-localparam [7:0] ADDR_RESET_REQ                = 8'h0D;
-localparam [7:0] ADDR_VFRONT                   = 8'h0E;
-localparam [7:0] ADDR_VFRONTREQ                = 8'h0E;
-localparam [7:0] ADDR_VBLANK_INTR_CTRL         = 8'h0F;
-localparam [7:0] ADDR_OVERLAY_CONTROL          = 8'h10;
-localparam [7:0] ADDR_PARAMS                   = 8'h12;
-localparam [7:0] ADDR_BUILD_TIMESTAMP_HI       = 8'h14;
-localparam [7:0] ADDR_BUILD_TIMESTAMP_LO       = 8'h16;
-localparam [7:0] ADDR_HW_VERSION_HI            = 8'h18;
-localparam [7:0] ADDR_HW_VERSION_LO            = 8'h1A;
-localparam [7:0] ADDR_I2C_DATA                 = 8'h21;
-localparam [7:0] ADDR_I2C_CTRL                 = 8'h23;
-localparam [7:0] ADDR_I2C_STATUS               = 8'h23;
-localparam [7:0] ADDR_UART_CTRL                = 8'h24;
-localparam [7:0] ADDR_UART_DATA                = 8'h25;
-localparam [7:0] ADDR_UART_BAUD_DIV            = 8'h26;
-localparam [7:0] ADDR_ESP_CTRL                 = 8'h28;
-localparam [7:0] ADDR_ESP_DATA                 = 8'h29;
-localparam [7:0] ADDR_ESP_BAUD_DIV             = 8'h2A;
-localparam [7:0] ADDR_UTIMER_1MHZ              = 8'h2E;
-localparam [7:0] ADDR_UTIMER_1MHZ_6348         = 8'h2E;
-localparam [7:0] ADDR_UTIMER_1MHZ_4732         = 8'h30;
-localparam [7:0] ADDR_UTIMER_1MHZ_3116         = 8'h32;
-localparam [7:0] ADDR_UTIMER_1MHZ_1500         = 8'h34;
-localparam [7:0] ADDR_DA_CONTROL               = 8'h36;
-localparam [7:0] ADDR_DA_PERIOD                = 8'h38;
-localparam [7:0] ADDR_KEYBOARD_MATRIX          = 8'h40;
-localparam [7:0] ADDR_JOYSTICK0                = 8'h60;
-localparam [7:0] ADDR_JOYSTICK1                = 8'h61;
-localparam [7:0] ADDR_DEBUG_REG_HI             = 8'h62;
-localparam [7:0] ADDR_DEBUG_REG_LO             = 8'h64;
-localparam [7:0] ADDR_JOYSTICK0_LATCHED        = 8'h66;
-localparam [7:0] ADDR_JOYSTICK1_LATCHED        = 8'h67;
-localparam [7:0] ADDR_MOUSE_X                  = 8'h68;
-localparam [7:0] ADDR_MOUSE_Y                  = 8'h6A;
-localparam [7:0] ADDR_MOUSE_Z                  = 8'h6C;
-localparam [7:0] ADDR_MOUSE_BUTTONS            = 8'h6E;
-localparam [7:0] ADDR_MOUSE_BUTTONS_LATCHED    = 8'h6F;
+localparam [7:0] ADDR_PARAMS                   = 8'h00;
+localparam [7:0] ADDR_BUILD_TIMESTAMP_HI       = 8'h02;
+localparam [7:0] ADDR_BUILD_TIMESTAMP_LO       = 8'h04;
+localparam [7:0] ADDR_HW_VERSION_HI            = 8'h06;
+localparam [7:0] ADDR_HW_VERSION_LO            = 8'h08;
+localparam [7:0] ADDR_DEBUG_REG_HI             = 8'h0A;
+localparam [7:0] ADDR_DEBUG_REG_LO             = 8'h0C;
+localparam [7:0] ADDR_POST_CODE                = 8'h0F;
+localparam [7:0] ADDR_RESET_TYPE               = 8'h11;
+localparam [7:0] ADDR_RESET_REQ                = 8'h11;
+localparam [7:0] ADDR_VBLANK_INTR_CTRL         = 8'h13;
+localparam [7:0] ADDR_UTIMER_1MHZ              = 8'h14;
+localparam [7:0] ADDR_UTIMER_1MHZ_6348         = 8'h14;
+localparam [7:0] ADDR_UTIMER_1MHZ_4732         = 8'h16;
+localparam [7:0] ADDR_UTIMER_1MHZ_3116         = 8'h18;
+localparam [7:0] ADDR_UTIMER_1MHZ_1500         = 8'h1A;
+localparam [7:0] ADDR_VFRONT                   = 8'h1D;
+localparam [7:0] ADDR_VFRONTREQ                = 8'h1D;
+localparam [7:0] ADDR_OVERLAY_CONTROL          = 8'h1F;
+localparam [7:0] ADDR_SDSPI_WRITE_ENABLE       = 8'h21;
+localparam [7:0] ADDR_SDSPI_DIVIDER            = 8'h23;
+localparam [7:0] ADDR_SDSPI_DATA_IN            = 8'h25;
+localparam [7:0] ADDR_SDSPI_DATA_OUT           = 8'h27;
+localparam [7:0] ADDR_SDSPI_READY              = 8'h29;
+localparam [7:0] ADDR_SDSPI_CHIP_SELECT        = 8'h2B;
+localparam [7:0] ADDR_UART_CTRL                = 8'h31;
+localparam [7:0] ADDR_UART_DATA                = 8'h33;
+localparam [7:0] ADDR_UART_BAUD_DIV            = 8'h34;
+localparam [7:0] ADDR_ESP_CTRL                 = 8'h37;
+localparam [7:0] ADDR_ESP_DATA                 = 8'h39;
+localparam [7:0] ADDR_ESP_BAUD_DIV             = 8'h3A;
+localparam [7:0] ADDR_I2C_DATA                 = 8'h3D;
+localparam [7:0] ADDR_I2C_CTRL                 = 8'h3F;
+localparam [7:0] ADDR_I2C_STATUS               = 8'h3F;
+localparam [7:0] ADDR_DA_CONTROL               = 8'h40;
+localparam [7:0] ADDR_DA_PERIOD                = 8'h42;
+localparam [7:0] ADDR_JOYSTICK0                = 8'h49;
+localparam [7:0] ADDR_JOYSTICK1                = 8'h4B;
+localparam [7:0] ADDR_JOYSTICK0_LATCHED        = 8'h4D;
+localparam [7:0] ADDR_JOYSTICK1_LATCHED        = 8'h4F;
+localparam [7:0] ADDR_MOUSE_X                  = 8'h50;
+localparam [7:0] ADDR_MOUSE_Y                  = 8'h52;
+localparam [7:0] ADDR_MOUSE_Z                  = 8'h54;
+localparam [7:0] ADDR_MOUSE_BUTTONS            = 8'h57;
+localparam [7:0] ADDR_MOUSE_BUTTONS_LATCHED    = 8'h59;
+localparam [7:0] ADDR_KEYBOARD_MATRIX          = 8'h60;
 localparam [7:0] ADDR_KEYBOARD_MATRIX_LATCHED  = 8'h80;
 
 reg [15:0] params = 16'd0;
@@ -1706,11 +1706,11 @@ begin
             if (cpu_addr[7:1]==ADDR_SDSPI_DATA_OUT[7:1] && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q };
             if (cpu_addr[7:1]==ADDR_SDSPI_READY[7:1] && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready};
             //--------------- reset ----------------------------------
-            if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_rd && !cpu_ds[0]) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q};
+            if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_rd) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q};
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_rd && !cpu_ds[1]) memio_out <= {7'b0, vfront, 7'b0, vfront};
+            if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_rd) memio_out <= {7'b0, vfront, 7'b0, vfront};
             //--------------- overlay ----------------------------------
-            if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_rd && !cpu_ds[1]) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys};
+            if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_rd) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys};
             //-------------- Build Info --------------------------------------------------
             if (cpu_addr[7:1]==ADDR_BUILD_TIMESTAMP_HI[7:1] && cpu_rd) memio_out <= build_timestamp[31:16];
             if (cpu_addr[7:1]==ADDR_BUILD_TIMESTAMP_LO[7:1] && cpu_rd) memio_out <= build_timestamp[15:0];
@@ -1720,11 +1720,11 @@ begin
             if (cpu_addr[7:1]==ADDR_I2C_DATA[7:1] && cpu_rd ) memio_out <= {i2c_din_q,i2c_din_q};
             if (cpu_addr[7:1]==ADDR_I2C_STATUS[7:1] && cpu_rd ) memio_out <= { 14'b0, i2c_err, i2c_busy };
             //-------------- ESP UART ----------------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_ESP_DATA[7:1] && cpu_rd && !cpu_ds[0]) memio_out <= {esp_dout_q,esp_dout_q};
-            if (cpu_addr[7:1]==ADDR_ESP_CTRL[7:1] && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q, 4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q};
+            if (cpu_addr[7:1]==ADDR_ESP_DATA[7:1] && cpu_rd) memio_out <= {esp_dout_q,esp_dout_q};
+            if (cpu_addr[7:1]==ADDR_ESP_CTRL[7:1] && cpu_rd) memio_out <= {4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q, 4'b0,esp_wa_q,esp_ra_q,esp_rd_q,esp_dr_q};
             //-------------- Pi UART ----------------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_UART_DATA[7:1] && cpu_rd && !cpu_ds[0]) memio_out <= {uart_dout_q,uart_dout_q};
-            if (cpu_addr[7:1]==ADDR_UART_CTRL[7:1] && cpu_rd && !cpu_ds[1]) memio_out <= {4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q, 4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q};
+            if (cpu_addr[7:1]==ADDR_UART_DATA[7:1] && cpu_rd) memio_out <= {uart_dout_q,uart_dout_q};
+            if (cpu_addr[7:1]==ADDR_UART_CTRL[7:1] && cpu_rd) memio_out <= {4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q, 4'b0,uart_wa_q,uart_ra_q,uart_rd_q,uart_dr_q};
             //------------- User timers (64-bit 1MHz) -------------------------
             // Reading any of the upper 3 words latches the current timer value
             // Subsequent reads of lower words use the latched value
@@ -1770,14 +1770,17 @@ begin
             //------------- latching keyboard (btnp) ----------------
             if (cpu_addr[7:5]==ADDR_KEYBOARD_MATRIX_LATCHED[7:5] && cpu_rd) memio_out <= {kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8], kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8]};
             //------------- joystick -----------------------------
-            if (cpu_addr[7:1]==ADDR_JOYSTICK0[7:1] && cpu_rd) memio_out <= {js0_q, js1_q};
+            if (cpu_addr[7:1]==ADDR_JOYSTICK0[7:1] && cpu_rd) memio_out <= {js0_q, js0_q};
+            if (cpu_addr[7:1]==ADDR_JOYSTICK1[7:1] && cpu_rd) memio_out <= {js0_q, js0_q};
             //------------- latching joystick (btnp) -------------
             if (cpu_addr[7:1]==ADDR_JOYSTICK0_LATCHED[7:1] && cpu_rd) memio_out <= {js0_latched, js1_latched};
+            if (cpu_addr[7:1]==ADDR_JOYSTICK1_LATCHED[7:1] && cpu_rd) memio_out <= {js1_latched, js1_latched};
             //------------- mouse (16-bit accumulators) ----------
             if (cpu_addr[7:1]==ADDR_MOUSE_X[7:1] && cpu_rd) memio_out <= mouse_x_q;
             if (cpu_addr[7:1]==ADDR_MOUSE_Y[7:1] && cpu_rd) memio_out <= mouse_y_q;
             if (cpu_addr[7:1]==ADDR_MOUSE_Z[7:1] && cpu_rd) memio_out <= mouse_z_q;
-            if (cpu_addr[7:1]==ADDR_MOUSE_BUTTONS[7:1] && cpu_rd) memio_out <= {mouse_buttons_latched, mouse_buttons_q};
+            if (cpu_addr[7:1]==ADDR_MOUSE_BUTTONS[7:1] && cpu_rd) memio_out <= {mouse_buttons_q, mouse_buttons_q};
+            if (cpu_addr[7:1]==ADDR_MOUSE_BUTTONS_LATCHED[7:1] && cpu_rd) memio_out <= {mouse_buttons_latched, mouse_buttons_latched};
         end else begin
             //------------- P8 Audio ----------------------------- h800100-h8001FF
             if (cpu_rd) memio_out <= p8audio_dout;
@@ -1812,32 +1815,32 @@ begin
             if (cpu_addr[7:1]==ADDR_SDSPI_DIVIDER[7:1] && cpu_wr ) qlsd_div <= cpu_dout[7:0];
             if (cpu_addr[7:1]==ADDR_SDSPI_CHIP_SELECT[7:1] && cpu_wr ) begin ql_sd_cs0_n_o <= cpu_dout[0]; ql_sd_cs1_n_o <= cpu_dout[1]; end
             //------------- post code -------------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_POST_CODE[7:1] && cpu_wr && !cpu_ds[1] ) post_code_cpu <= cpu_dout[13:8];
+            if (cpu_addr[7:1]==ADDR_POST_CODE[7:1] && cpu_wr) post_code_cpu <= cpu_dout[13:8];
             //--------------- reset ----------------------------------
-            if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_wr && !cpu_ds[0]) begin
+            if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_wr) begin
                 reset_request_toggle_mclk <= ~reset_request_toggle_mclk;
             end
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_wr && !cpu_ds[1]) vfrontreq <= cpu_dout[8];
-            if (cpu_addr[7:1]==ADDR_VBLANK_INTR_CTRL[7:1] && cpu_wr && !cpu_ds[0]) begin
+            if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_wr) vfrontreq <= cpu_dout[0];
+            if (cpu_addr[7:1]==ADDR_VBLANK_INTR_CTRL[7:1] && cpu_wr) begin
                 vsync_ack <= 1'b1;
                 vsync_irq_enable <= cpu_dout[0];
             end
             //--------------- overlay ----------------------------------
-            if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_wr && !cpu_ds[1]) overlay_ctrl_sys <= cpu_dout[15:8];
+            if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_wr) overlay_ctrl_sys <= cpu_dout[7:0];
             // ------------ parameters -------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_PARAMS[7:1] && cpu_wr) params <= cpu_dout;
             //-------------- RTC -------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_I2C_DATA[7:1] && cpu_wr ) i2c_dout <= cpu_dout[7:0];
             if (cpu_addr[7:1]==ADDR_I2C_CTRL[7:1] && cpu_wr ) begin i2c_rw <= cpu_dout[1];  i2c_ena <= cpu_dout[0]; end
             //-------------- UART ------------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_UART_CTRL[7:1] && cpu_wr && !cpu_ds[1]) begin uart_r <= cpu_dout[9]; uart_w <= cpu_dout[8]; end
-            if (cpu_addr[7:1]==ADDR_UART_DATA[7:1] && cpu_wr && !cpu_ds[0]) begin uart_din <= cpu_dout[7:0]; end
+            if (cpu_addr[7:1]==ADDR_UART_CTRL[7:1] && cpu_wr) begin uart_r <= cpu_dout[1]; uart_w <= cpu_dout[0]; end
+            if (cpu_addr[7:1]==ADDR_UART_DATA[7:1] && cpu_wr) begin uart_din <= cpu_dout[7:0]; end
             // ---------- UART baud rate divider  ------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_UART_BAUD_DIV[7:1] && cpu_wr ) begin uart_div <= cpu_dout[14:0]; end
             //-------------- ESP UART ------------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_ESP_CTRL[7:1] && cpu_wr && !cpu_ds[1]) begin esp_r <= cpu_dout[9]; esp_w <= cpu_dout[8]; end
-            if (cpu_addr[7:1]==ADDR_ESP_DATA[7:1] && cpu_wr && !cpu_ds[0]) begin esp_din <= cpu_dout[7:0]; end
+            if (cpu_addr[7:1]==ADDR_ESP_CTRL[7:1] && cpu_wr) begin esp_r <= cpu_dout[1]; esp_w <= cpu_dout[0]; end
+            if (cpu_addr[7:1]==ADDR_ESP_DATA[7:1] && cpu_wr) begin esp_din <= cpu_dout[7:0]; end
             // ---------- esp baud rate divider  ------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_ESP_BAUD_DIV[7:1] && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end
             // --------------- digital audio -----------------------------------------------------------
@@ -1851,14 +1854,14 @@ begin
                 kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8] <= kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8] & ~cpu_dout[15:8];
             end
             //------------- latching joystick clear (btnp) ----------
-            if (cpu_addr[7:1]==ADDR_JOYSTICK1_LATCHED[7:1] && cpu_wr && !cpu_ds[0]) begin
+            if (cpu_addr[7:1]==ADDR_JOYSTICK1_LATCHED[7:1] && cpu_wr) begin
                 js1_latched <= js1_latched & ~cpu_dout[7:0];
             end
-            if (cpu_addr[7:1]==ADDR_JOYSTICK0_LATCHED[7:1] && cpu_wr && !cpu_ds[1]) begin
+            if (cpu_addr[7:1]==ADDR_JOYSTICK0_LATCHED[7:1] && cpu_wr) begin
                 js0_latched <= js0_latched & ~cpu_dout[15:8];
             end
             //------------- latching mouse buttons clear (btnp) -----
-            if (cpu_addr[7:1]==ADDR_MOUSE_Z[7:1] && cpu_wr && !cpu_ds[1]) begin
+            if (cpu_addr[7:1]==ADDR_MOUSE_BUTTONS_LATCHED[7:1] && cpu_wr) begin
                 mouse_buttons_latched <= mouse_buttons_latched & ~cpu_dout[15:8];
             end
             //------------------ debug ------------------------------
@@ -1959,14 +1962,6 @@ hdmi hdmi (
     .O_GREEN (ogreen),
     .O_BLUE    (oblue)
     );
-
-
-//-------------- tube -----------------
-
-wire [7:0] tube_stdout;
-wire [7:0] tube_stderr;
-assign tube_stdout = (memio_go && cpu_enable && cpu_wr && {cpu_addr[23:1], 1'b0} == 24'hfffffe && !cpu_ds[1]) ? cpu_dout[15:8] : 8'dz;
-assign tube_stderr = (memio_go && cpu_enable && cpu_wr && {cpu_addr[23:1], 1'b0} == 24'hfffffe && !cpu_ds[0]) ? cpu_dout[7:0] : 8'dz;
 
 endmodule
 

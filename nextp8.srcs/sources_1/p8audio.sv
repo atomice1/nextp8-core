@@ -75,36 +75,38 @@ localparam [7:0] ADDR_SFX_BASE_HI = 8'h04;
 localparam [7:0] ADDR_SFX_BASE_LO = 8'h06;
 localparam [7:0] ADDR_MUSIC_BASE_HI = 8'h08;
 localparam [7:0] ADDR_MUSIC_BASE_LO = 8'h0A;
-localparam [7:0] ADDR_HWFX40 = 8'h0C;
-localparam [7:0] ADDR_HWFX42 = 8'h0E;
+localparam [7:0] ADDR_HWFX40 = 8'h0D;
+localparam [7:0] ADDR_HWFX41 = 8'h0F;
+localparam [7:0] ADDR_HWFX42 = 8'h11;
+localparam [7:0] ADDR_HWFX43 = 8'h13;
 reg [31:0] reg_sfx_base;                // mclk: SFX data base address in RAM
 reg [31:0] reg_music_base;              // mclk: Music data base address in RAM
 reg [7:0] hwfx_5f40, hwfx_5f41, hwfx_5f42, hwfx_5f43;  // mclk: PICO-8 hardware FX state snapshot
 
 // SFX API
-localparam [7:0] ADDR_SFX_CMD = 8'h14;
-localparam [7:0] ADDR_SFX_LEN = 8'h16;
+localparam [7:0] ADDR_SFX_CMD = 8'h18;
+localparam [7:0] ADDR_SFX_LEN = 8'h1A;
 reg [15:0] reg_sfx_len;                 // mclk: SFX length override
 
 // MUSIC API
-localparam [7:0] ADDR_MUSIC_CMD = 8'h18;
-localparam [7:0] ADDR_MUSIC_FADE = 8'h1A;
+localparam [7:0] ADDR_MUSIC_CMD = 8'h1C;
+localparam [7:0] ADDR_MUSIC_FADE = 8'h1E;
 reg [15:0] reg_music_fade;              // mclk: Music fade time (frames for crossfade)
 
 // stat(46..49): sfx index per channel
-localparam [7:0] ADDR_STAT46 = 8'h1C;
-localparam [7:0] ADDR_STAT47 = 8'h1E;
-localparam [7:0] ADDR_STAT48 = 8'h20;
-localparam [7:0] ADDR_STAT49 = 8'h22;
+localparam [7:0] ADDR_STAT46 = 8'h20;
+localparam [7:0] ADDR_STAT47 = 8'h22;
+localparam [7:0] ADDR_STAT48 = 8'h24;
+localparam [7:0] ADDR_STAT49 = 8'h26;
 // stat(50..53): note index per channel
-localparam [7:0] ADDR_STAT50 = 8'h24;
-localparam [7:0] ADDR_STAT51 = 8'h26;
-localparam [7:0] ADDR_STAT52 = 8'h28;
-localparam [7:0] ADDR_STAT53 = 8'h2A;
+localparam [7:0] ADDR_STAT50 = 8'h28;
+localparam [7:0] ADDR_STAT51 = 8'h2A;
+localparam [7:0] ADDR_STAT52 = 8'h2C;
+localparam [7:0] ADDR_STAT53 = 8'h2E;
 // stat(54..56): music pattern id / count / tick count
-localparam [7:0] ADDR_STAT54 = 8'h2C;
-localparam [7:0] ADDR_STAT55 = 8'h2E;
-localparam [7:0] ADDR_STAT56 = 8'h30;
+localparam [7:0] ADDR_STAT54 = 8'h30;
+localparam [7:0] ADDR_STAT55 = 8'h32;
+localparam [7:0] ADDR_STAT56 = 8'h34;
 
 always @(posedge mclk) begin
     if (!resetn_sys) begin
@@ -127,14 +129,10 @@ always @(posedge mclk) begin
             ADDR_MUSIC_BASE_LO[7:1]: reg_music_base[15:0]    <= din;
             ADDR_SFX_LEN[7:1]:       reg_sfx_len             <= din;
             ADDR_MUSIC_FADE[7:1]:    reg_music_fade          <= din;
-            ADDR_HWFX40[7:1]: begin
-                if (!nUDS) hwfx_5f40 <= din[15:8];
-                if (!nLDS) hwfx_5f41 <= din[7:0];
-            end
-            ADDR_HWFX42[7:1]: begin
-                if (!nUDS) hwfx_5f42 <= din[15:8];
-                if (!nLDS) hwfx_5f43 <= din[7:0];
-            end
+            ADDR_HWFX40[7:1]:        hwfx_5f40               <= din[7:0];
+            ADDR_HWFX41[7:1]:        hwfx_5f41               <= din[7:0];
+            ADDR_HWFX42[7:1]:        hwfx_5f42               <= din[7:0];
+            ADDR_HWFX43[7:1]:        hwfx_5f43               <= din[7:0];
             default: begin
                 // Ignore writes to undefined addresses
             end

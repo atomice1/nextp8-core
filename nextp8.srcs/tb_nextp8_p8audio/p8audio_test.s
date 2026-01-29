@@ -12,17 +12,6 @@
     .section .text
     .global _start
 
-/* p8audio register addresses */
-.equ CTRL,              0x800102
-.equ SFX_BASE_HI,       0x800104
-.equ SFX_BASE_LO,       0x800106
-.equ NOTE_ATK,          0x800110
-.equ NOTE_REL,          0x800112
-.equ SFX_CMD,           0x800114
-.equ SFX_LEN,           0x800116
-
-/* Post code output (via GPIO) */
-
 #include "asm/nextp8.h"
 
 _start:
@@ -35,18 +24,12 @@ _start:
     /* Configure SFX base address using sfx_data label */
     move.l  #sfx_data, %d0         /* Load address of sfx_data into d0 */
     swap    %d0                    /* Get upper 16 bits */
-    move.w  %d0, SFX_BASE_HI       /* Store upper 16 bits */
+    move.w  %d0, _P8AUDIO_SFX_BASE_HI       /* Store upper 16 bits */
     move.l  #sfx_data, %d0         /* Reload address */
-    move.w  %d0, SFX_BASE_LO       /* Store lower 16 bits */
+    move.w  %d0, _P8AUDIO_SFX_BASE_LO       /* Store lower 16 bits */
 
     /* Enable p8audio: CTRL.RUN = 1 */
-    move.w  #0x0001, CTRL
-
-    /* Set note attack time = 20 */
-    move.w  #20, NOTE_ATK
-
-    /* Set note release time = 20 */
-    move.w  #20, NOTE_REL
+    move.w  #0x0001, _P8AUDIO_CTRL
 
     /* Signal: Configuration complete (post_code = 5) */
     move.b  #5, _POST_CODE
@@ -58,10 +41,10 @@ _start:
      *   Bits 11-6:  Offset (0)
      *   Bits 5-0:   SFX index (8)
      */
-    move.w  #0x8008, SFX_CMD       /* 1000_0000_0000_1000 */
+    move.w  #0x8008, _P8AUDIO_SFX_CMD       /* 1000_0000_0000_1000 */
 
     /* Set SFX length = 0 (play full SFX) */
-    move.w  #0, SFX_LEN
+    move.w  #0, _P8AUDIO_SFX_LEN
 
     /* Signal: SFX triggered (post_code = 6) */
     move.b  #6, _POST_CODE

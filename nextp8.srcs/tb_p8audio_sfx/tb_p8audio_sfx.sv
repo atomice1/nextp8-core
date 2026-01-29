@@ -56,14 +56,12 @@ module tb_p8audio_sfx;
     reg         nUDS, nLDS;
     reg         write_en, read_en;
 
-    // MMIO register addresses (mirror of p8audio.sv)
-    localparam [6:0] ADDR_CTRL        = 7'h01;
-    localparam [6:0] ADDR_SFX_BASE_HI = 7'h02;
-    localparam [6:0] ADDR_SFX_BASE_LO = 7'h03;
-    localparam [6:0] ADDR_NOTE_ATK    = 7'h08;
-    localparam [6:0] ADDR_NOTE_REL    = 7'h09;
-    localparam [6:0] ADDR_SFX_CMD     = 7'h0A;
-    localparam [6:0] ADDR_SFX_LEN     = 7'h0B;
+    // MMIO register addresses (from p8audio.sv, using [7:1] slice to convert CPU address to word address)
+    localparam [7:0] ADDR_CTRL        = 8'h02;
+    localparam [7:0] ADDR_SFX_BASE_HI = 8'h04;
+    localparam [7:0] ADDR_SFX_BASE_LO = 8'h06;
+    localparam [7:0] ADDR_SFX_CMD     = 8'h18;
+    localparam [7:0] ADDR_SFX_LEN     = 8'h1A;
 
     //====================
     // PCM output
@@ -160,16 +158,18 @@ module tb_p8audio_sfx;
     //====================
     // Helpers: MMIO write/read
     //====================
-    task mmio_write(input [6:0] a, input [15:0] d);
+    task mmio_write(input [7:0] cpu_addr, input [15:0] d);
     begin
-        @(posedge clk_sys); address<=a; din<=d; write_en<=1'b1; read_en<=1'b0; nUDS<=1'b0; nLDS<=1'b0;
-        @(posedge clk_sys); write_en<=1'b0; nUDS<=1'b1; nLDS<=1'b1;
+        // Convert CPU address to word address by using [7:1] slice
+        @(posedge clk_sys); address <= cpu_addr[7:1]; din <= d; write_en <= 1'b1; read_en <= 1'b0; nUDS <= 1'b0; nLDS <= 1'b0;
+        @(posedge clk_sys); write_en <= 1'b0; nUDS <= 1'b1; nLDS <= 1'b1;
     end endtask
 
-    task mmio_read(input [6:0] a, output [15:0] d);
+    task mmio_read(input [7:0] cpu_addr, output [15:0] d);
     begin
-        @(posedge clk_sys); address<=a; write_en<=1'b0; read_en<=1'b1; nUDS<=1'b0; nLDS<=1'b0;
-        @(posedge clk_sys); d = dout; read_en<=1'b0; nUDS<=1'b1; nLDS<=1'b1;
+        // Convert CPU address to word address by using [7:1] slice
+        @(posedge clk_sys); address <= cpu_addr[7:1]; write_en <= 1'b0; read_en <= 1'b1; nUDS <= 1'b0; nLDS <= 1'b0;
+        @(posedge clk_sys); d = dout; read_en <= 1'b0; nUDS <= 1'b1; nLDS <= 1'b1;
     end endtask
 
     //====================
@@ -416,9 +416,6 @@ module tb_p8audio_sfx;
         mmio_write(ADDR_SFX_BASE_HI, 16'h0000);   // SFX_BASE_HI
         mmio_write(ADDR_SFX_BASE_LO, SFX_BASE);   // SFX_BASE_LO
         mmio_write(ADDR_CTRL,        16'h0001);   // CTRL.RUN=1
-        // Default attack/release
-        mmio_write(ADDR_NOTE_ATK,    16'd20);
-        mmio_write(ADDR_NOTE_REL,    16'd20);
 
         // Sweep SFX, capture duration derived from SFX speed (byte 65)
 
