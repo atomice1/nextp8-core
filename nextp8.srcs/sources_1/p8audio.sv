@@ -65,46 +65,46 @@ localparam [7:0]  NOTE_TICK_DIV      = 8'd183;    // global note tick divider (s
 //==============================================================
 
 // Version and control
-localparam [6:0] ADDR_VERSION       = 7'h00;
-localparam [6:0] ADDR_CTRL          = 7'h01;
+localparam [7:0] ADDR_VERSION = 8'h00;
+localparam [7:0] ADDR_CTRL = 8'h02;
 reg [15:0] reg_version;                 // mclk: Version register (read-only)
 reg [15:0] reg_ctrl;                    // mclk: Control register (bit0 = RUN)
 
 // Configuration
-localparam [6:0] ADDR_SFX_BASE_HI   = 7'h02;
-localparam [6:0] ADDR_SFX_BASE_LO   = 7'h03;
-localparam [6:0] ADDR_MUSIC_BASE_HI = 7'h04;
-localparam [6:0] ADDR_MUSIC_BASE_LO = 7'h05;
-localparam [6:0] ADDR_HWFX_5F40     = 7'h06;
-localparam [6:0] ADDR_HWFX_5F42     = 7'h07;
+localparam [7:0] ADDR_SFX_BASE_HI = 8'h04;
+localparam [7:0] ADDR_SFX_BASE_LO = 8'h06;
+localparam [7:0] ADDR_MUSIC_BASE_HI = 8'h08;
+localparam [7:0] ADDR_MUSIC_BASE_LO = 8'h0A;
+localparam [7:0] ADDR_HWFX40 = 8'h0C;
+localparam [7:0] ADDR_HWFX42 = 8'h0E;
 reg [31:0] reg_sfx_base;                // mclk: SFX data base address in RAM
 reg [31:0] reg_music_base;              // mclk: Music data base address in RAM
 reg [7:0] hwfx_5f40, hwfx_5f41, hwfx_5f42, hwfx_5f43;  // mclk: PICO-8 hardware FX state snapshot
 
 // SFX API
-localparam [6:0] ADDR_SFX_CMD       = 7'h0A;
-localparam [6:0] ADDR_SFX_LEN       = 7'h0B;
+localparam [7:0] ADDR_SFX_CMD = 8'h14;
+localparam [7:0] ADDR_SFX_LEN = 8'h16;
 reg [15:0] reg_sfx_len;                 // mclk: SFX length override
 
 // MUSIC API
-localparam [6:0] ADDR_MUSIC_CMD     = 7'h0C;
-localparam [6:0] ADDR_MUSIC_FADE    = 7'h0D;
+localparam [7:0] ADDR_MUSIC_CMD = 8'h18;
+localparam [7:0] ADDR_MUSIC_FADE = 8'h1A;
 reg [15:0] reg_music_fade;              // mclk: Music fade time (frames for crossfade)
 
 // stat(46..49): sfx index per channel
-localparam [6:0] ADDR_STAT46        = 7'h0E;
-localparam [6:0] ADDR_STAT47        = 7'h0F;
-localparam [6:0] ADDR_STAT48        = 7'h10;
-localparam [6:0] ADDR_STAT49        = 7'h11;
+localparam [7:0] ADDR_STAT46 = 8'h1C;
+localparam [7:0] ADDR_STAT47 = 8'h1E;
+localparam [7:0] ADDR_STAT48 = 8'h20;
+localparam [7:0] ADDR_STAT49 = 8'h22;
 // stat(50..53): note index per channel
-localparam [6:0] ADDR_STAT50        = 7'h12;
-localparam [6:0] ADDR_STAT51        = 7'h13;
-localparam [6:0] ADDR_STAT52        = 7'h14;
-localparam [6:0] ADDR_STAT53        = 7'h15;
+localparam [7:0] ADDR_STAT50 = 8'h24;
+localparam [7:0] ADDR_STAT51 = 8'h26;
+localparam [7:0] ADDR_STAT52 = 8'h28;
+localparam [7:0] ADDR_STAT53 = 8'h2A;
 // stat(54..56): music pattern id / count / tick count
-localparam [6:0] ADDR_STAT54        = 7'h16;
-localparam [6:0] ADDR_STAT55        = 7'h17;
-localparam [6:0] ADDR_STAT56        = 7'h18;
+localparam [7:0] ADDR_STAT54 = 8'h2C;
+localparam [7:0] ADDR_STAT55 = 8'h2E;
+localparam [7:0] ADDR_STAT56 = 8'h30;
 
 always @(posedge mclk) begin
     if (!resetn_sys) begin
@@ -120,18 +120,18 @@ always @(posedge mclk) begin
         hwfx_5f43       <= 0;
     end else if (write_en) begin
         case (address)
-            ADDR_CTRL:          reg_ctrl                <= din;
-            ADDR_SFX_BASE_HI:   reg_sfx_base[31:16]     <= din;
-            ADDR_SFX_BASE_LO:   reg_sfx_base[15:0]      <= din;
-            ADDR_MUSIC_BASE_HI: reg_music_base[31:16]   <= din;
-            ADDR_MUSIC_BASE_LO: reg_music_base[15:0]    <= din;
-            ADDR_SFX_LEN:       reg_sfx_len             <= din;
-            ADDR_MUSIC_FADE:    reg_music_fade          <= din;
-            ADDR_HWFX_5F40: begin
+            ADDR_CTRL[7:1]:          reg_ctrl                <= din;
+            ADDR_SFX_BASE_HI[7:1]:   reg_sfx_base[31:16]     <= din;
+            ADDR_SFX_BASE_LO[7:1]:   reg_sfx_base[15:0]      <= din;
+            ADDR_MUSIC_BASE_HI[7:1]: reg_music_base[31:16]   <= din;
+            ADDR_MUSIC_BASE_LO[7:1]: reg_music_base[15:0]    <= din;
+            ADDR_SFX_LEN[7:1]:       reg_sfx_len             <= din;
+            ADDR_MUSIC_FADE[7:1]:    reg_music_fade          <= din;
+            ADDR_HWFX40[7:1]: begin
                 if (!nUDS) hwfx_5f40 <= din[15:8];
                 if (!nLDS) hwfx_5f41 <= din[7:0];
             end
-            ADDR_HWFX_5F42: begin
+            ADDR_HWFX42[7:1]: begin
                 if (!nUDS) hwfx_5f42 <= din[15:8];
                 if (!nLDS) hwfx_5f43 <= din[7:0];
             end
@@ -506,7 +506,7 @@ always @(posedge mclk) begin
         force_stop_sys <= 4'b0000; force_release_sys <= 4'b0000;
 
         // SFX command handler
-        if (write_en && address==ADDR_SFX_CMD) begin
+        if (write_en && address==ADDR_SFX_CMD[7:1]) begin
             if (din[15]) begin
                 ch_f = din[14:12];
                 idx_f = din[5:0];
@@ -592,7 +592,7 @@ always @(posedge mclk) begin
         end
 
         // MUSIC command handler
-        if (write_en && address==ADDR_MUSIC_CMD) begin
+        if (write_en && address==ADDR_MUSIC_CMD[7:1]) begin
             // PICO-8 API: music(n, fade_len, channel_mask)
             // n = -1 (0x3f in 6-bit) stops music
             // n = 0..63 starts music from pattern n
@@ -724,22 +724,22 @@ end
 // MMIO readout for stat() equivalents (mclk domain)
 //==============================================================
 always @(*) begin                       // mclk: Combinational read mux
-    case(address)
-        ADDR_VERSION: dout = reg_version;
+    case (address)
+        ADDR_VERSION[7:1]: dout = reg_version;
         // stat(46..49): sfx index per channel; FFFF if idle
-        ADDR_STAT46: dout = voice_busy[0] ? {10'd0, v_stat_sfx_index[0]} : 16'hFFFF;
-        ADDR_STAT47: dout = voice_busy[1] ? {10'd0, v_stat_sfx_index[1]} : 16'hFFFF;
-        ADDR_STAT48: dout = voice_busy[2] ? {10'd0, v_stat_sfx_index[2]} : 16'hFFFF;
-        ADDR_STAT49: dout = voice_busy[3] ? {10'd0, v_stat_sfx_index[3]} : 16'hFFFF;
+        ADDR_STAT46[7:1]: dout = voice_busy[0] ? {10'd0, v_stat_sfx_index[0]} : 16'hFFFF;
+        ADDR_STAT47[7:1]: dout = voice_busy[1] ? {10'd0, v_stat_sfx_index[1]} : 16'hFFFF;
+        ADDR_STAT48[7:1]: dout = voice_busy[2] ? {10'd0, v_stat_sfx_index[2]} : 16'hFFFF;
+        ADDR_STAT49[7:1]: dout = voice_busy[3] ? {10'd0, v_stat_sfx_index[3]} : 16'hFFFF;
         // stat(50..53): note index per channel; FFFF if idle
-        ADDR_STAT50: dout = voice_busy[0] ? {10'd0, v_stat_note_index[0]} : 16'hFFFF;
-        ADDR_STAT51: dout = voice_busy[1] ? {10'd0, v_stat_note_index[1]} : 16'hFFFF;
-        ADDR_STAT52: dout = voice_busy[2] ? {10'd0, v_stat_note_index[2]} : 16'hFFFF;
-        ADDR_STAT53: dout = voice_busy[3] ? {10'd0, v_stat_note_index[3]} : 16'hFFFF;
+        ADDR_STAT50[7:1]: dout = voice_busy[0] ? {10'd0, v_stat_note_index[0]} : 16'hFFFF;
+        ADDR_STAT51[7:1]: dout = voice_busy[1] ? {10'd0, v_stat_note_index[1]} : 16'hFFFF;
+        ADDR_STAT52[7:1]: dout = voice_busy[2] ? {10'd0, v_stat_note_index[2]} : 16'hFFFF;
+        ADDR_STAT53[7:1]: dout = voice_busy[3] ? {10'd0, v_stat_note_index[3]} : 16'hFFFF;
         // stat(54..56): music pattern id / count / tick count
-        ADDR_STAT54: dout = stat_music_pattern;
-        ADDR_STAT55: dout = stat_music_pattern_count;
-        ADDR_STAT56: dout = stat_music_tick_count;
+        ADDR_STAT54[7:1]: dout = stat_music_pattern;
+        ADDR_STAT55[7:1]: dout = stat_music_pattern_count;
+        ADDR_STAT56[7:1]: dout = stat_music_tick_count;
         default: dout = 16'h0000;
     endcase
 end

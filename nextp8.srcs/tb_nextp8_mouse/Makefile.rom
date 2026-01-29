@@ -3,17 +3,20 @@
 
 # Toolchain
 TOOLCHAIN = m68k-elf-
+CPP = $(TOOLCHAIN)cpp
 AS = $(TOOLCHAIN)as
 LD = $(TOOLCHAIN)ld
 OBJCOPY = $(TOOLCHAIN)objcopy
 OBJDUMP = $(TOOLCHAIN)objdump
 
 # Flags
+CPPFLAGS = -I../../include
 ASFLAGS = -m68000
 LDFLAGS = -T mouse_test.ld
 
 # Files
 SRC = mouse_test.s
+PREPROCESSED = mouse_test.i
 OBJ = mouse_test.o
 ELF = mouse_test.elf
 BIN = mouse_test.bin
@@ -24,8 +27,12 @@ LST = mouse_test.lst
 
 all: $(MEM)
 
-# Assemble
-$(OBJ): $(SRC)
+# Preprocess assembly source to expand #include directives
+$(PREPROCESSED): $(SRC)
+	$(CPP) $(CPPFLAGS) $< -o $@
+
+# Assemble preprocessed source
+$(OBJ): $(PREPROCESSED)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Link
@@ -49,4 +56,4 @@ $(MEM): $(BIN) $(LST)
 	@echo "Size: $$(stat -c%s $(BIN)) bytes"
 
 clean:
-	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
+	rm -f $(PREPROCESSED) $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)

@@ -13,7 +13,6 @@
     .global _start
 
 /* p8audio register addresses */
-.equ P8AUDIO_BASE,      0x800100
 .equ CTRL,              0x800102
 .equ SFX_BASE_HI,       0x800104
 .equ SFX_BASE_LO,       0x800106
@@ -23,14 +22,15 @@
 .equ SFX_LEN,           0x800116
 
 /* Post code output (via GPIO) */
-.equ POST_CODE,         0x80000C
+
+#include "asm/nextp8.h"
 
 _start:
     /* Initialize stack pointer */
     move.l  #0x00010000, %sp
 
     /* Signal: Initializing p8audio (post_code = 4) */
-    move.b  #4, POST_CODE
+    move.b  #4, _POST_CODE
 
     /* Configure SFX base address using sfx_data label */
     move.l  #sfx_data, %d0         /* Load address of sfx_data into d0 */
@@ -49,7 +49,7 @@ _start:
     move.w  #20, NOTE_REL
 
     /* Signal: Configuration complete (post_code = 5) */
-    move.b  #5, POST_CODE
+    move.b  #5, _POST_CODE
 
     /* Trigger SFX 8 on channel 0 with full length
      * SFX_CMD format:
@@ -64,7 +64,7 @@ _start:
     move.w  #0, SFX_LEN
 
     /* Signal: SFX triggered (post_code = 6) */
-    move.b  #6, POST_CODE
+    move.b  #6, _POST_CODE
 
     /* Wait a bit for SFX to play */
     move.l  #0x100000, %d0
@@ -73,7 +73,7 @@ wait_loop:
     bne     wait_loop
 
     /* Signal: Test complete (post_code = 7) */
-    move.b  #7, POST_CODE
+    move.b  #7, _POST_CODE
 
     /* Loop forever */
 infinite_loop:

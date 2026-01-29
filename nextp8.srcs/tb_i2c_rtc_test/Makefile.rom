@@ -3,17 +3,20 @@
 
 # Toolchain
 TOOLCHAIN = m68k-elf-
+CPP = $(TOOLCHAIN)cpp
 AS = $(TOOLCHAIN)as
 LD = $(TOOLCHAIN)ld
 OBJCOPY = $(TOOLCHAIN)objcopy
 OBJDUMP = $(TOOLCHAIN)objdump
 
 # Flags
+CPPFLAGS = -I../../include
 ASFLAGS = -m68000
 LDFLAGS = -T rtc_test.ld
 
 # Files
 SRC = rtc_test.s
+PREPROCESSED = rtc_test.i
 OBJ = rtc_test.o
 ELF = rtc_test.elf
 BIN = rtc_test.bin
@@ -24,8 +27,12 @@ LST = rtc_test.lst
 
 all: $(MEM)
 
-# Assemble
-$(OBJ): $(SRC)
+# Preprocess assembly source to expand #include directives
+$(PREPROCESSED): $(SRC)
+	$(CPP) $(CPPFLAGS) $< -o $@
+
+# Assemble preprocessed source
+$(OBJ): $(PREPROCESSED)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Link
@@ -49,7 +56,7 @@ $(MEM): $(BIN) $(LST)
 	@echo "Size: $$(stat -c%s $(BIN)) bytes"
 
 clean:
-	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
+	rm -f $(PREPROCESSED) $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
 
 help:
 	@echo "Makefile targets:"

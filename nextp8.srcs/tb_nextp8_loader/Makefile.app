@@ -6,17 +6,20 @@ TB_DIR = .
 
 # Toolchain
 TOOLCHAIN = m68k-elf-
+CPP = $(TOOLCHAIN)cpp
 AS = $(TOOLCHAIN)as
 LD = $(TOOLCHAIN)ld
 OBJCOPY = $(TOOLCHAIN)objcopy
 OBJDUMP = $(TOOLCHAIN)objdump
 
 # Flags
+CPPFLAGS = -I../../include
 ASFLAGS = -m68000
 LDFLAGS = -T $(TB_DIR)/hello_test_ram.ld
 
 # Files
 SRC = hello_test.s
+PREPROCESSED = hello_test.i
 OBJ = hello_test.o
 ELF = hello_test.elf
 BIN = nextp8.bin
@@ -26,8 +29,12 @@ LST = hello_test.lst
 
 all: $(BIN)
 
-# Assemble
-$(OBJ): $(SRC)
+# Preprocess assembly source to expand #include directives
+$(PREPROCESSED): $(SRC)
+	$(CPP) $(CPPFLAGS) $< -o $@
+
+# Assemble preprocessed source
+$(OBJ): $(PREPROCESSED)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Link with RAM linker script
@@ -45,7 +52,7 @@ $(LST): $(ELF)
 	$(OBJDUMP) -d $< > $@
 
 clean:
-	rm -f $(OBJ) $(ELF) $(BIN) $(LST)
+	rm -f $(PREPROCESSED) $(OBJ) $(ELF) $(BIN) $(LST)
 
 help:
 	@echo "Makefile targets:"

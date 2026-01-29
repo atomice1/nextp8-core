@@ -3,17 +3,20 @@
 
 # Toolchain
 TOOLCHAIN = m68k-elf-
+CPP = $(TOOLCHAIN)cpp
 AS = $(TOOLCHAIN)as
 LD = $(TOOLCHAIN)ld
 OBJCOPY = $(TOOLCHAIN)objcopy
 OBJDUMP = $(TOOLCHAIN)objdump
 
 # Flags
+CPPFLAGS = -I../../include
 ASFLAGS = -m68000
 LDFLAGS = -T keyboard_test.ld
 
 # Files
 SRC = keyboard_test.s
+PREPROCESSED = keyboard_test.i
 OBJ = keyboard_test.o
 ELF = keyboard_test.elf
 BIN = keyboard_test.bin
@@ -24,8 +27,12 @@ LST = keyboard_test.lst
 
 all: $(MEM)
 
-# Assemble
-$(OBJ): $(SRC)
+# Preprocess assembly source to expand #include directives
+$(PREPROCESSED): $(SRC)
+	$(CPP) $(CPPFLAGS) $< -o $@
+
+# Assemble preprocessed source
+$(OBJ): $(PREPROCESSED)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Link
@@ -49,4 +56,4 @@ $(MEM): $(BIN) $(LST)
 	@echo "Size: $$(stat -c%s $(BIN)) bytes"
 
 clean:
-	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
+	rm -f $(PREPROCESSED) $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)

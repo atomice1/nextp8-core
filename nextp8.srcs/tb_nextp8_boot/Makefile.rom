@@ -7,13 +7,16 @@ AS = $(TOOLCHAIN)as
 LD = $(TOOLCHAIN)ld
 OBJCOPY = $(TOOLCHAIN)objcopy
 OBJDUMP = $(TOOLCHAIN)objdump
+CPP = $(TOOLCHAIN)cpp
 
 # Flags
 ASFLAGS = -m68000
+CPPFLAGS = -I../../include
 LDFLAGS = -T hello_test.ld
 
 # Files
 SRC = hello_test.s
+PREPROCESSED = hello_test.i
 OBJ = hello_test.o
 ELF = hello_test.elf
 BIN = hello_test.bin
@@ -24,8 +27,12 @@ LST = hello_test.lst
 
 all: $(MEM)
 
+# Preprocess assembly source
+$(PREPROCESSED): $(SRC)
+	$(CPP) $(CPPFLAGS) $< -o $@
+
 # Assemble
-$(OBJ): $(SRC)
+$(OBJ): $(PREPROCESSED)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 # Link
@@ -49,7 +56,7 @@ $(MEM): $(BIN) $(LST)
 	@echo "Size: $$(stat -c%s $(BIN)) bytes"
 
 clean:
-	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST)
+	rm -f $(OBJ) $(ELF) $(BIN) $(MEM) $(LST) $(PREPROCESSED)
 
 help:
 	@echo "Makefile targets:"

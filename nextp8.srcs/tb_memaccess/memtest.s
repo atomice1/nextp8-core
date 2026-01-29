@@ -17,11 +17,7 @@
     .global _start
 
 /* Memory addresses for testing */
-.equ POST_CODE,         0x80000C
-
 .equ SRAM_ADDR,         0x010000    /* SRAM test location */
-.equ DEBUG_REG_LO,      0x800064    /* MMIO debug register low */
-.equ DEBUG_REG_HI,      0x800062    /* MMIO debug register high */
 .equ VRAM_BACK,         0xC00100    /* Video back buffer */
 .equ VRAM_FRONT,        0xC02100    /* Video front buffer */
 .equ VRAM_OV_BACK,      0xC04100    /* Video overlay back */
@@ -39,18 +35,21 @@
 .equ TEST_VAL_7,        0x800F    /* Palette RAM: only bits [7,3:0] per byte are stored */
 .equ TEST_VAL_8,        0xFEDC
 
+
+#include "asm/nextp8.h"
+
 _start:
     /* Initialize stack pointer */
     move.l  #0x00010000, %sp
 
     /* POST 4: Starting memory tests */
-    move.b  #4, POST_CODE
+    move.b  #4, _POST_CODE
 
     /*========================================
      * TEST 1: SRAM
      *========================================*/
     /* POST 5: Testing SRAM */
-    move.b  #5, POST_CODE
+    move.b  #5, _POST_CODE
     
     /* Write test value to SRAM */
     move.w  #TEST_VAL_1, SRAM_ADDR
@@ -69,10 +68,10 @@ _start:
      * TEST 2: MMIO Debug Register
      *========================================*/
     /* POST 6: Testing MMIO */
-    move.b  #6, POST_CODE
+    move.b  #6, _POST_CODE
     
     /* Write test value to debug register */
-    move.w  #TEST_VAL_2, DEBUG_REG_LO
+    move.w  #TEST_VAL_2, _DEBUG_REG_LO
     
     /* Three unrelated accesses */
     move.w  #0x4444, SRAM_ADDR
@@ -80,7 +79,7 @@ _start:
     move.w  #0x6666, PAL_RAM
     
     /* Read back and verify */
-    move.w  DEBUG_REG_LO, %d0
+    move.w  _DEBUG_REG_LO, %d0
     cmp.w   #TEST_VAL_2, %d0
     bne     fail_mmio
 
@@ -88,14 +87,14 @@ _start:
      * TEST 3: Video RAM Back Buffer
      *========================================*/
     /* POST 7: Testing VRAM back */
-    move.b  #7, POST_CODE
+    move.b  #7, _POST_CODE
     
     /* Write test value */
     move.w  #TEST_VAL_3, VRAM_BACK
     
     /* Three unrelated accesses */
     move.w  #0x7777, SRAM_ADDR
-    move.w  #0x8888, DEBUG_REG_LO
+    move.w  #0x8888, _DEBUG_REG_LO
     move.w  #0x9999, VRAM_FRONT
     
     /* Read back and verify */
@@ -107,7 +106,7 @@ _start:
      * TEST 4: Video RAM Front Buffer
      *========================================*/
     /* POST 8: Testing VRAM front */
-    move.b  #8, POST_CODE
+    move.b  #8, _POST_CODE
     
     /* Write test value */
     move.w  #TEST_VAL_4, VRAM_FRONT
@@ -126,7 +125,7 @@ _start:
      * TEST 5: Video RAM Overlay Back
      *========================================*/
     /* POST 9: Testing VRAM overlay back */
-    move.b  #9, POST_CODE
+    move.b  #9, _POST_CODE
     
     /* Write test value */
     move.w  #TEST_VAL_5, VRAM_OV_BACK
@@ -145,14 +144,14 @@ _start:
      * TEST 6: Video RAM Overlay Front
      *========================================*/
     /* POST 10: Testing VRAM overlay front */
-    move.b  #10, POST_CODE
+    move.b  #10, _POST_CODE
     
     /* Write test value */
     move.w  #TEST_VAL_6, VRAM_OV_FRONT
     
     /* Three unrelated accesses */
     move.w  #0x1122, VRAM_OV_BACK
-    move.w  #0x3344, DEBUG_REG_LO
+    move.w  #0x3344, _DEBUG_REG_LO
     move.w  #0x5566, VRAM_BACK
     
     /* Read back and verify */
@@ -164,7 +163,7 @@ _start:
      * TEST 7: Palette RAM
      *========================================*/
     /* POST 11: Testing palette RAM */
-    move.b  #11, POST_CODE
+    move.b  #11, _POST_CODE
     
     /* Write test value */
     move.w  #TEST_VAL_7, PAL_RAM
@@ -183,7 +182,7 @@ _start:
      * TEST 8: Digital Audio RAM
      *========================================*/
     /* POST 12: Testing digital audio RAM */
-    move.b  #12, POST_CODE
+    move.b  #12, _POST_CODE
     
     /* Write test value */
     move.w  #TEST_VAL_8, DA_RAM
@@ -202,40 +201,40 @@ _start:
      * ALL TESTS PASSED
      *========================================*/
     /* POST 13: All tests passed */
-    move.b  #13, POST_CODE
+    move.b  #13, _POST_CODE
     
     bra     success_loop
 
 fail_sram:
-    move.b  #25, POST_CODE       /* Stay at test 1 */
+    move.b  #25, _POST_CODE       /* Stay at test 1 */
     bra     infinite_loop
 
 fail_mmio:
-    move.b  #26, POST_CODE       /* Stay at test 2 */
+    move.b  #26, _POST_CODE       /* Stay at test 2 */
     bra     infinite_loop
 
 fail_vram_back:
-    move.b  #27, POST_CODE       /* Stay at test 3 */
+    move.b  #27, _POST_CODE       /* Stay at test 3 */
     bra     infinite_loop
 
 fail_vram_front:
-    move.b  #28, POST_CODE       /* Stay at test 4 */
+    move.b  #28, _POST_CODE       /* Stay at test 4 */
     bra     infinite_loop
 
 fail_vram_ov_back:
-    move.b  #29, POST_CODE       /* Stay at test 5 */
+    move.b  #29, _POST_CODE       /* Stay at test 5 */
     bra     infinite_loop
 
 fail_vram_ov_front:
-    move.b  #30, POST_CODE      /* Stay at test 6 */
+    move.b  #30, _POST_CODE      /* Stay at test 6 */
     bra     infinite_loop
 
 fail_pal_ram:
-    move.b  #31, POST_CODE      /* Stay at test 7 */
+    move.b  #31, _POST_CODE      /* Stay at test 7 */
     bra     infinite_loop
 
 fail_da_ram:
-    move.b  #32, POST_CODE      /* Stay at test 8 */
+    move.b  #32, _POST_CODE      /* Stay at test 8 */
     bra     infinite_loop
 
 success_loop:

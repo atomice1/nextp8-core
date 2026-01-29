@@ -12,34 +12,30 @@
     .global _start
 
 /* Keyboard register addresses */
-.equ KBD_MATRIX_BASE,   0x800040    /* Regular keyboard matrix (32 words, 256 bits) */
-.equ KBD_LATCH_BASE,    0x800080    /* Latching keyboard matrix (32 words, 256 bits) */
-
 /* Post code output */
-.equ POST_CODE,         0x80000C
-
 /* Debug register */
-.equ DEBUG_REG,         0x800062    /* 32-bit debug register */
-
 /* Test key indices - using scancode 0x1C (A key) = key index 0x1C */
 .equ TEST_KEY_1,        0x1C        /* A key scancode */
 .equ TEST_KEY_2,        0x23        /* D key scancode */
+
+
+#include "asm/nextp8.h"
 
 _start:
     /* Initialize stack pointer */
     move.l  #0x00010000, %sp
 
     /* POST 4: Starting test */
-    move.b  #4, POST_CODE
+    move.b  #4, _POST_CODE
 
     /* ================================================================
      * TEST 1: Check that both matrices are initially clear
      * ================================================================ */
 
-    move.b  #5, POST_CODE
+    move.b  #5, _POST_CODE
 
     /* Check all 16 words of regular keyboard matrix (256 bits = 32 bytes = 16 words) */
-    lea     KBD_MATRIX_BASE, %a0
+    lea     _KEYBOARD_MATRIX, %a0
     move.w  #15, %d7        /* Counter: 0-15 (16 words) */
 check_matrix_clear:
     move.w  (%a0)+, %d0
@@ -48,7 +44,7 @@ check_matrix_clear:
     dbf     %d7, check_matrix_clear
 
     /* Check all 16 words of latching keyboard matrix */
-    lea     KBD_LATCH_BASE, %a0
+    lea     _KEYBOARD_MATRIX_LATCHED, %a0
     move.w  #15, %d7        /* Counter: 0-15 (16 words) */
 check_latch_clear:
     move.w  (%a0)+, %d0
@@ -57,7 +53,7 @@ check_latch_clear:
     dbf     %d7, check_latch_clear
 
     /* POST 6: Initial clear check passed */
-    move.b  #6, POST_CODE
+    move.b  #6, _POST_CODE
 
     /* ================================================================
      * TEST 2: Wait for key press, check it appears in both matrices
@@ -65,7 +61,7 @@ check_latch_clear:
      * Word address = 0x1C >> 4 = 1, bit = 0x1C & 0xF = 12
      * ================================================================ */
 
-    move.b  #7, POST_CODE
+    move.b  #7, _POST_CODE
 
     /* Calculate byte offset and bit mask for TEST_KEY_1 */
     move.w  #TEST_KEY_1, %d0
@@ -74,7 +70,7 @@ check_latch_clear:
     andi.w  #7, %d1         /* Bit position = key_index & 7 */
 
     /* Wait for key in regular matrix */
-    lea     KBD_MATRIX_BASE, %a0
+    lea     _KEYBOARD_MATRIX, %a0
 
 wait_key1_regular:
     move.b  (%a0,%d0.w), %d3
@@ -82,48 +78,48 @@ wait_key1_regular:
     beq     wait_key1_regular
 
     /* POST 8: Key detected in regular matrix */
-    move.b  #8, POST_CODE
+    move.b  #8, _POST_CODE
 
     /* Check key also in latching matrix */
-    lea     KBD_LATCH_BASE, %a0
+    lea     _KEYBOARD_MATRIX_LATCHED, %a0
     move.b  (%a0,%d0.w), %d3
     btst    %d1, %d3
     beq     fail
 
     /* POST 9: Key detected in latching matrix */
-    move.b  #9, POST_CODE
+    move.b  #9, _POST_CODE
 
     /* ================================================================
      * TEST 3: Wait for key release, verify regular matrix clears
      *         but latching matrix stays set
      * ================================================================ */
 
-    move.b  #10, POST_CODE
+    move.b  #10, _POST_CODE
 
     /* Wait for key to be released from regular matrix */
-    lea     KBD_MATRIX_BASE, %a0
+    lea     _KEYBOARD_MATRIX, %a0
 wait_key1_release:
     move.b  (%a0,%d0.w), %d3
     btst    %d1, %d3
     bne     wait_key1_release
 
     /* POST 11: Key released from regular matrix */
-    move.b  #11, POST_CODE
+    move.b  #11, _POST_CODE
 
     /* Verify key still set in latching matrix */
-    lea     KBD_LATCH_BASE, %a0
+    lea     _KEYBOARD_MATRIX_LATCHED, %a0
     move.b  (%a0,%d0.w), %d3
     btst    %d1, %d3
     beq     fail
 
     /* POST 12: Key still latched */
-    move.b  #12, POST_CODE
+    move.b  #12, _POST_CODE
 
     /* ================================================================
      * TEST 4: Press and latch a second key (TEST_KEY_2)
      * ================================================================ */
 
-    move.b  #13, POST_CODE
+    move.b  #13, _POST_CODE
 
     /* Calculate byte offset and bit for TEST_KEY_2 (0x23) */
     move.w  #TEST_KEY_2, %d4
@@ -132,14 +128,14 @@ wait_key1_release:
     andi.w  #7, %d5         /* Bit position = key_index & 7 */
 
     /* Wait for second key in regular matrix */
-    lea     KBD_MATRIX_BASE, %a0
+    lea     _KEYBOARD_MATRIX, %a0
 wait_key2_regular:
     move.b  (%a0,%d4.w), %d3
     btst    %d5, %d3
     beq     wait_key2_regular
 
     /* POST 14: Second key detected */
-    move.b  #14, POST_CODE
+    move.b  #14, _POST_CODE
 
     /* Wait for second key release */
 wait_key2_release:
@@ -148,10 +144,10 @@ wait_key2_release:
     bne     wait_key2_release
 
     /* POST 15: Second key released */
-    move.b  #15, POST_CODE
+    move.b  #15, _POST_CODE
 
     /* Verify both keys latched */
-    lea     KBD_LATCH_BASE, %a0
+    lea     _KEYBOARD_MATRIX_LATCHED, %a0
     move.b  (%a0,%d0.w), %d3
     btst    %d1, %d3
     beq     fail
@@ -160,25 +156,25 @@ wait_key2_release:
     beq     fail
 
     /* POST 16: Both keys latched */
-    move.b  #16, POST_CODE
+    move.b  #16, _POST_CODE
 
     /* ================================================================
      * TEST 5: Clear first key by writing to latching matrix
      *         Verify only that bit is cleared, not the second key
      * ================================================================ */
 
-    move.b  #17, POST_CODE
+    move.b  #17, _POST_CODE
 
     /* Create bitmask to clear TEST_KEY_1 */
     move.b  #1, %d6
     lsl.b   %d1, %d6        /* Shift to bit position */
 
     /* Write to clear TEST_KEY_1 */
-    lea     KBD_LATCH_BASE, %a0
+    lea     _KEYBOARD_MATRIX_LATCHED, %a0
     move.b  %d6, (%a0,%d0.w)
 
     /* POST 18: Wrote clear command */
-    move.b  #18, POST_CODE
+    move.b  #18, _POST_CODE
 
     /* Verify TEST_KEY_1 is now clear */
     move.b  (%a0,%d0.w), %d3
@@ -186,7 +182,7 @@ wait_key2_release:
     bne     fail
 
     /* POST 19: First key cleared */
-    move.b  #19, POST_CODE
+    move.b  #19, _POST_CODE
 
     /* Verify TEST_KEY_2 is still latched */
     move.b  (%a0,%d4.w), %d3
@@ -194,7 +190,7 @@ wait_key2_release:
     beq     fail
 
     /* POST 20: Second key still latched */
-    move.b  #20, POST_CODE
+    move.b  #20, _POST_CODE
 
     /* ================================================================
      * TEST 6: Clear second key
@@ -210,21 +206,21 @@ wait_key2_release:
     bne     fail
 
     /* POST 21: Second key cleared */
-    move.b  #21, POST_CODE
+    move.b  #21, _POST_CODE
 
     /* ================================================================
      * ALL TESTS PASSED
      * ================================================================ */
 
     /* POST 25: Success! */
-    move.b  #25, POST_CODE
+    move.b  #25, _POST_CODE
 
 done:
     bra     done
 
 fail:
     /* POST 50: Test failed */
-    move.b  #50, POST_CODE
+    move.b  #50, _POST_CODE
 fail_loop:
     bra     fail_loop
 
