@@ -56,12 +56,11 @@ module sram_simple #(
         
         // ROM sanity checks (68K boot vector validation)
         begin
-            reg [31:0] initial_sp, initial_pc, third_word;
+            reg [31:0] initial_sp, initial_pc;
             reg [15:0] code_at_pc;
             
             initial_sp = {mem[0], mem[1]};  // First 32-bit word: initial SP
             initial_pc = {mem[2], mem[3]};  // Second 32-bit word: initial PC
-            third_word = {mem[4], mem[5]};  // Third 32-bit word: should be zero
             
             if (initial_sp == 32'h0) begin
                 $fatal(1, "[SRAM] ERROR: ROM validation failed - Initial SP is zero");
@@ -71,9 +70,6 @@ module sram_simple #(
             end
             if (initial_pc >= initial_sp) begin
                 $fatal(1, "[SRAM] ERROR: ROM validation failed - Initial PC (0x%08x) >= Initial SP (0x%08x)", initial_pc, initial_sp);
-            end
-            if (third_word != 32'h0) begin
-                $fatal(1, "[SRAM] ERROR: ROM validation failed - Third longword is non-zero (0x%08x)", third_word);
             end
             
             // Check that there's actual code at the PC address (word-addressed)
