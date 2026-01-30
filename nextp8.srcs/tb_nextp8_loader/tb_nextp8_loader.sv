@@ -382,7 +382,7 @@ end
 // Monitor POST code and UART output
 reg post_target_reached = 0;
 longint post_target_time = 0;
-parameter longint WAIT_AFTER_POST = 1200000000; // 1.2ms in ps (1,200,000 ns)
+parameter longint WAIT_AFTER_POST = 1200000; // 1.2ms in ps (1,200,000 ns)
 
 always @(posedge clock_50_i) begin
     // Detect when POST_TARGET is reached
