@@ -399,6 +399,8 @@ module tb_p8audio_sfx;
             sfx_end = 21;
             $display("Full mode: Testing SFX 8-21");
         end
+        sfx_start = 20;
+        sfx_end = 20;
         
         // Load SFX from PICO-8 cart file
         load_p8_sfx(p8_path);

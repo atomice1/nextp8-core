@@ -240,7 +240,7 @@ reg  [3:0]  play_strobe_sys;      // mclk: One-cycle pulse to start SFX playback
 reg  [3:0]  sfx_strobe_mask;      // mclk: Tracks which strobes were set by SFX commands
 reg  [5:0]  play_sfx_index [0:3]; // mclk: SFX index to play (0-63)
 reg  [5:0]  play_sfx_off   [0:3]; // mclk: Starting note offset (0-31)
-reg  [5:0]  play_sfx_len   [0:3]; // mclk: Number of notes to play (0=full)
+reg  [15:0] play_sfx_len   [0:3]; // mclk: Number of notes to play (0=full)
 reg  [3:0]  force_stop_sys;       // mclk: One-cycle pulse to stop voice immediately
 reg  [3:0]  force_release_sys;    // mclk: One-cycle pulse to release voice from looping
 
@@ -428,10 +428,10 @@ reg [15:0] stat_music_tick_count;         // mclk: Note tick count (stat 56)
 // SFX API queueing (mclk domain)
 //==============================================================
 // Queue for pending SFX requests per voice
-reg        q_valid [0:3];  // mclk: Queue entry valid
-reg [5:0]  q_index [0:3];  // mclk: Queued SFX index
-reg [5:0]  q_off   [0:3];  // mclk: Queued note offset
-reg [5:0]  q_len   [0:3];  // mclk: Queued note length
+reg         q_valid [0:3];  // mclk: Queue entry valid
+reg [5:0]   q_index [0:3];  // mclk: Queued SFX index
+reg [5:0]   q_off   [0:3];  // mclk: Queued note offset
+reg [15:0]  q_len   [0:3];  // mclk: Queued note length
 
 function [1:0] find_idle;
     input dummy;  // Dummy input required by Verilog
@@ -447,11 +447,10 @@ endfunction
 // SFX queueing variables
 integer l;
 integer m;
-reg [2:0] ch_f;
-reg [5:0] idx_f;
-reg [5:0] off_f;
-reg [5:0] len_f;
-reg [1:0] chx;
+reg [2:0]  ch_f;
+reg [5:0]  idx_f;
+reg [5:0]  off_f;
+reg [1:0]  chx;
 
 // Music command variables
 reg [5:0] pat;
@@ -509,10 +508,6 @@ always @(posedge mclk) begin
                 ch_f = din[14:12];
                 idx_f = din[5:0];
                 off_f = din[11:6];
-                len_f = reg_sfx_len[5:0];
-                if (len_f == 6'd0) begin
-                    len_f = 6'd32 - off_f;
-                end
 
                 if (idx_f==6'h3f) begin  // N=-1: Stop command (all ones in 6 bits)
                     if (ch_f==3'b111 || ch_f[2]) begin  // All channels if ch < 0
@@ -543,13 +538,13 @@ always @(posedge mclk) begin
                     if (!voice_busy[chx]) begin
                         play_sfx_index[chx] <= idx_f;
                         play_sfx_off[chx]   <= off_f;
-                        play_sfx_len[chx]   <= len_f;
+                        play_sfx_len[chx]   <= reg_sfx_len;
                         play_strobe_sys[chx] <= 1'b1;
                         sfx_strobe_mask[chx] <= 1'b1;
                     end else begin
                         q_index[chx] <= idx_f;
                         q_off[chx]   <= off_f;
-                        q_len[chx]   <= len_f;
+                        q_len[chx]   <= reg_sfx_len;
                         q_valid[chx] <= 1'b1;
                     end
                 end else if (ch_f==3'b110) begin  // CHANNEL=-2: Stop SFX on all channels playing it
@@ -564,13 +559,13 @@ always @(posedge mclk) begin
                     if (!voice_busy[chx]) begin
                         play_sfx_index[chx] <= idx_f;
                         play_sfx_off[chx]   <= off_f;
-                        play_sfx_len[chx]   <= len_f;
+                        play_sfx_len[chx]   <= reg_sfx_len;
                         play_strobe_sys[chx] <= 1'b1;
                         sfx_strobe_mask[chx] <= 1'b1;
                     end else begin
                         q_index[chx] <= idx_f;
                         q_off[chx]   <= off_f;
-                        q_len[chx]   <= len_f;
+                        q_len[chx]   <= reg_sfx_len;
                         q_valid[chx] <= 1'b1;
                     end
                 end
@@ -650,8 +645,8 @@ always @(posedge mclk) begin
                         end else begin
                             play_sfx_index[ch] <= frame_bytes[ch][5:0];
                             play_sfx_off[ch]   <= 6'd0;
-                            play_sfx_len[ch]   <= 6'd0;   // full SFX
-                            play_strobe_sys[ch]    <= 1'b1;
+                            play_sfx_len[ch]   <= 16'd0;   // full SFX
+                            play_strobe_sys[ch] <= 1'b1;
                             seq_played_mask[ch] <= 1'b1;
                         end
                     end

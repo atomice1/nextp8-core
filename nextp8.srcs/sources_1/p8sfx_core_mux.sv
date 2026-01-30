@@ -39,7 +39,7 @@ module p8sfx_core_mux (
     // Per-context trigger inputs (clk_sys domain) - 4 MAIN contexts (contexts 1,3,5,7)
     input  [5:0]  sfx_index_in [0:3],         // clk_sys: SFX slot to play (0-63) for each MAIN context
     input  [5:0]  sfx_offset [0:3],           // clk_sys: Starting note offset (0-31)
-    input  [5:0]  sfx_length [0:3],           // clk_sys: Number of notes to play (0=until end/loop)
+    input  [15:0] sfx_length [0:3],           // clk_sys: Number of notes to play (0=until end/loop)
     input  [3:0]  play_strobe,                // clk_sys: 1-cycle pulse per MAIN context to load & start
     input  [3:0]  force_stop,                 // clk_sys: 1-cycle pulse to hard stop
     input  [3:0]  force_release,              // clk_sys: 1-cycle pulse to release from looping
@@ -128,6 +128,13 @@ function is_main_context;
     input [2:0] ctx;
     begin
         is_main_context = ctx[0];
+    end
+endfunction
+
+function is_custom_context;
+    input [2:0] ctx;
+    begin
+        is_custom_context = ~ctx[0];
     end
 endfunction
 
@@ -221,11 +228,12 @@ localparam [1:0] PCM_STOPPING = 2'd3;  // Stopping
 
 reg [1:0] pcm_state [0:7];  // Per-context state in clk_pcm_8x domain
 
-reg [5:0] start_idx_8x [0:7];   // 0-32
+reg [5:0] start_idx_8x [0:7];    // 0-32
 reg [5:0] sfx_length_val_8x [0:7]; // 0-32
-reg [5:0] note_idx_8x [0:7];    // 0-32
-reg [7:0] sample_ctr_8x [0:7];  // Sample counter for note timing (0-182)
-reg [7:0] note_ctr_8x [0:7];    // Note counter (0-speed-1)
+reg [5:0] note_idx_8x [0:7];     // 0-32
+reg [7:0] notes_played_8x [0:7]; // Monotonic counter: total notes played (independent of looping)
+reg [7:0] sample_ctr_8x [0:7];   // Sample counter for note timing (0-182)
+reg [7:0] note_ctr_8x [0:7];     // Note counter (0-speed-1)
 
 // Current note parameters
 reg [5:0] cur_pitch_8x [0:7];   // 0-63
@@ -526,9 +534,9 @@ integer i;
 reg [7:0] pending_load_sys;      // clk_sys: Bit[i] = context i has pending load request
 
 // Per-context load request parameters (captured on play_strobe)
-reg [5:0] sfx_index_req_8x [0:7];   // clk_sys: Requested SFX index per context
-reg [5:0] sfx_offset_req_8x [0:7];  // clk_sys: Requested note offset per context
-reg [5:0] sfx_length_req_8x [0:7];  // clk_sys[W], clk_pcm_8x[R]: Requested note length per context
+reg [5:0]  sfx_index_req_8x [0:7];   // clk_sys: Requested SFX index per context
+reg [5:0]  sfx_offset_req_8x [0:7];  // clk_sys: Requested note offset per context
+reg [15:0] sfx_length_req_8x [0:7];  // clk_sys[W], clk_pcm_8x[R]: Requested note length per context
 
 // DMA arbiter state
 reg [2:0] dma_state;             // clk_sys: L_IDLE, L_START_LOAD, L_LOAD, L_SCAN
@@ -584,8 +592,7 @@ always @(posedge clk_sys) begin
                 pending_load_sys[ctx_from_voice(i, 1'b0)] <= 1'b1;
                 sfx_index_req_8x[ctx_from_voice(i, 1'b0)] <= {3'b0, custom_load_wave_pcm[i]};
                 sfx_offset_req_8x[ctx_from_voice(i, 1'b0)] <= 6'd0;
-                // Custom instruments should loop continuously (6'b111111 = continuous loop mode)
-                sfx_length_req_8x[ctx_from_voice(i, 1'b0)] <= 6'b111111;
+                sfx_length_req_8x[ctx_from_voice(i, 1'b0)] <= 16'd0;
             end else if (dma_state == L_SCAN && ctx_to_load == ctx_from_voice(i, 1'b0)) begin
                 // Clear pending flag when load completes for CUSTOM contexts
                 pending_load_sys[ctx_from_voice(i, 1'b0)] <= 1'b0;
@@ -881,6 +888,7 @@ task load_done;
 
         // Initialize playback state for this context
         note_idx_8x[ctx_idx] <= start_idx;
+        notes_played_8x[ctx_idx] <= 8'd0;  // Reset monotonic note counter
         phase_acc_8x[ctx_idx] <= 22'd0;
         detune_acc_8x[ctx_idx] <= 22'd0;
         releasing_8x[ctx_idx] <= 1'b0;
@@ -1160,20 +1168,15 @@ task advance_note;
         new_note_idx = note_idx; // default
 
         // Advance note index based on mode
-        if (sfx_length_val == 6'b111111) begin
-            // Continuous loop mode
+        if (is_custom_context(ctx_idx)) begin
+            // Custom instruments play in continuous loop mode
             if (note_idx == NOTE_MAX_INDEX) begin
                 new_note_idx = 6'd0;
             end else begin
                 new_note_idx = note_idx + 1;
             end
-        end else if (sfx_length_val != 6'd0) begin
-            // Limited-length mode
-            if (note_idx == NOTE_MAX_INDEX + 1 || note_idx >= start_idx + sfx_length_val) begin
-                should_stop = 1'b1;
-            end else begin
-                new_note_idx = note_idx + 1;
-            end
+        end else if (sfx_length_val != 16'd0 && notes_played_8x[ctx_idx] >= sfx_length_val) begin
+            should_stop = 1'b1;
         end else begin
             // Full SFX mode: check loop points
             if ((loop_start != 6'd0) && (loop_end == 6'd0)) begin
@@ -1192,7 +1195,7 @@ task advance_note;
                 end
             end else begin
                 // Normal loop
-                if (note_idx == loop_end) begin
+                if (note_idx == loop_end - 1) begin
                     new_note_idx = loop_start;
                 end else if (note_idx == NOTE_MAX_INDEX) begin
                     new_note_idx = loop_start;
@@ -1202,8 +1205,11 @@ task advance_note;
             end
         end
 
-        // Apply the new note_idx
+        // Apply the new note_idx and increment the monotonic note counter
         note_idx_8x[ctx_idx] <= new_note_idx;
+        if (!should_stop) begin
+            notes_played_8x[ctx_idx] <= notes_played_8x[ctx_idx] + 8'd1;
+        end
 
         // Reset arpeggio group position if we moved to a new group
         if (new_note_idx[5:2] != note_idx[5:2]) begin
@@ -1792,7 +1798,7 @@ task update_status_outputs;
         // Update status outputs for current context
         // Only output status for MAIN contexts (odd indices: 1,3,5,7)
         if (is_main_context(ctx_idx)) begin
-            looping[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? (loop_start != 6'd0) || (loop_end != 6'd31) : 1'b0;
+            looping[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? (loop_start < loop_end) : 1'b0;
             stat_sfx_index[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? sfx_index_req_8x[ctx_idx] : 6'h3F;
             stat_note_index[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? note_idx : 6'h3F;
         end
