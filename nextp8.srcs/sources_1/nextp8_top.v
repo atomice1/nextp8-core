@@ -1227,7 +1227,6 @@ always @(posedge mclk) begin
         // Non-blocking assignment ensures FSM sees old value before it changes
         else if (p8audio_dma_req_latched && (estate == 3'b000)) begin
             p8audio_dma_req_latched <= 1'b0;
-            $display("[nextp8_top] time=%0t DMA request cleared (FSM picked up in state 000)", $time);
         end
     end
 end

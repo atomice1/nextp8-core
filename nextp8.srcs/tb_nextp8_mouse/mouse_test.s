@@ -60,7 +60,7 @@ wait_x_10:
     /* POST 8: X=10 detected */
     move.b  #8, _POST_CODE
 
-    /* Wait for Y position to change from 0 (packet + CDC delay ~3ns) */
+    /* Wait for Y position to change from 0 */
 wait_y_nonzero:
     move.w  _MOUSE_Y, %d0
     tst.w   %d0
@@ -91,7 +91,7 @@ wait_y_nonzero:
 
     /* Wait for left button press (bit 0 of _MOUSE_BUTTONS) */
 wait_left_button:
-    move.w  _MOUSE_BUTTONS, %d0
+    move.b  _MOUSE_BUTTONS, %d0
     btst    #0, %d0
     beq     wait_left_button
 
@@ -103,7 +103,7 @@ wait_left_button:
 
     /* Wait for button release */
 wait_left_release:
-    move.w  _MOUSE_BUTTONS, %d0
+    move.b  _MOUSE_BUTTONS, %d0
     btst    #0, %d0
     bne     wait_left_release
 
@@ -119,7 +119,7 @@ wait_left_release:
 
     /* Wait for right button press (bit 1 of _MOUSE_BUTTONS) */
 wait_right_button:
-    move.w  _MOUSE_BUTTONS, %d0
+    move.b  _MOUSE_BUTTONS, %d0
     btst    #1, %d0
     beq     wait_right_button
 
@@ -131,7 +131,7 @@ wait_right_button:
 
     /* Wait for button release */
 wait_right_release:
-    move.w  _MOUSE_BUTTONS, %d0
+    move.b  _MOUSE_BUTTONS, %d0
     btst    #1, %d0
     bne     wait_right_release
 
