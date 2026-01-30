@@ -46,8 +46,8 @@ module p8sfx_core_mux (
 
     // Status outputs per MAIN context (clk_pcm_8x domain)
     output wire [3:0] voice_busy,             // clk_pcm_8x: High while each MAIN context is playing
-    output reg [3:0] sfx_done,                // clk_pcm_8x: 1-cycle pulse when SFX completes
-    output reg [3:0] looping,                 // clk_pcm_8x: Loop status per MAIN context
+    output reg [3:0]  sfx_done,               // clk_pcm_8x: 1-cycle pulse when SFX completes
+    output reg [3:0]  looping,                // clk_pcm_8x: Loop status per MAIN context
 
     // DMA client (clk_sys domain) - shared across all contexts
     output reg [30:0] dma_addr,               // clk_sys: DMA address (word address)

@@ -54,10 +54,6 @@ module p8audio (
 localparam [15:0] VERSION            = 16'd1;
 localparam integer NUM_VOICES        = 4;         // Fixed voices
 localparam [5:0]  MAX_PATTERN_INDEX  = 6'd63;     // MUSIC pattern wrap
-localparam [15:0] DEFAULT_NOTE_ATK   = 16'd16;    // samples
-localparam [15:0] DEFAULT_NOTE_REL   = 16'd16;    // samples
-localparam [15:0] DEFAULT_MUS_FADE   = 16'd16;    // frames
-localparam [15:0] DEFAULT_MUSIC_RATE = 16'd16;    // frames / sec
 localparam [7:0]  NOTE_TICK_DIV      = 8'd183;    // global note tick divider (samples)
 
 //==============================================================
@@ -115,7 +111,7 @@ always @(posedge mclk) begin
         reg_music_base  <= 0;
         reg_version     <= VERSION;
         reg_sfx_len     <= 0;
-        reg_music_fade  <= DEFAULT_MUS_FADE;
+        reg_music_fade  <= 0;
         hwfx_5f40       <= 0;
         hwfx_5f41       <= 0;
         hwfx_5f42       <= 0;
@@ -175,10 +171,10 @@ dma_arbiter #(
 //==============================================================
 // Voices - Clock Domain: mixed (see comments)
 //==============================================================
-wire signed [7:0] voice_pcm [0:3];          // clk_pcm: S8F7 PCM output per voice (zero when inactive)
-wire [3:0]         voice_busy_pcm;          // clk_pcm_8x: Voice active status
-wire [3:0]         voice_done_pcm;          // clk_pcm_8x: Context done pulse
-wire [3:0]         voice_looping_pcm;       // clk_pcm_8x: Context looping status
+wire signed [7:0]  voice_pcm [0:3];             // clk_pcm: S8F7 PCM output per voice (zero when inactive)
+wire [3:0]         voice_busy_pcm;               // clk_pcm_8x: Voice active status
+wire [3:0]         voice_done_pcm;               // clk_pcm_8x: Context done pulse
+wire [3:0]         voice_looping_pcm;            // clk_pcm_8x: Context looping status
 wire [5:0]         v_stat_sfx_index_pcm [0:3];   // clk_pcm_8x: Current SFX index
 wire [5:0]         v_stat_note_index_pcm[0:3];   // clk_pcm_8x: Current note index
 
@@ -237,7 +233,6 @@ end
 // Voice control signals (mclk domain)
 //==============================================================
 reg  [3:0]  play_strobe_sys;      // mclk: One-cycle pulse to start SFX playback
-reg  [3:0]  sfx_strobe_mask;      // mclk: Tracks which strobes were set by SFX commands
 reg  [5:0]  play_sfx_index [0:3]; // mclk: SFX index to play (0-63)
 reg  [5:0]  play_sfx_off   [0:3]; // mclk: Starting note offset (0-31)
 reg  [15:0] play_sfx_len   [0:3]; // mclk: Number of notes to play (0=full)
@@ -284,6 +279,7 @@ p8sfx_core_mux core_mux_inst (
 // Note tick generation and music fade (clk_pcm domain)
 //==============================================================
 reg note_tick_toggle_pcm;         // clk_pcm: Toggle on each note tick for CDC
+reg music_stop_toggle_pcm;        // clk_pcm: Toggle when fade-out completes (stop request)
 reg [7:0] note_tick_counter;      // clk_pcm: Counter for note tick timing (0-182)
 
 reg [15:0] music_fade_ctr_in;   // mclk: Fade-in frame counter
@@ -304,6 +300,8 @@ reg [15:0] music_fade_ctr_out_pcm;    // clk_pcm: Fade-out counter (managed in c
 (* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_ctr_in_init;    // clk_pcm: CDC stage 2 for initialization
 (* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_ctr_out_init_d; // clk_pcm: CDC stage 1 for initialization
 (* ASYNC_REG = "TRUE" *) reg [15:0] music_fade_ctr_out_init;   // clk_pcm: CDC stage 2 for initialization
+reg [15:0] music_fade_ctr_in_init_prev;   // clk_pcm: Previous value for edge detection
+reg [15:0] music_fade_ctr_out_init_prev;  // clk_pcm: Previous value for edge detection
 
 always @(posedge clk_pcm) begin
     if (!resetn_pcm) begin
@@ -315,7 +313,10 @@ always @(posedge clk_pcm) begin
         music_fade_ctr_in_init   <= 16'd0;
         music_fade_ctr_out_init_d <= 16'd0;
         music_fade_ctr_out_init  <= 16'd0;
+        music_fade_ctr_in_init_prev <= 16'd0;
+        music_fade_ctr_out_init_prev <= 16'd0;
         note_tick_toggle_pcm <= 1'b0;
+        music_stop_toggle_pcm <= 1'b0;
         note_tick_counter <= 8'd0;
     end else begin
         // Synchronize fade parameters from mclk
@@ -326,26 +327,29 @@ always @(posedge clk_pcm) begin
         music_fade_len_pcm_d      <= music_fade_len;
         music_fade_len_pcm        <= music_fade_len_pcm_d;
 
-        // Load new fade values when they change (edge detection)
-        if (music_fade_ctr_in_init != music_fade_ctr_in_pcm && music_fade_ctr_in_init != 16'd0) begin
+        // Load new fade values when source changes (edge detection)
+        if (music_fade_ctr_in_init != music_fade_ctr_in_init_prev && music_fade_ctr_in_init != 16'd0) begin
             music_fade_ctr_in_pcm <= music_fade_ctr_in_init;
+        end else if (music_fade_ctr_in_pcm != 16'd0) begin
+            music_fade_ctr_in_pcm <= music_fade_ctr_in_pcm - 16'd1;
         end
-        if (music_fade_ctr_out_init != music_fade_ctr_out_pcm && music_fade_ctr_out_init != 16'd0) begin
+        if (music_fade_ctr_out_init != music_fade_ctr_out_init_prev && music_fade_ctr_out_init != 16'd0) begin
             music_fade_ctr_out_pcm <= music_fade_ctr_out_init;
+        end else if (music_fade_ctr_out_pcm != 16'd0) begin
+            music_fade_ctr_out_pcm <= music_fade_ctr_out_pcm - 16'd1;
+            // When fade-out reaches zero, stop music playback
+            if (music_fade_ctr_out_pcm == 16'd1) begin
+                // Stop music playback
+                music_stop_toggle_pcm <= ~music_stop_toggle_pcm;
+            end
         end
+        music_fade_ctr_in_init_prev <= music_fade_ctr_in_init;
+        music_fade_ctr_out_init_prev <= music_fade_ctr_out_init;
 
         // Note tick generation
         if (note_tick_counter >= 8'd182) begin  // NOTE_TICK_DIV - 1 = 183 - 1 = 182
             note_tick_counter <= 8'd0;
             note_tick_toggle_pcm <= ~note_tick_toggle_pcm;
-
-            // Decrement fade counters on note tick (in clk_pcm domain)
-            if (music_fade_ctr_in_pcm != 16'd0) begin
-                music_fade_ctr_in_pcm <= music_fade_ctr_in_pcm - 16'd1;
-            end
-            if (music_fade_ctr_out_pcm != 16'd0) begin
-                music_fade_ctr_out_pcm <= music_fade_ctr_out_pcm - 16'd1;
-            end
         end else begin
             note_tick_counter <= note_tick_counter + 1;
         end
@@ -378,21 +382,22 @@ always @(posedge clk_pcm) begin
             + $signed({voice_pcm[3][7], voice_pcm[3][7], voice_pcm[3]});
 
         // Apply fade effects
-        denom = $signed({{16{1'b0}}, music_fade_len_pcm == 16'd0 ? 32'd1 : music_fade_len_pcm});
+        denom = $signed({{16{1'b0}}, music_fade_len_pcm == 16'd0 ? 16'd1 : music_fade_len_pcm});
         if (music_fade_in_pcm) begin
             // Fade in: multiply by (len - ctr) / len
             num = $signed(denom - music_fade_ctr_in_pcm);
-            sum = (sum * num) / denom;
+            sum = ($signed({{22{sum[9]}}, sum}) * num) / denom;
         end
         if (music_fade_out_pcm) begin
             // Fade out: multiply by ctr / len
             numo = $signed({{16{1'b0}}, music_fade_ctr_out_pcm});
-            sum = (sum * numo) / denom;
+            sum = ($signed({{22{sum[9]}}, sum}) * numo) / denom;
         end
 
+
         // Saturation to S8F7 output (range: -128 to +127)
-        if (sum > 18'sd127) sum = 18'sd127;
-        if (sum < -18'sd128) sum = -18'sd128;
+        if (sum > 10'sd127) sum = 10'sd127;
+        if (sum < -10'sd128) sum = -10'sd128;
         pcm_out <= sum[7:0];
     end
 end
@@ -400,8 +405,16 @@ end
 //==============================================================
 // MUSIC Sequencer + stat counters (mclk domain)
 //==============================================================
+// Music sequencer state machine (mclk domain)
+localparam [2:0] MUSIC_IDLE     = 3'd0;
+localparam [2:0] MUSIC_LOADING  = 3'd1;
+localparam [2:0] MUSIC_LOADED   = 3'd2;
+localparam [2:0] MUSIC_PLAYING  = 3'd3;
+localparam [2:0] MUSIC_ADVANCE  = 3'd4;
+localparam [2:0] MUSIC_STOPPING = 3'd5;
+
 reg [5:0] cur_frame;                      // mclk: Current music pattern frame index
-reg       music_active;                   // mclk: Music sequencer active flag
+reg [2:0] music_state;                    // mclk: Music sequencer state
 reg [7:0] frame_bytes [0:3];              // mclk: Current frame data (4 bytes)
 reg [1:0] fb_idx;                         // mclk: Frame byte fetch index
 
@@ -410,7 +423,6 @@ reg       loop_def, stop_on_loop;         // mclk: Loop flags
 reg [3:0] music_mask;                     // mclk: Channel enable mask for music
 
 reg [3:0] seq_played_mask;                // mclk: Channels triggered by current pattern
-reg       seq_waiting;                    // mclk: Wait for voice_done before advancing
 
 reg [15:0] stat_music_pattern;            // mclk: Current pattern index (stat 54)
 reg [15:0] stat_music_pattern_count;      // mclk: Pattern loop count (stat 55)
@@ -419,6 +431,12 @@ reg [15:0] stat_music_tick_count;         // mclk: Note tick count (stat 56)
 // CDC: note_tick toggle synchronizer from clk_pcm to mclk
 (* ASYNC_REG = "TRUE" *) reg note_tick_toggle_sys_d;               // mclk: CDC stage 1
 (* ASYNC_REG = "TRUE" *) reg note_tick_toggle_sys_q;               // mclk: CDC stage 2
+
+// CDC: music stop request from clk_pcm to mclk
+(* ASYNC_REG = "TRUE" *) reg music_stop_toggle_sys_d;              // mclk: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg music_stop_toggle_sys_q;              // mclk: CDC stage 2
+reg music_stop_toggle_sys_prev;                                    // mclk: Edge detect
+wire music_stop_pulse = (music_stop_toggle_sys_q != music_stop_toggle_sys_prev);
 
 // CDC: Reserved for future use
 (* ASYNC_REG = "TRUE" *) reg frame_toggle_sys_d;                   // mclk: CDC stage 1 (unused)
@@ -457,6 +475,7 @@ reg [5:0] pat;
 reg [3:0] msk;
 reg start;
 reg stop;
+reg [5:0] next_frame;
 
 // Sequencer variables
 integer ch;
@@ -474,33 +493,30 @@ always @(posedge mclk) begin
             force_stop_sys[l]<=0;
             force_release_sys[l]<=0;
         end
-        sfx_strobe_mask <= 4'b0000;
         // MUSIC command handler resets
-        music_active<=0; music_mask<=4'b1111; cur_frame<=0;
+        music_state<=MUSIC_IDLE; music_mask<=4'b1111; cur_frame<=0;
         music_fade_ctr_in<=0; music_fade_ctr_out<=0; music_fade_len<=0;
         // Sequencer resets
         seq_dma_req<=0; fb_idx<=0;
         frame_toggle_sys_d <= 1'b0; frame_toggle_sys_q <= 1'b0;
-        seq_played_mask <= 4'b0000; seq_waiting <= 1'b0;
+        seq_played_mask <= 4'b0000;
         loop_def<=0; loop_start<=0; loop_end<=0; stop_on_loop<=0;
         stat_music_pattern<=0; stat_music_pattern_count<=0;
         // Note tick counter resets
         note_tick_toggle_sys_d <= 1'b0;
         note_tick_toggle_sys_q <= 1'b0;
+        // Music stop request resets
+        music_stop_toggle_sys_d <= 1'b0;
+        music_stop_toggle_sys_q <= 1'b0;
+        music_stop_toggle_sys_prev <= 1'b0;
         stat_music_tick_count <= 0;
         // Initialize frame_bytes to disabled channels (bit 6 set)
         frame_bytes[0] <= 8'h41; frame_bytes[1] <= 8'h42;
         frame_bytes[2] <= 8'h43; frame_bytes[3] <= 8'h44;
     end else begin
-        // Clear SFX-triggered strobes from previous cycle
-        if (sfx_strobe_mask != 4'b0000) begin
-            for (l=0; l<NUM_VOICES; l=l+1) begin
-                if (sfx_strobe_mask[l]) play_strobe_sys[l] <= 1'b0;
-            end
-            sfx_strobe_mask <= 4'b0000;
-        end
-
+        play_strobe_sys <= 4'd0;
         force_stop_sys <= 4'b0000; force_release_sys <= 4'b0000;
+        seq_dma_req<=0;
 
         // SFX command handler
         if (write_en && address==ADDR_SFX_CMD[7:1]) begin
@@ -540,7 +556,6 @@ always @(posedge mclk) begin
                         play_sfx_off[chx]   <= off_f;
                         play_sfx_len[chx]   <= reg_sfx_len;
                         play_strobe_sys[chx] <= 1'b1;
-                        sfx_strobe_mask[chx] <= 1'b1;
                     end else begin
                         q_index[chx] <= idx_f;
                         q_off[chx]   <= off_f;
@@ -561,7 +576,6 @@ always @(posedge mclk) begin
                         play_sfx_off[chx]   <= off_f;
                         play_sfx_len[chx]   <= reg_sfx_len;
                         play_strobe_sys[chx] <= 1'b1;
-                        sfx_strobe_mask[chx] <= 1'b1;
                     end else begin
                         q_index[chx] <= idx_f;
                         q_off[chx]   <= off_f;
@@ -579,7 +593,6 @@ always @(posedge mclk) begin
                 play_sfx_off[l]   <= q_off[l];
                 play_sfx_len[l]   <= q_len[l];
                 play_strobe_sys[l] <= 1'b1;
-                sfx_strobe_mask[l] <= 1'b1;
                 q_valid[l] <= 1'b0;
             end
         end
@@ -593,17 +606,18 @@ always @(posedge mclk) begin
             msk = din[6:3];
             if (pat == 6'h3f) begin
                 // Stop music (pattern = -1)
-                music_active<=0; seq_dma_req<=0;
-                music_fade_ctr_in <= 0;
-                music_fade_ctr_out <= reg_music_fade;
-                music_fade_len <= reg_music_fade;
+                if (music_state != MUSIC_IDLE) begin
+                    music_fade_ctr_in <= 0;
+                    music_fade_ctr_out <= reg_music_fade;
+                    music_fade_len <= reg_music_fade;
+                end
             end else begin
                 // Start music from pattern n
                 music_mask <= (msk==4'b0000) ? 4'b1111 : msk;
                 music_fade_len     <= reg_music_fade;
                 music_fade_ctr_in  <= reg_music_fade;
                 music_fade_ctr_out <= 0;
-                music_active<=1;
+                music_state<=MUSIC_LOADING;
                 cur_frame <= pat;
                 loop_def<=0; stop_on_loop<=0;
                 // reg_music_base is byte address, convert to word address
@@ -618,24 +632,26 @@ always @(posedge mclk) begin
             end
         end
 
-        // Clear music-triggered play strobes
-        if (seq_played_mask != 4'b0000) begin
-            for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
-                if (seq_played_mask[ch]) play_strobe_sys[ch] <= 1'b0;
+        case (music_state)
+            MUSIC_LOADING: begin
+                // MUSIC sequencer DMA: Fetch 4 bytes per frame (2 DMA reads of 16 bits each)
+                if (seq_dma_ack) begin
+                    // Unpack 16-bit DMA read into two consecutive bytes
+                    // Big-endian: bits[15:8] = first byte (lower address), bits[7:0] = second byte (higher address)
+                    frame_bytes[fb_idx]     <= dma_rdata[15:8];  // first byte at even position
+                    frame_bytes[fb_idx + 1] <= dma_rdata[7:0];   // second byte at odd position
+                    seq_dma_addr <= seq_dma_addr + 1;  // increment by 1 word (2 bytes)
+                    fb_idx <= fb_idx + 2'd2;
+                    if (fb_idx < 2'd2) begin
+                        // More data needed - pulse for next transfer
+                        seq_dma_req <= 1'b1;
+                    end else begin
+                        music_state <= MUSIC_LOADED;
+                    end
+                end
             end
-        end
-
-        // MUSIC sequencer DMA: Fetch 4 bytes per frame (2 DMA reads of 16 bits each)
-        if (seq_dma_ack) begin
-            // Unpack 16-bit DMA read into two consecutive bytes
-            // Big-endian: bits[15:8] = first byte (lower address), bits[7:0] = second byte (higher address)
-            frame_bytes[fb_idx]     <= dma_rdata[15:8];  // first byte at even position
-            frame_bytes[fb_idx + 1] <= dma_rdata[7:0];   // second byte at odd position
-            fb_idx <= fb_idx + 2;
-            seq_dma_addr <= seq_dma_addr + 1;  // increment by 1 word (2 bytes)
-            if (fb_idx >= 2'd2) begin
-                // Done - clear request
-                seq_dma_req <= 1'b0;
+            MUSIC_LOADED: begin
+                // DMA done - process frame data
                 fb_idx <= 0;
                 seq_played_mask <= 4'b0000;
                 for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
@@ -654,55 +670,53 @@ always @(posedge mclk) begin
                 if (frame_bytes[0][7]) begin loop_start<=cur_frame; loop_def<=1'b1; end
                 if (frame_bytes[1][7]) begin loop_end<=cur_frame;   loop_def<=1'b1; end
                 if (frame_bytes[3][7]) begin stop_on_loop<=1'b1; end
-                // if any channels were triggered, wait for a voice_done before advancing
-                seq_waiting <= |seq_played_mask;
-            end else begin
-                // More data needed - pulse for next transfer
-                seq_dma_req <= 1'b1;
+                music_state <= MUSIC_PLAYING;
             end
-        end else if (seq_dma_req) begin
-            // Clear pulse after one cycle
-            seq_dma_req <= 1'b0;
-        end
-
-        // MUSIC sequencer pattern advancement
-        if (music_active) begin
-            // Dynamically find leftmost non-looping channel among triggered channels
-            leftmost_nonloop = 2'd0;  // default
-            if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
-                leftmost_nonloop = 2'd0;
-            end else if (seq_played_mask[1] && !voice_looping_sys_q[1]) begin
-                leftmost_nonloop = 2'd1;
-            end else if (seq_played_mask[2] && !voice_looping_sys_q[2]) begin
-                leftmost_nonloop = 2'd2;
-            end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
-                leftmost_nonloop = 2'd3;
-            end
-
-            // advance only if not waiting or if leftmost non-looping channel reports done
-            if ((!seq_waiting || (seq_waiting && voice_done[leftmost_nonloop])) && !seq_dma_req) begin
-                if (loop_def && cur_frame==loop_end) begin
-                    if (stop_on_loop) begin
-                        music_active<=1'b0;
-                    end else begin
-                        // loop back to stored loop_start
-                        cur_frame<=loop_start;
-                        stat_music_pattern_count <= stat_music_pattern_count + 1;
-                    end
-                end else begin
-                    cur_frame <= (cur_frame==MAX_PATTERN_INDEX) ? 6'd0 : (cur_frame+1);
-                    stat_music_pattern_count <= stat_music_pattern_count + 1;
+            MUSIC_PLAYING: begin
+                //$display("MUSIC PLAYING AT FRAME %d", cur_frame);
+                // Dynamically find leftmost non-looping channel among triggered channels
+                leftmost_nonloop = 2'd0;  // default
+                if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
+                    leftmost_nonloop = 2'd0;
+                end else if (seq_played_mask[1] && !voice_looping_sys_q[1]) begin
+                    leftmost_nonloop = 2'd1;
+                end else if (seq_played_mask[2] && !voice_looping_sys_q[2]) begin
+                    leftmost_nonloop = 2'd2;
+                end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
+                    leftmost_nonloop = 2'd3;
                 end
-                stat_music_pattern <= {10'd0, cur_frame};
-                // reg_music_base is byte address, convert to word address
-                seq_dma_addr_temp = (reg_music_base + ({26'd0, cur_frame} << 2)) >> 1;
-                seq_dma_addr <= seq_dma_addr_temp[30:0];
-                seq_dma_req  <= 1'b1;
-                fb_idx <= 0;
-                // clear waiting flag for next frame
-                seq_waiting <= 1'b0;
+
+                // Advance immediately if nothing triggered, otherwise wait for a non-looping voice to complete
+                if (seq_played_mask == 4'b0000 || voice_done[leftmost_nonloop]) begin
+                    music_state <= MUSIC_ADVANCE;
+                end
             end
-        end
+            MUSIC_ADVANCE: begin
+                // MUSIC sequencer pattern advancement
+                if (loop_def && cur_frame==loop_end && stop_on_loop) begin
+                    music_state<=MUSIC_STOPPING;
+                end else begin
+                    if (loop_def && cur_frame==loop_end) begin
+                        // loop back to stored loop_start
+                        next_frame = loop_start;
+                    end else begin
+                        next_frame = (cur_frame==MAX_PATTERN_INDEX) ? 6'd0 : (cur_frame+1);
+                    end
+                    cur_frame <= next_frame;
+                    stat_music_pattern <= {10'd0, next_frame};
+                    stat_music_pattern_count <= stat_music_pattern_count + 1;
+                    // reg_music_base is byte address, convert to word address
+                    seq_dma_addr_temp = (reg_music_base + ({26'd0, next_frame} << 2)) >> 1;
+                    seq_dma_addr <= seq_dma_addr_temp[30:0];
+                    seq_dma_req  <= 1'b1;
+                    fb_idx <= 0;
+                    music_state <= MUSIC_LOADING;
+                end
+            end
+            MUSIC_STOPPING: begin
+                music_state <= MUSIC_IDLE;
+            end
+        endcase
 
         // Note tick counter - detect edge from clk_pcm domain
         note_tick_toggle_sys_d <= note_tick_toggle_pcm;
@@ -710,6 +724,14 @@ always @(posedge mclk) begin
         if (note_tick_toggle_sys_q != note_tick_toggle_sys_d) begin
             stat_music_tick_count <= stat_music_tick_count + 1;
         end
+
+        // Music stop request - detect edge from clk_pcm domain
+        music_stop_toggle_sys_d <= music_stop_toggle_pcm;
+        music_stop_toggle_sys_q <= music_stop_toggle_sys_d;
+        if (music_stop_pulse && music_state != MUSIC_IDLE) begin
+            music_state <= MUSIC_STOPPING;
+        end
+        music_stop_toggle_sys_prev <= music_stop_toggle_sys_q;
     end
 end
 

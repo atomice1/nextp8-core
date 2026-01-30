@@ -31,8 +31,8 @@ module tb_p8audio_sfx;
     // Relatively prime clocks to provoke CDC issues.
     // The clock ratios don't match the implementation - clk_pcm_8x runs much
     // faster to reduce simulation time.
-    always #7 clk_sys = ~clk_sys;
-    always #4 clk_pcm_8x = ~clk_pcm_8x;
+    always #4 clk_sys = ~clk_sys;
+    always #7 clk_pcm_8x = ~clk_pcm_8x;
 
     // Derive clk_pcm from clk_pcm_8x using a counter to ensure exact 8:1 ratio
     reg [1:0] pcm_div_counter = 2'd0;

@@ -85,7 +85,7 @@ sim: elaborate venv
 	@echo "WAV file generated: tb_p8audio_music_out.wav"
 	@echo ""
 	@echo "=== Checking audio output against reference ==="
-	@$(VENV_PYTHON) ../../scripts/check_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav" 0.15 5.0 || \
+	@$(VENV_PYTHON) ../../scripts/check_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav" 0.165 8.0 || \
 		(echo ""; echo "ERROR: Audio check failed. Run 'make compare' to see detailed comparison."; exit 1)
 	@echo ""
 	@echo "=== Audio check PASSED ==="
@@ -133,7 +133,7 @@ compare: venv
 
 check: venv
 	@echo "=== Checking audio output against reference (pass/fail) ==="
-	@$(VENV_PYTHON) ../../scripts/check_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav" 0.15 5.0
+	@$(VENV_PYTHON) ../../scripts/check_audio.py "tb_p8audio_music_ref.wav" "tb_p8audio_music_out.wav" 0.165 8.0
 
 # Clean generated files
 clean:

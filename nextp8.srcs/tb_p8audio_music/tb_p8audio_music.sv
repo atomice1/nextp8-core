@@ -28,15 +28,23 @@ module tb_p8audio_music;
     reg clk_pcm_8x = 1'b0;  // ~176.4 kHz (8× PCM sample clock)
     reg resetn  = 1'b0;
 
-    // 33MHz: 30ns period
-    always #15 clk_sys = ~clk_sys;
-    // 22.05kHz: ~45.351us period
-    //localparam integer PCM_HALF_NS = 1000000000/22050/2; // 22.675us ~ 44.101kHz
-    // Note: the test bench runs the PCM clock at 1000x to reduce simulation time.
-    localparam integer PCM_HALF_NS = 1000000/22050/2; // 22.675ns ~ 44.101MHz
-    always #(PCM_HALF_NS) clk_pcm = ~clk_pcm;
-    // clk_pcm_8x: 8× faster than clk_pcm
-    always #(PCM_HALF_NS/8) clk_pcm_8x = ~clk_pcm_8x;
+    // Relatively prime clocks to provoke CDC issues.
+    // The clock ratios don't match the implementation.
+    always #4 clk_sys = ~clk_sys;
+    always #7 clk_pcm_8x = ~clk_pcm_8x;
+
+    // Derive clk_pcm from clk_pcm_8x using a counter to ensure exact 8:1 ratio
+    reg [1:0] pcm_div_counter = 2'd0;
+    always @(posedge clk_pcm_8x or negedge resetn) begin
+        if (!resetn) begin
+            pcm_div_counter <= 2'd0;
+            clk_pcm <= 1'b0;
+        end else begin
+            pcm_div_counter <= pcm_div_counter + 1;
+            if (pcm_div_counter == 2'd3)  // Toggle every 4 cycles for 8:1 ratio
+                clk_pcm <= ~clk_pcm;
+        end
+    end
 
     //====================
     // MMIO signals
@@ -61,7 +69,7 @@ module tb_p8audio_music;
     //====================
     // PCM output
     //====================
-    wire signed [15:0] pcm_out;
+    wire signed [7:0] pcm_out;
 
     //====================
     // DMA interface
@@ -520,8 +528,8 @@ module tb_p8audio_music;
         mmio_write(ADDR_MUSIC_BASE_HI, 16'h0000); // MUSIC_BASE_HI
         mmio_write(ADDR_MUSIC_BASE_LO, MUSIC_BASE); // MUSIC_BASE_LO (byte address)
         mmio_write(ADDR_CTRL,        16'h0001);   // CTRL.RUN=1
-        // Set music fade time (default 16 frames)
-        mmio_write(ADDR_MUSIC_FADE,  16'd16);
+        // Set music fade time (default 300 ms)
+        mmio_write(ADDR_MUSIC_FADE,  16'd6615);
 
         // Play music starting from pattern 5 on all channels
         // MUSIC_CMD format: [14]=stop, [13]=start, [12:7]=pattern, [6:3]=mask
@@ -541,7 +549,7 @@ module tb_p8audio_music;
         while (count < n_samples) begin
             @(posedge clk_pcm);
             // Write little-endian PCM samples as bytes
-            $fwrite(wav, "%c%c", pcm_out[7:0], pcm_out[15:8]);
+            $fwrite(wav, "%c%c", 8'd0, pcm_out[7:0]);
             count = count + 1;
         end
         $fclose(wav);
