@@ -79,6 +79,7 @@ SDSPISIM::SDSPISIM(const bool debug) {
 	//
 	m_reading_data = false;
 	m_have_token = false;
+	m_multiblock_write = false;
 	m_debug = debug;
 	m_crc_on = false;
 }
@@ -315,7 +316,12 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					if (m_debug) printf("LEN = %d\n", m_rxloc);
 					if (m_debug) printf("CHECKING CRC: (rx) %04x =? %04x (calc)\n",
 						crc, rxcrc);
-					m_reading_data = false;
+					if (m_multiblock_write) {
+						// In multi-block mode, stay in reading_data state
+						m_reading_data = true;
+					} else {
+						m_reading_data = false;
+					}
 					m_have_token = false;
 					if (!m_crc_on || rxcrc == crc) {
 						m_dat_out = 5;
@@ -333,9 +339,22 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 			} else {
 				// {{{
 				if ((m_dat_in&0x0ff) == 0x0fe) {
+					// Single block write token
 					if (m_debug) printf("SDSPI: TOKEN!!\n");
 					m_have_token = true;
 					m_rxloc = 0;
+				} else if ((m_dat_in&0x0ff) == 0x0fc) {
+					// Multi-block write token
+					if (m_debug) printf("SDSPI: MULTI-BLOCK WRITE TOKEN!!\n");
+					m_have_token = true;
+					m_rxloc = 0;
+				} else if ((m_dat_in&0x0ff) == 0x0fd) {
+					// Stop transmission token
+					if (m_debug) printf("SDSPI: STOP TRAN TOKEN!!\n");
+					m_reading_data = false;
+					m_multiblock_write = false;
+					m_have_token = false;
+					m_dat_out = 0xff; // Busy signal, then 0xFF
 				} else if (m_debug)
 					printf("SDSPI: waiting on token\n");
 				// }}}
@@ -565,6 +584,23 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					}
 					m_reading_data = true;
 					m_have_token = false;
+					m_multiblock_write = false;
+					m_dat_out = 0;
+					break;
+				case 25: // CMD25 -- WRITE_MULTIPLE_BLOCK
+					if (m_dev) {
+						if (m_debug) printf("Going to write multiple blocks starting at %08x of %08lx\n", arg, m_devblocks);
+						if (m_block_address) {
+							assert(arg < m_devblocks);
+							fseek(m_dev, arg<<LGSECTOR_SIZE, SEEK_SET);
+						} else {
+							assert(arg < m_devblocks<<9);
+							fseek(m_dev, arg, SEEK_SET);
+						}
+					}
+					m_reading_data = true;
+					m_have_token = false;
+					m_multiblock_write = true;
 					m_dat_out = 0;
 					break;
 				case 55: // CMD55 -- APP_CMD
@@ -612,7 +648,7 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					m_rspdly = 4; 
 					break;
 				case  6: // CMD6  -- SWITCH_FUNC
-				case 25: // CMD25 -- WRITE_MULTIPLE_BLOCK
+
 				case 27: // CMD27 -- PROGRAM_CSD
 				case 32: // CMD32 -- ERASE_WR_BLK_START_ADDR
 				case 33: // CMD33 -- ERASE_WR_BLK_END_ADDR
