@@ -408,9 +408,15 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					m_blkidx = 0;
 					m_dat_out = 0;
 					break;
+				case 23: // ACMD23 -- SET_WR_BLK_ERASE_COUNT
+					// Pre-erase notification for multi-block writes
+					// Argument contains the number of blocks to pre-erase
+					// In simulation, we just acknowledge it
+					m_rspbuf[0] = 0x00;
+					m_rspdly = 2;
+					break;
 				case 13: // ACMD13
 				case 22: // ACMD22
-				case 23: // ACMD23
 				case 42: // ACMD42
 				default: // Unimplemented command!
 					m_rspbuf[0] = 0x04;
