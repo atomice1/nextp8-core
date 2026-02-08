@@ -66,7 +66,7 @@ class	SDSPISIM {
 	int		m_last_sck, m_delay, m_mosi;
 	bool		m_busy, m_debug, m_block_address, m_altcmd_flag,
 			m_syncd, m_host_supports_high_capacity, m_reading_data,
-			m_have_token, m_crc_on;
+			m_have_token, m_crc_on, m_multiblock_write;
 
 	RESET_STATES	m_reset_state;
 
