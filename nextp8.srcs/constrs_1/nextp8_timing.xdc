@@ -192,7 +192,7 @@ set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_ou
 set_output_delay -clock [get_clocks joy_clock] -max 200.0 [get_ports {joysel_o}]
 set_output_delay -clock [get_clocks joy_clock] -min 0.0 [get_ports {joysel_o}]
 
-## Accelerometer I2C (on 50 MHz clock)
+## Accelerater I2C (on 50 MHz clock)
 set_input_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports accel_io[*]]
 set_input_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports accel_io[*]]
 set_output_delay -clock [get_clocks clock_50_i] -max 20.0 [get_ports accel_io[*]]
@@ -202,6 +202,15 @@ set_output_delay -clock [get_clocks clock_50_i] -min 0.0 [get_ports accel_io[*]]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] -max 5.0 [get_ports {rgb_r_o[*] rgb_g_o[*] rgb_b_o[*] hsync_o vsync_o}]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] -min 0.0 [get_ports {rgb_r_o[*] rgb_g_o[*] rgb_b_o[*] hsync_o vsync_o}]
 
+## VGA DAC clock outputs (direct clock forwarding from clk65)
+set_max_delay -to [get_ports {vgaclk_o vgaclkn_o}] 5.0
+
+## Pi UART output (async serial, on clk_sys)
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 20.0 [get_ports pi_uart_tx_o]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports pi_uart_tx_o]
+
+## Debug/diagnostic outputs (not timing critical)
+set_false_path -to [get_ports {postcode_o[*] joyp7_o}]
 
 ## Clock Domain Crossing False Paths
 ## These are paths between different PLLs or async clock domains with proper CDC
@@ -243,6 +252,10 @@ set_false_path -from [get_ports ear_port_i]
 
 ## SPI flash input (self-timed by internal SPI controller)
 set_false_path -from [get_ports flash_miso_i]
+
+## Unused input ports (not connected in design)
+set_false_path -from [get_ports {btn_divmmc_n_i btn_multiface_n_i}]
+set_false_path -from [get_ports {XADC_VP XADC_VN XADC_15P XADC_15N XADC_7P XADC_7N}]
 
 ## Joystick clock domain (very slow, async)
 set_false_path -from [get_clocks joy_clock]
