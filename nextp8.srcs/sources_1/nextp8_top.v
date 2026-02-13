@@ -192,17 +192,17 @@ pll pll
 (
     .clk_in1   ( clock_50_i ),
     .clk_out1  ( clk_sys ),    // 11 MHz
-    .clk_out2  ( clk325 ),     // 325 MHz
+    .clk_out2  ( clk325 ),     // 325 MHz (VCO input for PLL2)
     .clk_out3  ( mclk ),       // 30.56 MHz
     .locked    ( pll_locked )
 );
 
 pll_hdmi pl2
 (
-    .clk_in1   ( clk325 ),
-    .clk_out1  ( clk65 ),      // 64.71 MHz pixel clock
-    .clk_out2  ( clk_tmds ),   // 323.52940 MHz TMDS clock
-    .clk_out3  ( clk_video )   // 10.78 MHz video clock (64.71 MHz / 6)
+    .clk_in1   ( clk325 ),     // 325 MHz input (VCO = 650 MHz)
+    .clk_out1  ( clk65 ),      // 65.0 MHz pixel clock (VCO/10)
+    .clk_out2  ( clk_tmds ),   // 325.0 MHz TMDS clock (VCO/2, exactly 5x clk65)
+    .clk_out3  ( clk_video )   // 32.5 MHz video timing clock (VCO/20, exactly clk65/2)
 );
 
 

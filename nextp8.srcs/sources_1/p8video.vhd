@@ -91,12 +91,14 @@ architecture Behavioral of p8video is
 -- Visible region starts at: pixel 264 (136+128), line 35 (6+29)
 constant l1:natural:=35;     -- vsync + vback porch
 constant lno:natural:=768;   -- visible lines
-constant p1:natural:=264+128;-- hsync + hback porch + left border
+constant p1:natural:=136+160+128;-- hsync + hback porch + left border
 constant pno:natural:=768;   -- visible pixels
 constant p2:natural:=p1+pno;
 constant l2:natural:=l1+lno;  --
 constant xdim:natural:=1343; --pixels-1
 constant ydim:natural:=805; --lines
+
+constant VRAM_PIPELINE_LATENCY_PIXELS : natural := 6;
 
 type PaletteArray is array(0 to 31) of Std_logic_vector(23 downto 0);
 CONSTANT SystemPalette : PaletteArray := (
@@ -303,13 +305,7 @@ begin
                 VSB <= '1';
             end if;
 
-            if pixel < 136 then
-                HS <= '0';
-            else
-                HS <= '1';
-            end if;
-
-            if pixel >= xdim - 5 then
+            if pixel >= xdim - 1 then
                 pixel := 0;
                 if lin < ydim then
                     lin := lin + 1;
@@ -318,16 +314,26 @@ begin
                     vfront <= vfrontreq_video;
                 end if;
             else
-                pixel := pixel + 6;
+                pixel := pixel + 2;
             end if;
 
-            if pixel >= p1 - 36 and pixel < p2 + 6 and lin >= l1 and lin < l2 then
+            if pixel < 136 then
+                HS <= '0';
+            else
+                HS <= '1';
+            end if;
+
+            if pixel >= p1 - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2 and lin >= l1 and lin < l2 then
                 px := (pixel - p1) / 6;
                 ln := (lin - l1) / 6;
-                px_next := px + 1;
-
-                vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
-                vaddress_overlay <= '0' & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
+                if pixel + VRAM_PIPELINE_LATENCY_PIXELS < p2 then
+                    px_next := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1) / 6;
+                    vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
+                    vaddress_overlay <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
+                else
+                    vaddress_main <= (others => '0');
+                    vaddress_overlay <= (others => '0');
+                end if;
             else
                 px := 800;
                 ln := 300;
