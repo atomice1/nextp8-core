@@ -397,141 +397,64 @@ wire audioL,audioR;
 assign audioext_l_o = audioL;
 assign audioext_r_o = audioR;
 
-// Digital audio signals (declare before use)
-reg da_playing=0;
-reg da_mono=0;
-reg [15:0] da_data=16'd0;
-(* ASYNC_REG = "TRUE" *) reg da_start_sys_d, da_start_sys_q;
 
 // P8 audio output (from p8audio module below)
 wire signed [7:0] p8audio_pcm_out;
 
-// DAC audio mixing in clk_sys domain (removed - now done in clk_tmds domain)
-// wire [15:0] pcm_audio_L_dac, pcm_audio_R_dac;
-// assign pcm_audio_L_dac = (da_playing ? (da_mono_q ? da_data_sys_q : {da_data_sys_q[7:0], 8'd0}) : 16'd0) +
-//                          {p8audio_pcm_out_sys_q, 8'd0};
-// assign pcm_audio_R_dac = (da_playing ? (da_mono_q ? da_data_sys_q : {da_data_sys_q[15:8], 8'd0}) : 16'd0) +
-//                          {p8audio_pcm_out_sys_q, 8'd0};
+// Reset synchronizer for clk65 domain (for DAC and HDMI mixing)
+(* ASYNC_REG = "TRUE" *) reg reset65_d, reset65_q;  // clk65 domain
 
-// DAC audio mixing synchronized to clk_tmds
-(* ASYNC_REG = "TRUE" *) reg [15:0] pcm_audio_L_dac_2pll_d, pcm_audio_L_dac_2pll_q;
-(* ASYNC_REG = "TRUE" *) reg [15:0] pcm_audio_R_dac_2pll_d, pcm_audio_R_dac_2pll_q;
-
-// Additional CDC synchronizers for audio mixing components (clk_sys -> clk_tmds)
-(* ASYNC_REG = "TRUE" *) reg da_playing_tmds_d, da_playing_tmds_q;
-(* ASYNC_REG = "TRUE" *) reg da_mono_tmds_d, da_mono_tmds_q;
-(* ASYNC_REG = "TRUE" *) reg [15:0] da_data_tmds_d, da_data_tmds_q;
-(* ASYNC_REG = "TRUE" *) reg signed [7:0] p8audio_pcm_out_tmds_d, p8audio_pcm_out_tmds_q;
-(* ASYNC_REG = "TRUE" *) reg reset_tmds_d, reset_tmds_q;
-
-// Audio mixing in clk_tmds domain with pipelined stages
-wire [15:0] pcm_audio_L_tmds, pcm_audio_R_tmds;
-
-// Stage 1: DA audio selection (combinatorial)
-wire [15:0] da_audio_L_sel = da_playing_tmds_q ? (da_mono_tmds_q ? da_data_tmds_q : {da_data_tmds_q[7:0], 8'd0}) : 16'd0;
-wire [15:0] da_audio_R_sel = da_playing_tmds_q ? (da_mono_tmds_q ? da_data_tmds_q : {da_data_tmds_q[15:8], 8'd0}) : 16'd0;
-
-// Stage 2: P8 audio extension (combinatorial)
-wire [15:0] p8_audio_L_ext = {p8audio_pcm_out_tmds_q, 8'd0};
-wire [15:0] p8_audio_R_ext = {p8audio_pcm_out_tmds_q, 8'd0};
-
-// Pipeline registers for audio mixing stages
-reg [15:0] da_audio_L_tmds_reg, da_audio_R_tmds_reg;
-reg [15:0] p8_audio_L_tmds_reg, p8_audio_R_tmds_reg;
-reg [15:0] pcm_audio_L_tmds_reg, pcm_audio_R_tmds_reg;
-
-always @(posedge clk_tmds) begin
-    if (reset_tmds_q) begin
-        pcm_audio_L_dac_2pll_d <= 16'd0;
-        pcm_audio_L_dac_2pll_q <= 16'd0;
-        pcm_audio_R_dac_2pll_d <= 16'd0;
-        pcm_audio_R_dac_2pll_q <= 16'd0;
-
-        da_playing_tmds_d <= 1'b0;
-        da_playing_tmds_q <= 1'b0;
-        da_mono_tmds_d <= 1'b0;
-        da_mono_tmds_q <= 1'b0;
-        da_data_tmds_d <= 16'd0;
-        da_data_tmds_q <= 16'd0;
-        p8audio_pcm_out_tmds_d <= 8'd0;
-        p8audio_pcm_out_tmds_q <= 8'd0;
-
-        // Pipeline registers for audio mixing
-        da_audio_L_tmds_reg <= 16'd0;
-        da_audio_R_tmds_reg <= 16'd0;
-        p8_audio_L_tmds_reg <= 16'd0;
-        p8_audio_R_tmds_reg <= 16'd0;
-        pcm_audio_L_tmds_reg <= 16'd0;
-        pcm_audio_R_tmds_reg <= 16'd0;
-    end else begin
-        // Pipeline the audio mixing stages to break combinatorial path
-        da_audio_L_tmds_reg <= da_audio_L_sel;
-        da_audio_R_tmds_reg <= da_audio_R_sel;
-        p8_audio_L_tmds_reg <= p8_audio_L_ext;
-        p8_audio_R_tmds_reg <= p8_audio_R_ext;
-        pcm_audio_L_tmds_reg <= da_audio_L_tmds_reg + p8_audio_L_tmds_reg;
-        pcm_audio_R_tmds_reg <= da_audio_R_tmds_reg + p8_audio_R_tmds_reg;
-
-        // Synchronize the final mixed audio
-        pcm_audio_L_dac_2pll_d <= pcm_audio_L_tmds_reg;
-        pcm_audio_L_dac_2pll_q <= pcm_audio_L_dac_2pll_d;
-        pcm_audio_R_dac_2pll_d <= pcm_audio_R_tmds_reg;
-        pcm_audio_R_dac_2pll_q <= pcm_audio_R_dac_2pll_d;
-
-        // Synchronize the audio mixing components
-        da_playing_tmds_d <= da_playing;
-        da_playing_tmds_q <= da_playing_tmds_d;
-        da_mono_tmds_d <= da_mono;
-        da_mono_tmds_q <= da_mono_tmds_d;
-        da_data_tmds_d <= da_data;
-        da_data_tmds_q <= da_data_tmds_d;
-        p8audio_pcm_out_tmds_d <= p8audio_pcm_out;
-        p8audio_pcm_out_tmds_q <= p8audio_pcm_out_tmds_d;
-    end
-end
-
+// Delta-Sigma DAC modules - uses clk65 (64.71 MHz) for ~1460x oversampling
 dac #(11) audioDL
 (
-    .clk_i  (clk_tmds),
-    .res_i  (reset),
-    .dac_i  (pcm_audio_L_dac_2pll_q[15:4]),
+    .clk_i  (clk65),
+    .res_i  (reset65_q),
+    .dac_i  (pcm_audio_L[15:4]),
     .dac_o  (audioL)
 );
 
 dac #(11) audioDR
 (
-    .clk_i  (clk_tmds),
-    .res_i  (reset),
-    .dac_i  (pcm_audio_R_dac_2pll_q[15:4]),
+    .clk_i  (clk65),
+    .res_i  (reset65_q),
+    .dac_i  (pcm_audio_R[15:4]),
     .dac_o  (audioR)
 );
 
 //------------- Digital Audio --------------
 
 reg da_read=1'b0;
-// CDC synchronizers for da_data
-(* ASYNC_REG = "TRUE" *) reg [15:0] da_data_d, da_data_q;
-reg [12:0] da_address=13'd0;
-reg [11:0] da_cnt=12'd0;
-reg [11:0] da_period=12'd500;
-// CDC synchronizers for da_period
-(* ASYNC_REG = "TRUE" *) reg [11:0] da_period_sys_d, da_period_sys_q;
-reg da_start=0;
-// CDC synchronizers for da_playing
-(* ASYNC_REG = "TRUE" *) reg da_playing_d, da_playing_q;
-// CDC synchronizers for da_mono
-(* ASYNC_REG = "TRUE" *) reg da_mono_d, da_mono_q;
-reg [1:0] da_state=0;
+// Digital audio runs in clk65 domain (audio output clock)
+reg [15:0] da_data;  // clk65 domain (read from da_memory port A)
+reg [12:0] da_address=13'd0;  // clk65 domain
+reg [11:0] da_cnt=12'd0;  // clk65 domain
+reg da_playing=1'b0;  // clk65 domain
+reg [1:0] da_state=0;  // clk65 domain
+
+// CDC synchronizers for control signals (mclk -> clk65)
+reg [11:0] da_period=12'd500;  // mclk domain (written by CPU)
+reg da_start=0;  // mclk domain (written by CPU)
+reg da_mono=0;  // mclk domain (written by CPU)
+(* ASYNC_REG = "TRUE" *) reg [11:0] da_period_65_d, da_period_65_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg da_start_65_d, da_start_65_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg da_mono_65_d, da_mono_65_q;  // clk65 domain
+
+// CDC synchronizer for da_address status readback (clk65 -> mclk)
+(* ASYNC_REG = "TRUE" *) reg [12:0] da_address_mclk_d, da_address_mclk_q;  // mclk domain
+
+// Dual-port BRAM: Port A = clk65 (audio playback), Port B = mclk (CPU access)
 (* ram_style = "block" *) reg [15:0] da_memory [0:8191];
 reg [15:0] da_memory_cpu_rdata; // Registered BRAM read output for CPU access
 
-always @(posedge clk_sys) begin
-    da_data <= da_memory[da_address];
+// Port A: Audio playback read (clk65 domain)
+always @(posedge clk65) begin
+    da_data <= da_memory[da_address];  // Output: clk65 domain (used directly in audio mixing)
 end
 
+// Port B: CPU access (mclk domain)
 always @(posedge mclk) begin
     // Read path: Register address for 1-cycle BRAM latency (used in 3-cycle state machine)
-    da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];
+    da_memory_cpu_rdata <= da_memory[cpu_addr[13:1]];  // mclk domain
 
     // Write path: Optimized to 1-cycle - write immediately when da_mem && cpu_wr
     // No state machine dependency - CPU writes complete in state 000
@@ -541,20 +464,30 @@ always @(posedge mclk) begin
     end
 end
 
-always @(posedge clk_sys)
+// Digital audio counter and state machine (clk65 domain)
+always @(posedge clk65)
 begin
+    // CDC synchronizers for control signals (mclk -> clk65)
+    da_period_65_d <= da_period;
+    da_period_65_q <= da_period_65_d;
+    da_start_65_d <= da_start;
+    da_start_65_q <= da_start_65_d;
+    da_mono_65_d <= da_mono;
+    da_mono_65_q <= da_mono_65_d;
+
+    // Audio playback counter
     if (da_cnt>12'd0) begin
         da_cnt<=da_cnt-12'd1;
     end else begin
-        da_cnt<=da_period_sys_q;
+        da_cnt<=da_period_65_q;
         case (da_state)
         2'd0: begin
             if (da_playing) da_address<=da_address+13'd1;
             da_state<=3'd2;
             end
         2'd2: begin
-            if (da_start_sys_q==1'b1 && da_address==13'd0) da_playing<=1'b1;
-            if (da_start_sys_q==1'b0) begin da_playing<=1'b0; da_address<=13'd0; end
+            if (da_start_65_q==1'b1 && da_address==13'd0) da_playing<=1'b1;
+            if (da_start_65_q==1'b0) begin da_playing<=1'b0; da_address<=13'd0; end
             da_state<=3'd0;
         end
         endcase
@@ -1088,14 +1021,14 @@ always @(posedge clk_pcm_8x or posedge reset) begin
     end
 end
 
-// Reset synchronizer for clk_tmds domain (async reset from clk_sys)
-always @(posedge clk_tmds or posedge reset) begin
+// Reset synchronizer for clk65 domain (async reset from clk_sys)
+always @(posedge clk65 or posedge reset) begin
     if (reset) begin
-        reset_tmds_d <= 1'b1;
-        reset_tmds_q <= 1'b1;
+        reset65_d <= 1'b1;
+        reset65_q <= 1'b1;
     end else begin
-        reset_tmds_d <= 1'b0;
-        reset_tmds_q <= reset_tmds_d;
+        reset65_d <= 1'b0;
+        reset65_q <= reset65_d;
     end
 end
 
@@ -1530,14 +1463,6 @@ always @(posedge clk_sys) begin
         ql_sd_cs1_n_o_d <= 1'b1;
         ql_sd_cs1_n_o_q <= 1'b1;
 
-        // DA control
-        da_start_sys_d <= 1'b0;
-        da_start_sys_q <= 1'b0;
-
-        // DA period
-        da_period_sys_d <= 12'd500;
-        da_period_sys_q <= 12'd500;
-
         // P8 audio PCM
         p8audio_pcm_out_sys_d <= 8'd0;
         p8audio_pcm_out_sys_q <= 8'd0;
@@ -1588,37 +1513,11 @@ always @(posedge clk_sys) begin
         ql_sd_cs1_n_o_d <= ql_sd_cs1_n_o;
         ql_sd_cs1_n_o_q <= ql_sd_cs1_n_o_d;
 
-        // DA control
-        da_start_sys_d <= da_start;
-        da_start_sys_q <= da_start_sys_d;
-
-        // DA period
-        da_period_sys_d <= da_period;
-        da_period_sys_q <= da_period_sys_d;
-
         // P8 audio PCM
         p8audio_pcm_out_sys_d <= p8audio_pcm_out;
         p8audio_pcm_out_sys_q <= p8audio_pcm_out_sys_d;
     end
 end
-
-// -------------------------------------------------------------------------
-// ---------------- CDC synchronizers for mclk -> clk_tmds crossings --
-// -------------------------------------------------------------------------
-
-// DA mono synchronizer (mclk -> clk_tmds)
-(* ASYNC_REG = "TRUE" *) reg da_mono_audio_d, da_mono_audio_q;
-
-always @(posedge clk_tmds) begin
-    if (reset) begin
-        da_mono_audio_d <= 1'b0;
-        da_mono_audio_q <= 1'b0;
-    end else begin
-        da_mono_audio_d <= da_mono;
-        da_mono_audio_q <= da_mono_audio_d;
-    end
-end
-
 // -------------------------------------------------------------------------
 // ---------------- CDC synchronizers for clk_sys -> mclk crossings --
 // -------------------------------------------------------------------------
@@ -1628,6 +1527,9 @@ end
 
 always @(posedge mclk)
 begin
+    // CDC synchronizer for da_address readback (clk65 -> mclk)
+    da_address_mclk_d <= da_address;
+    da_address_mclk_q <= da_address_mclk_d;
     kbd_matrix_d <= kbd_matrix;
     kbd_matrix_q <= kbd_matrix_d;
     kbd_matrix_q_prev <= kbd_matrix_q;
@@ -1646,12 +1548,6 @@ begin
     i2c_busy_q <= i2c_busy_d;
     i2c_err_d <= i2c_err;
     i2c_err_q <= i2c_err_d;
-    da_data_d <= da_data;
-    da_data_q <= da_data_d;
-    da_playing_d <= da_playing;
-    da_playing_q <= da_playing_d;
-    da_mono_d <= da_mono;
-    da_mono_q <= da_mono_d;
     esp_dout_d <= esp_dout;
     esp_dout_q <= esp_dout_d;
     esp_rd_d <= esp_rd;
@@ -1763,7 +1659,7 @@ begin
                 utimer_last_slice <= 2'd3;
             end
             //------------- digital audio -----------------------------
-            if (cpu_addr[7:1]==ADDR_DA_CONTROL[7:1] && cpu_rd) memio_out <= {3'd0,da_address};
+            if (cpu_addr[7:1]==ADDR_DA_CONTROL[7:1] && cpu_rd) memio_out <= {3'd0,da_address_mclk_q};
             //------------- debug registers ------------------------------
             if (cpu_addr[7:1]==ADDR_DEBUG_REG_HI[7:1] && cpu_rd) memio_out <= debug_reg[31:16];
             if (cpu_addr[7:1]==ADDR_DEBUG_REG_LO[7:1] && cpu_rd) memio_out <= debug_reg[15:0];
@@ -1884,23 +1780,21 @@ end
 
 wire [9:0] ored,ogreen,oblue;
 wire [3:0] tmds_out_p,tmds_out_n;
-wire [15:0] pcm_audio_L,pcm_audio_R;
+wire [15:0] pcm_audio_L,pcm_audio_R;  // clk65 domain
 
 // CDC synchronizers for video signals (p8video clk_video domain -> HDMI clk65 domain)
-(* ASYNC_REG = "TRUE" *) reg [7:0] video_r_d, video_r_q;
-(* ASYNC_REG = "TRUE" *) reg [7:0] video_g_d, video_g_q;
-(* ASYNC_REG = "TRUE" *) reg [7:0] video_b_d, video_b_q;
-(* ASYNC_REG = "TRUE" *) reg iblank_d, iblank_q;
-(* ASYNC_REG = "TRUE" *) reg video_hs_d, video_hs_q;
-(* ASYNC_REG = "TRUE" *) reg video_vs_d, video_vs_q;
+(* ASYNC_REG = "TRUE" *) reg [7:0] video_r_d, video_r_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg [7:0] video_g_d, video_g_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg [7:0] video_b_d, video_b_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg iblank_d, iblank_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg video_hs_d, video_hs_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg video_vs_d, video_vs_q;  // clk65 domain
 
-// DA mono synchronizer (mclk -> clk65)
-(* ASYNC_REG = "TRUE" *) reg da_mono_65_d, da_mono_65_q;
-
-// P8 audio PCM synchronizers (clk_pcm -> clk_sys and clk_pcm -> clk65)
-(* ASYNC_REG = "TRUE" *) reg signed [7:0] p8audio_pcm_out_65_d, p8audio_pcm_out_65_q;
+// P8 audio PCM synchronizer (clk_pcm -> clk65)
+(* ASYNC_REG = "TRUE" *) reg signed [7:0] p8audio_pcm_out_65_d, p8audio_pcm_out_65_q;  // clk65 domain
 
 always @(posedge clk65) begin
+    // Video signals (clk_video -> clk65)
     video_r_d <= video_r;
     video_r_q <= video_r_d;
     video_g_d <= video_g;
@@ -1914,11 +1808,7 @@ always @(posedge clk65) begin
     video_vs_d <= video_vs;
     video_vs_q <= video_vs_d;
 
-    // DA mono
-    da_mono_65_d <= da_mono;
-    da_mono_65_q <= da_mono_65_d;
-
-    // P8 audio PCM
+    // P8 audio PCM (clk_pcm -> clk65)
     p8audio_pcm_out_65_d <= p8audio_pcm_out;
     p8audio_pcm_out_65_q <= p8audio_pcm_out_65_d;
 end
@@ -1934,9 +1824,9 @@ assign rgb_b_o = video_b_q[7:4];
 
 // Mix digital audio (da_playing) with P8 audio (p8audio_pcm_out)
 // P8 audio is mono, send to both channels
-assign pcm_audio_L = (da_playing_q ? (da_mono_65_q ? da_data_q : {da_data_q[7:0], 8'd0}) : 16'd0) +
+assign pcm_audio_L = (da_playing ? (da_mono_65_q ? da_data : {da_data[7:0], 8'd0}) : 16'd0) +
                      {p8audio_pcm_out_65_q, 8'd0};
-assign pcm_audio_R = (da_playing_q ? (da_mono_65_q ? da_data_q : {da_data_q[15:8], 8'd0}) : 16'd0) +
+assign pcm_audio_R = (da_playing ? (da_mono_65_q ? da_data : {da_data[15:8], 8'd0}) : 16'd0) +
                      {p8audio_pcm_out_65_q, 8'd0};
 
 hdmi_out_xilinx hdmiqout (

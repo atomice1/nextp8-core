@@ -97,6 +97,9 @@ set_clock_groups -asynchronous -quiet \
 ## Reset counter outputs drive many domains - false path to avoid over-constraining
 set_false_path -from [get_pins {nextp8_inst/reset_cnt_reg[*]/C}]
 
+## Reset synchronizers for different clock domains (async reset paths)
+set_false_path -from [get_pins nextp8_inst/reset_reg_reg*/C] -to [get_pins {nextp8_inst/reset65_d_reg/PRE nextp8_inst/reset65_q_reg/PRE}]
+
 ## CDC paths from clk_sys (11 MHz) to mclk (30.56 MHz) with ASYNC_REG synchronizers
 ## These are properly synchronized with 2-stage synchronizers
 ## Set max delay to 1 destination clock period to allow proper CDC
@@ -144,9 +147,10 @@ set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 5.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports {sd_cs0_n_o sd_cs1_n_o sd_mosi_o sd_sclk_o}]
 
-## Audio DAC outputs (PWM-style, on clk_sys 11 MHz, board RC filter)
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -max 22.0 [get_ports {audioext_l_o audioext_r_o}]
-set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] -min 0.0 [get_ports {audioext_l_o audioext_r_o}]
+## Audio DAC outputs (PWM-style, on clk65 64.71 MHz, board RC filter)
+## Digital audio moved to clk65 domain for better timing
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] -max 5.0 [get_ports {audioext_l_o audioext_r_o}]
+set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pl2/clk_out1]] -min 0.0 [get_ports {audioext_l_o audioext_r_o}]
 
 
 ## HDMI outputs: TMDS serializer has internal timing, max delay keeps routing reasonable
@@ -175,7 +179,7 @@ set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_ou
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports ram_data_io[*]]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_data_io[*]]
 
-set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 15.0 [get_ports ram_data_io[*]]
+set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 12.0 [get_ports ram_data_io[*]]
 set_input_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_data_io[*]]
 
 ## I2C bus for RTC (on clk_sys 11 MHz, slow protocol, relaxed timing)
@@ -221,9 +225,24 @@ set_false_path -from [get_ports {ps2_data_io ps2_pin2_io ps2_clk_io ps2_pin6_io}
 set_false_path -from [get_ports esp_rx_i]
 set_false_path -to [get_ports esp_tx_o]
 
+## ESP32 flow control (async)
+set_false_path -from [get_ports esp_rtr_n_i]
+
 ## NextPi accelerator GPIO (async)
 set_false_path -from [get_ports accel_io[*]]
 set_false_path -to [get_ports accel_io[*]]
+
+## ZX Spectrum expansion bus signals (async to FPGA clocks)
+set_false_path -from [get_ports {bus_busreq_n_i bus_int_in_i bus_iorqula_n_i bus_nmi_n_i bus_romcs_i bus_wait_n_i}]
+
+## Joystick inputs (async, sampled at low frequency)
+set_false_path -from [get_ports {joyp1_i joyp2_i joyp3_i joyp4_i joyp6_i joyp9_i}]
+
+## Cassette/tape input (async audio signal)
+set_false_path -from [get_ports ear_port_i]
+
+## SPI flash input (self-timed by internal SPI controller)
+set_false_path -from [get_ports flash_miso_i]
 
 ## Joystick clock domain (very slow, async)
 set_false_path -from [get_clocks joy_clock]
