@@ -88,6 +88,7 @@ venv:
 		echo "=== Creating Python virtual environment ==="; \
 		$(PYTHON3) -m venv $(VENV_DIR); \
 		echo "=== Installing Python dependencies ==="; \
+		$(VENV_PIP) install setuptools==81 ; \
 		$(VENV_PIP) install -r $(REQUIREMENTS); \
 		echo ""; \
 	else \
