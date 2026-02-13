@@ -1424,8 +1424,9 @@ reg [7:0] qlsd_din;
 reg [7:0] qlsd_div = 8'd2;
 reg ql_sd_w=1'b0;
 wire [7:0] qlsd_data;
-// CDC synchronizers for qlsd_data
+// CDC synchronizers for qlsd_data and ql_sd_ready (clk_sys -> mclk)
 (* ASYNC_REG = "TRUE" *) reg [7:0] qlsd_data_d, qlsd_data_q;
+(* ASYNC_REG = "TRUE" *) reg ql_sd_ready_d, ql_sd_ready_q;
 
 assign sd_cs0_n_o  =  ql_sd_cs0_n_o_q;
 assign sd_cs1_n_o  =  ql_sd_cs1_n_o_q;
@@ -1675,6 +1676,8 @@ begin
     utimer_64bit_q <= utimer_64bit_d;
     qlsd_data_d <= qlsd_data;
     qlsd_data_q <= qlsd_data_d;
+    ql_sd_ready_d <= ql_sd_ready;
+    ql_sd_ready_q <= ql_sd_ready_d;
     js0_d <= js0;
     js0_q <= js0_d;
     js0_q_prev <= js0_q;
@@ -1703,7 +1706,7 @@ begin
         if (cpu_addr[8] == 1'b0) begin
             //--------------- QLSD --------------------------------------------------
             if (cpu_addr[7:1]==ADDR_SDSPI_DATA_OUT[7:1] && cpu_rd ) memio_out <= {qlsd_data_q, qlsd_data_q };
-            if (cpu_addr[7:1]==ADDR_SDSPI_READY[7:1] && cpu_rd ) memio_out <= {7'd0, ql_sd_ready, 7'd0, ql_sd_ready};
+            if (cpu_addr[7:1]==ADDR_SDSPI_READY[7:1] && cpu_rd ) memio_out <= {7'd0, ql_sd_ready_q, 7'd0, ql_sd_ready_q};
             //--------------- reset ----------------------------------
             if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_rd) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q};
             // ------------ video ----------------------------------------------------

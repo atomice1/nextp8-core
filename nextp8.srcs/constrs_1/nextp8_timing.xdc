@@ -97,6 +97,13 @@ set_clock_groups -asynchronous -quiet \
 ## Reset counter outputs drive many domains - false path to avoid over-constraining
 set_false_path -from [get_pins {nextp8_inst/reset_cnt_reg[*]/C}]
 
+## CDC paths from clk_sys (11 MHz) to mclk (30.56 MHz) with ASYNC_REG synchronizers
+## These are properly synchronized with 2-stage synchronizers
+## Set max delay to 1 destination clock period to allow proper CDC
+set_max_delay -from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]] \
+              -to [get_pins -hierarchical -filter {NAME =~ *nextp8_inst/*_d_reg*/D && ASYNC_REG == TRUE}] \
+              -datapath_only 32.7
+
 ## Video palette CDC: Direct transfer with ASYNC_REG synchronizers
 ## Palette data is quasi-static (only changes on palette writes from CPU)
 ## Use max_delay to allow ample time for clock domain crossing
