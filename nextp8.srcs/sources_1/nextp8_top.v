@@ -193,7 +193,7 @@ pll pll
     .clk_in1   ( clock_50_i ),
     .clk_out1  ( clk_sys ),    // 11 MHz
     .clk_out2  ( clk325 ),     // 325 MHz (VCO input for PLL2)
-    .clk_out3  ( mclk ),       // 30.56 MHz
+    .clk_out3  ( mclk ),       // 40 MHz
     .locked    ( pll_locked )
 );
 
