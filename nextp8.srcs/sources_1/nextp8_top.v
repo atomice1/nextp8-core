@@ -924,11 +924,30 @@ p8video p8video (
 assign vgaclk_o = clk65;
 assign vgaclkn_o = ~clk65;
 
-// Vsync IRQ is set whenever vsync rises (in mclk domain)
-wire vsync_irq_reset = reset_mclk_q || vsync_ack;
-always @(posedge video_vs_mclk_q or posedge vsync_irq_reset) begin
-    if (vsync_irq_reset)        vsync_irq <= 1'b0;
-    else if (vsync_irq_enable)  vsync_irq <= 1'b1;
+// Vsync IRQ: Edge detection for video_vs in mclk domain
+reg video_vs_mclk_prev;
+wire video_vs_posedge = video_vs_mclk_q && !video_vs_mclk_prev;
+
+always @(posedge mclk) begin
+    if (reset_mclk_q) begin
+        video_vs_mclk_prev <= 1'b0;
+        vsync_irq <= 1'b0;
+    end else begin
+        video_vs_mclk_prev <= video_vs_mclk_q;
+
+        // Set IRQ on rising edge of vsync if enabled
+        if (video_vs_posedge && vsync_irq_enable) begin
+            $display("[%d] VSYNC IRQ ASSERTED", $time);
+            vsync_irq <= 1'b1;
+        end
+
+        // Clear IRQ on acknowledgment
+        if (vsync_ack) begin
+            $display("[%d] VSYNC IRQ CLEARED", $time);
+            vsync_irq <= 1'b0;
+            vsync_ack <= 1'b0;
+        end
+    end
 end
 
 // IPL output: interrupt level 2 when vsync_irq is asserted

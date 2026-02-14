@@ -249,10 +249,9 @@ set_false_path -from [get_ports {btn_divmmc_n_i btn_multiface_n_i}]
 set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]]
 set_false_path -from [get_ports btn_reset_n_i] -to [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out1]]
 
-## Vsync interrupt: video_vs_mclk_q used as async clock for interrupt latch
-## This is intentional edge-triggered interrupt logic with async reset
-set_false_path -from [get_pins {nextp8_inst/video_vs_mclk_q_reg/C}] -to [get_pins {nextp8_inst/vsync_irq_reg/C}]
-set_false_path -to [get_pins {nextp8_inst/vsync_irq_reg/CLR}]
+## Vsync CDC: video_vs (clk_video domain) synchronized to mclk domain via 2-stage synchronizer
+## video_vs_mclk_d/q have ASYNC_REG attribute for proper handling
+set_max_delay -from [get_pins {nextp8_inst/p8video/VSB_reg/C}] -to [get_pins {nextp8_inst/video_vs_mclk_d_reg/D}] -datapath_only 91.3
 
 ## PS/2 keyboard (async bidirectional I/O, handled by keyboard controller)
 ## Input constraints: async protocol with synchronizers
