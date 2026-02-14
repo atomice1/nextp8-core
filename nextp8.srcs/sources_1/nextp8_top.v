@@ -432,10 +432,10 @@ reg da_playing=1'b0;  // clk65 domain
 reg [1:0] da_state=0;  // clk65 domain
 
 // CDC synchronizers for control signals (mclk -> clk65)
-reg [11:0] da_period=12'd500;  // mclk domain (written by CPU)
+reg [15:0] da_period=16'd2948;  // mclk domain (written by CPU)
 reg da_start=0;  // mclk domain (written by CPU)
 reg da_mono=0;  // mclk domain (written by CPU)
-(* ASYNC_REG = "TRUE" *) reg [11:0] da_period_65_d, da_period_65_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg [15:0] da_period_65_d, da_period_65_q;  // clk65 domain
 (* ASYNC_REG = "TRUE" *) reg da_start_65_d, da_start_65_q;  // clk65 domain
 (* ASYNC_REG = "TRUE" *) reg da_mono_65_d, da_mono_65_q;  // clk65 domain
 
@@ -476,8 +476,8 @@ begin
     da_mono_65_q <= da_mono_65_d;
 
     // Audio playback counter
-    if (da_cnt>12'd0) begin
-        da_cnt<=da_cnt-12'd1;
+    if (da_cnt>16'd0) begin
+        da_cnt<=da_cnt-16'd1;
     end else begin
         da_cnt<=da_period_65_q;
         case (da_state)
@@ -939,8 +939,8 @@ assign cpu_ipl = { !vsync_irq, 1'b1, !vsync_irq };
 // -------------------------------------------------------------------------
 // Generate 176.4 kHz (clk_pcm_8x) from 11 MHz using fractional-N divider
 // For a toggled clock: need 2x target frequency for toggle rate
-// Required toggle rate: 352,800 / 11,000,000 = 0.0320727272...
-// Phase increment: 0.0320727272 × 2^32 = 137,751,328
+// Required toggle rate: 352,800 / 11,000,000 = 0.0322043076923077
+// Phase increment: 0.0322043076923077 × 2^32 = 138,316,448
 
 reg [31:0] clk_pcm_8x_phase = 32'd0;
 reg clk_pcm_8x_pulse = 1'b0;
@@ -955,7 +955,7 @@ begin
     end else begin
         // Add fractional increment, pulse on overflow
         // Toggle rate = 2x desired clock frequency (352.8 kHz for 176.4 kHz clock)
-        {clk_pcm_8x_pulse, clk_pcm_8x_phase} <= {1'b0, clk_pcm_8x_phase} + 33'd137751328;
+        {clk_pcm_8x_pulse, clk_pcm_8x_phase} <= {1'b0, clk_pcm_8x_phase} + 33'd138316448;
 
         // Toggle clk_pcm_8x_div to create proper 50% duty cycle clock
         if (clk_pcm_8x_pulse) begin
@@ -1268,12 +1268,18 @@ end
 reg [63:0] utimer_64bit=0;
 // CDC synchronizers for utimer_64bit
 (* ASYNC_REG = "TRUE" *) reg [63:0] utimer_64bit_d, utimer_64bit_q;
-reg [3:0]  utcnt_1mhz=0;
+reg [31:0] utcnt_1mhz_phase=0;
+reg utimer_pulse;
+// Phase accumulator for 1 MHz from 10.9550561797752809 MHz clk_sys
+// Increment = (1 / 10.9550561797752809) * 2^32 = 392053424.9682051281649176
+localparam UTIMER_INC = 33'd392053425;
 always @(negedge clk_sys)
 begin
-    if (utcnt_1mhz<4'd10) utcnt_1mhz<=utcnt_1mhz+4'd1; else begin
+    // Add fractional increment, pulse on overflow
+    {utimer_pulse, utcnt_1mhz_phase} <= {1'b0, utcnt_1mhz_phase} + UTIMER_INC;
+
+    if (utimer_pulse) begin
         utimer_64bit <= utimer_64bit + 64'd1;
-        utcnt_1mhz<=4'd0;
     end
 end
 
@@ -1370,7 +1376,7 @@ spi qlsdspi(
     .miso     (sd_miso_i),
     .clk      (clk_sys),
     .reset    (reset),
-    .w          (ql_sd_w_q),
+    .w        (ql_sd_w_q),
     .readyo   (ql_sd_ready),
     .data_in  (qlsd_din_q),
     .data_out (qlsd_data),
@@ -1743,7 +1749,7 @@ begin
             if (cpu_addr[7:1]==ADDR_ESP_BAUD_DIV[7:1] && cpu_wr ) begin esp_div <= cpu_dout[14:0]; end
             // --------------- digital audio -----------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_DA_CONTROL[7:1] && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end
-            if (cpu_addr[7:1]==ADDR_DA_PERIOD[7:1] && cpu_wr ) begin da_period <= cpu_dout[11:0]; end
+            if (cpu_addr[7:1]==ADDR_DA_PERIOD[7:1] && cpu_wr ) begin da_period <= cpu_dout; end
             //------------- latching keyboard clear (btnp)
             if (cpu_addr[7:5]==ADDR_KEYBOARD_MATRIX_LATCHED[7:5] && cpu_wr && !cpu_ds[0]) begin
                 kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8] <= kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8] & ~cpu_dout[7:0];
@@ -1765,11 +1771,11 @@ begin
             //------------------ debug ------------------------------
             if (cpu_addr[7:1]==ADDR_DEBUG_REG_HI[7:1] && cpu_wr) begin
                 debug_reg[31:16] <= cpu_dout;
-                $display("Debug reg hi write: %h at time %t, debug reg is now %h", cpu_dout, $time, {cpu_dout, debug_reg[15:0]});
+                $display("Debug reg hi write: %h at time %t, debug reg is now %h (%d / %d)", cpu_dout, $time, {cpu_dout, debug_reg[15:0]}, {cpu_dout, debug_reg[15:0]}, $signed({cpu_dout, debug_reg[15:0]}));
             end
             if (cpu_addr[7:1]==ADDR_DEBUG_REG_LO[7:1] && cpu_wr) begin
                 debug_reg[15:0]  <= cpu_dout;
-                $display("Debug reg lo write: %h at time %t, debug reg is now %h", cpu_dout, $time, {debug_reg[31:16], cpu_dout});
+                $display("Debug reg lo write: %h at time %t, debug reg is now %h (%d / %d)", cpu_dout, $time, {debug_reg[31:16], cpu_dout}, {debug_reg[31:16], cpu_dout}, $signed({debug_reg[31:16], cpu_dout}));
             end
         end
     end
