@@ -228,7 +228,6 @@ localparam [1:0] PCM_STOPPING = 2'd3;  // Stopping
 
 reg [1:0] pcm_state [0:7];  // Per-context state in clk_pcm_8x domain
 
-reg [5:0] start_idx_8x [0:7];    // 0-32
 reg [5:0] sfx_length_val_8x [0:7]; // 0-32
 reg [5:0] note_idx_8x [0:7];     // 0-32
 reg [7:0] notes_played_8x [0:7]; // Monotonic counter: total notes played (independent of looping)
@@ -334,9 +333,6 @@ wire       filt_buzz = filt_buzz_8x[ctx_idx];
 wire [1:0] filt_detune = filt_detune_8x[ctx_idx];
 wire [1:0] filt_reverb = filt_reverb_8x[ctx_idx];
 wire [1:0] filt_dampen = filt_dampen_8x[ctx_idx];
-
-// Playback state
-wire [5:0] start_idx = start_idx_8x[ctx_idx];
 
 // Combinatorial status outputs (derived from FSM state)
 assign voice_busy[0] = (pcm_state[1] != PCM_IDLE);
@@ -882,12 +878,11 @@ task load_done;
         filt_detune_8x[ctx_idx] <= filt_detune_sys_8x[ctx_idx];
         filt_reverb_8x[ctx_idx] <= filt_reverb_sys_8x[ctx_idx];
         filt_dampen_8x[ctx_idx] <= filt_dampen_sys_8x[ctx_idx];
-        start_idx_8x[ctx_idx] <= (sfx_offset_req_8x[ctx_to_load] > 6'd31) ?
-                                        6'd31 : sfx_offset_req_8x[ctx_to_load];
         sfx_length_val_8x[ctx_idx] <= sfx_length_req_8x[ctx_idx];
 
         // Initialize playback state for this context
-        note_idx_8x[ctx_idx] <= start_idx;
+        note_idx_8x[ctx_idx] <= (sfx_offset_req_8x[ctx_to_load] > 6'd31) ?
+                                        6'd31 : sfx_offset_req_8x[ctx_to_load];
         notes_played_8x[ctx_idx] <= 8'd0;  // Reset monotonic note counter
         phase_acc_8x[ctx_idx] <= 22'd0;
         detune_acc_8x[ctx_idx] <= 22'd0;
@@ -1168,7 +1163,9 @@ task advance_note;
         new_note_idx = note_idx; // default
 
         // Advance note index based on mode
-        if (is_custom_context(ctx_idx)) begin
+        if (pcm_state[ctx_idx] == PCM_WARM_UP) begin
+            // Don't advance the note or we will miss the first note.
+        end else if (is_custom_context(ctx_idx)) begin
             // Custom instruments play in continuous loop mode
             if (note_idx == NOTE_MAX_INDEX) begin
                 new_note_idx = 6'd0;
@@ -1847,7 +1844,6 @@ always @(posedge clk_pcm_8x) begin
             filt_detune_8x[i] <= 2'd0;
             filt_reverb_8x[i] <= 2'd0;
             filt_dampen_8x[i] <= 2'd0;
-            start_idx_8x[i] <= 6'd0;
             sfx_length_val_8x[i] <= 6'd0;
             sample_ctr_8x[i] <= 8'd0;
             note_ctr_8x[i] <= 8'd0;
@@ -1935,7 +1931,7 @@ always @(posedge clk_pcm_8x) begin
 
                     // Handle force_release (disable looping, continue playing)
                     else if (force_release_pcm_sticky[ctx_idx]) begin
-                        loop_end_8x[ctx_idx] <= loop_start[ctx_idx];
+                        loop_end_8x[ctx_idx] <= loop_start_8x[ctx_idx];
                         force_release_pcm_sticky[ctx_idx] <= 1'b0;
                         // State remains unchanged
                     end

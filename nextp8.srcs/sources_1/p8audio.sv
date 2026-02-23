@@ -103,6 +103,8 @@ localparam [7:0] ADDR_STAT53 = 8'h2E;
 localparam [7:0] ADDR_STAT54 = 8'h30;
 localparam [7:0] ADDR_STAT55 = 8'h32;
 localparam [7:0] ADDR_STAT56 = 8'h34;
+// stat(57): music playing flag
+localparam [7:0] ADDR_STAT57 = 8'h36;
 
 always @(posedge mclk) begin
     if (!resetn_sys) begin
@@ -419,14 +421,17 @@ reg [7:0] frame_bytes [0:3];              // mclk: Current frame data (4 bytes)
 reg [1:0] fb_idx;                         // mclk: Frame byte fetch index
 
 reg [5:0] loop_start, loop_end;           // mclk: Loop start/end frame indices
-reg       loop_def, stop_on_loop;         // mclk: Loop flags
+reg       loop_start_seen, loop_end_seen; // mclk: Track if loop markers encountered
+reg       stop_on_loop;                   // mclk: Stop flag
 reg [3:0] music_mask;                     // mclk: Channel enable mask for music
+wire      loop_def = loop_start_seen && loop_end_seen; // mclk: Loop active when both markers seen
 
 reg [3:0] seq_played_mask;                // mclk: Channels triggered by current pattern
 
 reg [15:0] stat_music_pattern;            // mclk: Current pattern index (stat 54)
 reg [15:0] stat_music_pattern_count;      // mclk: Pattern loop count (stat 55)
 reg [15:0] stat_music_tick_count;         // mclk: Note tick count (stat 56)
+wire       stat_music_playing = (music_state != MUSIC_IDLE);
 
 // CDC: note_tick toggle synchronizer from clk_pcm to mclk
 (* ASYNC_REG = "TRUE" *) reg note_tick_toggle_sys_d;               // mclk: CDC stage 1
@@ -454,10 +459,10 @@ reg [15:0]  q_len   [0:3];  // mclk: Queued note length
 function [1:0] find_idle;
     input dummy;  // Dummy input required by Verilog
     begin
-        if (!voice_busy[0]) find_idle=2'd0;
-        else if (!voice_busy[1]) find_idle=2'd1;
-        else if (!voice_busy[2]) find_idle=2'd2;
-        else if (!voice_busy[3]) find_idle=2'd3;
+        if (!voice_busy[0] && !music_mask[0]) find_idle=2'd0;
+        else if (!voice_busy[1] && !music_mask[1]) find_idle=2'd1;
+        else if (!voice_busy[2] && !music_mask[2]) find_idle=2'd2;
+        else if (!voice_busy[3] && !music_mask[3]) find_idle=2'd3;
         else find_idle=2'd0;
     end
 endfunction
@@ -500,7 +505,7 @@ always @(posedge mclk) begin
         seq_dma_req<=0; fb_idx<=0;
         frame_toggle_sys_d <= 1'b0; frame_toggle_sys_q <= 1'b0;
         seq_played_mask <= 4'b0000;
-        loop_def<=0; loop_start<=0; loop_end<=0; stop_on_loop<=0;
+        loop_start_seen<=0; loop_end_seen<=0; loop_start<=0; loop_end<=0; stop_on_loop<=0;
         stat_music_pattern<=0; stat_music_pattern_count<=0;
         // Note tick counter resets
         note_tick_toggle_sys_d <= 1'b0;
@@ -530,11 +535,15 @@ always @(posedge mclk) begin
                         for (m=0; m<NUM_VOICES; m=m+1) begin
                             force_stop_sys[m] <= 1'b1;
                             q_valid[m] <= 1'b0;
+                            music_mask[m] <= 1'b0;
+                            seq_played_mask[m] <= 1'b0;
                         end
                     end else begin  // Specific channel
                         chx = ch_f[1:0];
                         force_stop_sys[chx] <= 1'b1;
                         q_valid[chx] <= 1'b0;
+                        music_mask[chx] <= 1'b0;
+                        seq_played_mask[chx] <= 1'b0;
                     end
                 end else if (idx_f==6'h3e) begin  // N=-2: Release from looping
                     if (ch_f==3'b111 || ch_f[2]) begin  // All channels if ch < 0
@@ -571,7 +580,13 @@ always @(posedge mclk) begin
                     end
                 end else begin
                     chx = ch_f[1:0];
-                    if (!voice_busy[chx]) begin
+                    music_mask[chx] <= 1'b0;
+                    seq_played_mask[chx] <= 1'b0;
+                    if (seq_played_mask[chx]) begin
+                        // If the requested channel is currently playing music, stop it first
+                        force_stop_sys[chx] <= 1'b1;
+                    end
+                    if (!voice_busy[chx] && !seq_played_mask[chx]) begin
                         play_sfx_index[chx] <= idx_f;
                         play_sfx_off[chx]   <= off_f;
                         play_sfx_len[chx]   <= reg_sfx_len;
@@ -607,9 +622,15 @@ always @(posedge mclk) begin
             if (pat == 6'h3f) begin
                 // Stop music (pattern = -1)
                 if (music_state != MUSIC_IDLE) begin
-                    music_fade_ctr_in <= 0;
-                    music_fade_ctr_out <= reg_music_fade;
-                    music_fade_len <= reg_music_fade;
+                    if (reg_music_fade == 16'd0) begin
+                        // Immediate stop if fade length is zero
+                        music_state<=MUSIC_STOPPING;
+                    end else begin
+                        // Start fade-out process
+                        music_fade_ctr_in <= 0;
+                        music_fade_ctr_out <= reg_music_fade;
+                        music_fade_len <= reg_music_fade;
+                    end
                 end
             end else begin
                 // Start music from pattern n
@@ -619,8 +640,9 @@ always @(posedge mclk) begin
                 music_fade_ctr_out <= 0;
                 music_state<=MUSIC_LOADING;
                 cur_frame <= pat;
-                loop_def<=0; stop_on_loop<=0;
-                // reg_music_base is byte address, convert to word address
+                music_mask <= msk;
+                loop_start_seen<=0; loop_end_seen<=0; stop_on_loop<=0;
+                stat_music_pattern <= {10'd0, pat};
                 // pat << 2 = pat * 4 bytes per frame, then divide by 2 for word address
                 seq_dma_addr_temp = (reg_music_base + ({26'd0, pat} << 2)) >> 1;
                 seq_dma_addr <= seq_dma_addr_temp[30:0];
@@ -667,28 +689,32 @@ always @(posedge mclk) begin
                         end
                     end
                 end
-                if (frame_bytes[0][7]) begin loop_start<=cur_frame; loop_def<=1'b1; end
-                if (frame_bytes[1][7]) begin loop_end<=cur_frame;   loop_def<=1'b1; end
+                if (frame_bytes[0][7]) begin loop_start<=cur_frame; loop_start_seen<=1'b1; end
+                if (frame_bytes[1][7]) begin loop_end<=cur_frame;   loop_end_seen<=1'b1; end
                 if (frame_bytes[3][7]) begin stop_on_loop<=1'b1; end
                 music_state <= MUSIC_PLAYING;
             end
             MUSIC_PLAYING: begin
-                //$display("MUSIC PLAYING AT FRAME %d", cur_frame);
-                // Dynamically find leftmost non-looping channel among triggered channels
-                leftmost_nonloop = 2'd0;  // default
-                if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
-                    leftmost_nonloop = 2'd0;
-                end else if (seq_played_mask[1] && !voice_looping_sys_q[1]) begin
-                    leftmost_nonloop = 2'd1;
-                end else if (seq_played_mask[2] && !voice_looping_sys_q[2]) begin
-                    leftmost_nonloop = 2'd2;
-                end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
-                    leftmost_nonloop = 2'd3;
-                end
+                if (music_mask == 4'b0000) begin
+                    // SFX override on all channels - stop immediately
+                    music_state <= MUSIC_IDLE;
+                end else begin
+                    // Dynamically find leftmost non-looping channel among triggered channels
+                    leftmost_nonloop = 2'd0;  // default
+                    if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
+                        leftmost_nonloop = 2'd0;
+                    end else if (seq_played_mask[1] && !voice_looping_sys_q[1]) begin
+                        leftmost_nonloop = 2'd1;
+                    end else if (seq_played_mask[2] && !voice_looping_sys_q[2]) begin
+                        leftmost_nonloop = 2'd2;
+                    end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
+                        leftmost_nonloop = 2'd3;
+                    end
 
-                // Advance immediately if nothing triggered, otherwise wait for a non-looping voice to complete
-                if (seq_played_mask == 4'b0000 || voice_done[leftmost_nonloop]) begin
-                    music_state <= MUSIC_ADVANCE;
+                    // Advance immediately if nothing triggered, otherwise wait for a non-looping voice to complete
+                    if (seq_played_mask == 4'b0000 || voice_done[leftmost_nonloop]) begin
+                        music_state <= MUSIC_ADVANCE;
+                    end
                 end
             end
             MUSIC_ADVANCE: begin
@@ -714,6 +740,12 @@ always @(posedge mclk) begin
                 end
             end
             MUSIC_STOPPING: begin
+                // force_stop all channels in music_mask
+                for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
+                    if (music_mask[ch]) begin
+                        force_stop_sys[ch] <= 1'b1;
+                    end
+                end
                 music_state <= MUSIC_IDLE;
             end
         endcase
@@ -755,6 +787,7 @@ always @(*) begin                       // mclk: Combinational read mux
         ADDR_STAT54[7:1]: dout = stat_music_pattern;
         ADDR_STAT55[7:1]: dout = stat_music_pattern_count;
         ADDR_STAT56[7:1]: dout = stat_music_tick_count;
+        ADDR_STAT57[7:1]: dout = {15'd0, stat_music_playing};
         default: dout = 16'h0000;
     endcase
 end
