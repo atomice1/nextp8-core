@@ -60,7 +60,7 @@
     input  wire joyp3_i,
     input  wire joyp4_i,
     input  wire joyp6_i,
-    inout wire joyp7_o,
+    output wire joyp7_o,
     input  wire joyp9_i,
     output wire joysel_o,
 
@@ -221,6 +221,9 @@ reg power_on_flag = 1'b1;
 // Reset control signal (mclk domain)
 reg reset_request_toggle_mclk = 1'b0;
 
+// CPU shutdown flag (mclk domain) - set when 0xff written to RESET_REQ
+reg cpu_shutdown = 1'b0;
+
 // Reset type signals (mclk domain)
 (* ASYNC_REG = "TRUE" *) reg [1:0] reset_type_mclk_d = RESET_TYPE_POWER_ON;
 (* ASYNC_REG = "TRUE" *) reg [1:0] reset_type_mclk_q = RESET_TYPE_POWER_ON;
@@ -347,16 +350,18 @@ reg [15:0] rdata;
 reg [15:0] memio_out;
 wire [15:0] vdout1_main;
 wire [15:0] vdout1_overlay;
+wire vfront;
 
 // Palette interface signals
 wire [15:0] pal_dout;
 wire pal_write_en;
 wire pal_read_en;
-reg pal_sel = 1'b0;
+wire pal_sel;
 
 // Palette control signals
 assign pal_write_en = pal_mem && cpu_wr;
 assign pal_read_en = pal_mem && cpu_rd && memio_go;
+assign pal_sel = cpu_addr[4] ? vfront : ~vfront;
 
 // demultiplex the various data sources
 // For SRAM (cpu_mem) in state 000: use sram_rdata latched on falling edge (1-cycle access)
@@ -364,9 +369,7 @@ assign pal_read_en = pal_mem && cpu_rd && memio_go;
 wire [15:0] cpu_din =
     memio_rd?{ memio_out}:
     sram_access ? sram_rdata :
-    (pal_mem || da_mem) ? rdata:
-    (back_mem || front_mem)? {vdout1_main} :
-    (overlay_back_mem || overlay_front_mem)? {vdout1_overlay} :
+    (pal_mem || da_mem || vid_mem) ? rdata :
     16'hffff;
 
 TG68KdotC_Kernel #(0,1,0,0,0,0,0,1)
@@ -745,7 +748,7 @@ reg [7:0] js0 = 7'd0;
 (* ASYNC_REG = "TRUE" *) reg [7:0] js0_d, js0_q;
 reg [7:0] js0_q_prev;
 reg joys=0;
-assign joyp7_o=1'bz;
+assign joyp7_o=1'b1;
 assign joysel_o=joys;
 
 always @(posedge joy_clock or posedge reset_joy_q)
@@ -777,15 +780,15 @@ end
 // -------------------------------------- video ------------------------------------
 // ---------------------------------------------------------------------------------
 
-reg  [12:0] vaddr1_main;
+wire [12:0] vaddr1_main;
 wire [12:0] vaddr2_main;
 wire [15:0] vdout2_main;
-reg [15:0] vdin1_main;
+wire [15:0] vdin1_main;
 
-reg  [12:0] vaddr1_overlay;
+wire [12:0] vaddr1_overlay;
 wire [12:0] vaddr2_overlay;
 wire [15:0] vdout2_overlay;
-reg [15:0] vdin1_overlay;
+wire [15:0] vdin1_overlay;
 
 // VRAM write enables: Combinatorial to match write conditions exactly
 wire [1:0] vw1_main;
@@ -796,6 +799,16 @@ reg vfrontreq=1'b0;
 // Combinatorial write enables for VRAM - asserted only when writing in state 000
 assign vw1_main = (estate == 3'b000 && cpu_wr && (back_mem || front_mem)) ? ~cpu_ds : 2'b00;
 assign vw1_overlay = (estate == 3'b000 && cpu_wr && (overlay_back_mem || overlay_front_mem)) ? ~cpu_ds : 2'b00;
+
+// Combinational VRAM address and data
+assign vaddr1_main = back_mem ? {~vfront, cpu_addr[12:1]} :
+                     front_mem ? {vfront, cpu_addr[12:1]} :
+                     {vfront, cpu_addr[12:1]};
+assign vaddr1_overlay = overlay_back_mem ? {1'b0, cpu_addr[12:1]} :
+                        overlay_front_mem ? {1'b1, cpu_addr[12:1]} :
+                        {1'b0, cpu_addr[12:1]};
+assign vdin1_main = cpu_dout;
+assign vdin1_overlay = cpu_dout;
 
 // overlay control register (clk_sys)
 reg [7:0] overlay_ctrl_sys = 8'h00;  // [6]=enable, [3:0]=key_colour
@@ -833,7 +846,6 @@ wire [7:0] video_r, video_g, video_b;
 
 wire video_hs, video_vs;
 wire iblank;
-wire vfront;
 
 // Vblank interrupt control
 reg vsync_irq_enable;
@@ -918,6 +930,15 @@ p8video p8video (
     .VB(video_b)
     );
 
+// Debug monitor for vfront changes
+reg vfront_prev = 1'b0;
+always @(posedge mclk) begin
+    if (vfront_prev != vfront) begin
+        $display("[%d] VFRONT CHANGED: %b -> %b (vfrontreq=%b)", $time, vfront_prev, vfront, vfrontreq);
+        vfront_prev <= vfront;
+    end
+end
+
 // VGA clocks to latch RGB data in external DACs
 // vgaclk_o clocks ADV7125 (highest 4 bits), vgaclkn_o clocks 74ALVC574 (lowest 4 bits)
 // Use pixel clock for synchronous data transfer
@@ -951,7 +972,7 @@ always @(posedge mclk) begin
 end
 
 // IPL output: interrupt level 2 when vsync_irq is asserted
-assign cpu_ipl = { !vsync_irq, 1'b1, !vsync_irq };
+assign cpu_ipl = { 1'b1, !vsync_irq, 1'b1 };
 
 // -------------------------------------------------------------------------
 // ---------------------- Audio Subsystem Clocks ----------------------------
@@ -1138,7 +1159,7 @@ end
 assign ram_addr_o = sram_access ? cpu_addr[21:1] : raddr;
 // WE# is active (low) when toggles differ
 assign ram_we_n_o = sram_access ? ~(sram_we_toggle_a ^ sram_we_toggle_b) : ramwe;
-assign ram_cs_n_o = sram_access ? 1'b0 : ramce;
+assign ram_cs_n_o = (sram_access || sram_we_active) ? 1'b0 : ramce;
 assign ram_oe_n_o = sram_access ? ~sys_oe : ramoe;
 assign ram_lb_n_o = sram_access ? cpu_ds[0] : rds[0];
 assign ram_ub_n_o = sram_access ? cpu_ds[1] : rds[1];
@@ -1149,7 +1170,8 @@ assign ram_data_io = (sram_access && sys_wr) ? cpu_dout :
 // For SRAM (cpu_mem): stays in state 000, cpu_enable HIGH (1-cycle access)
 // For BRAM writes (da_mem/vid_mem/pal_mem && cpu_wr): stays in state 000, cpu_enable HIGH (1-cycle access, optimized)
 // For MMIO/BRAM reads (!cpu_mem): goes through 000->001->010 (3-cycle access)
-wire cpu_enable = pll_locked && ((estate == 3'b000 && (cpu_idle || cpu_mem || ((da_mem || vid_mem || pal_mem) && cpu_wr))) || estate == 3'b010);
+// Disabled permanently if cpu_shutdown flag is set (until next reset)
+wire cpu_enable = !cpu_shutdown && pll_locked && ((estate == 3'b000 && (cpu_idle || cpu_mem || ((da_mem || vid_mem || pal_mem) && cpu_wr))) || estate == 3'b010);
 
 // Latch SRAM data on falling edge of clock
 // This gives the SRAM time to respond to address changes while ensuring
@@ -1166,9 +1188,10 @@ assign p8audio_dma_rdata = rdata;
 // P8 Audio DMA request capture - latch any request pulse until serviced
 // Both p8audio and FSM run on mclk (same clock domain)
 always @(posedge mclk) begin
-    if (!pll_locked) begin
+    if (!pll_locked || reset_mclk_q) begin
         p8audio_dma_req_latched <= 1'b0;
         p8audio_dma_addr_latched <= 31'd0;
+        cpu_shutdown <= 1'b0;  // Clear shutdown flag on reset
     end else begin
         // Latch request when it goes high
         if (p8audio_dma_req) begin
@@ -1185,7 +1208,7 @@ end
 
 always @(posedge mclk)
 begin
-    if (pll_locked)
+    if (pll_locked && !cpu_shutdown)
     begin
         case (estate)
         3'b000: begin
@@ -1203,26 +1226,8 @@ begin
                 ramoe <= 1'b1;
                 ramwe <= 1'b1;
                 raddr <= cpu_addr[21:1];
-                if (back_mem)
-                    vaddr1_main <= {~vfront, cpu_addr[12:1]};
-                else if (front_mem)
-                    vaddr1_main <= {vfront, cpu_addr[12:1]};
-                if (overlay_back_mem)
-                    vaddr1_overlay <= {1'b0, cpu_addr[12:1]};
-                else if (overlay_front_mem)
-                    vaddr1_overlay <= {1'b1, cpu_addr[12:1]};
-                if (cpu_addr[4] == 1'b0)
-                    pal_sel <= ~vfront;
-                else if (cpu_addr[4] == 1'b1)
-                    pal_sel <= vfront;
                 rds <= cpu_ds;
                 // Optimized BRAM writes: Write data registered, write enables are combinatorial
-                if (cpu_wr && vid_mem) begin
-                    if (back_mem || front_mem)
-                        vdin1_main <= cpu_dout;
-                    else if (overlay_back_mem || overlay_front_mem)
-                        vdin1_overlay <= cpu_dout;
-                end
                 if (cpu_idle) begin
                     // CPU idle - cpu_enable automatically HIGH (combinational)
                     estate <= 3'b000;
@@ -1244,15 +1249,18 @@ begin
             // Note: SRAM read/writes and BRAM writes are optimized to happen in state 000 (1-cycle)
             // This state is only reached for BRAM reads and MMIO accesses (3-cycle)
             if (da_mem && !cpu_wr) begin
-                 if (~cpu_ds[0]) rdata[7:0] <= da_memory_cpu_rdata[7:0];
-                 if (~cpu_ds[1]) rdata[15:8] <= da_memory_cpu_rdata[15:8];
+                 if (~cpu_ds[0]) rdata <= da_memory_cpu_rdata;
             end
-            if (pal_mem) begin
+            if (pal_mem && !cpu_wr) begin
                 // Palette read/write now handled by p8video module via MMIO interface
                 // Just latch the read data from p8video
-                if (!cpu_wr) begin
-                      rdata <= pal_dout;
-                 end
+                rdata <= pal_dout;
+            end
+            if (vid_mem && !cpu_wr) begin
+                if (back_mem || front_mem)
+                    rdata <= vdout1_main;
+                else if (overlay_back_mem || overlay_front_mem)
+                    rdata <= vdout1_overlay;
             end
             // cpu_enable will automatically go HIGH in state 010 (combinational)
             // TG68K samples data_in on rising_edge(clk) when clkena_in='1'
@@ -1271,6 +1279,7 @@ begin
             rdata <= ram_data_io;
             ramce <= 1'b1;
             ramoe <= 1'b1;
+            rds <= 2'b00;   // Both bytes enabled for DMA
             estate <= 3'b100;
         end
         3'b100: begin
@@ -1728,7 +1737,7 @@ begin
         mouse_buttons_latched <= mouse_buttons_latched | (mouse_buttons_q & ~mouse_buttons_q_prev);
     end
 
-    if (!reset_mclk_q && memio_go && memio_rd && cpu_wr) begin
+    if (!reset_mclk_q && memio_go && memio_rd && cpu_wr && !cpu_shutdown) begin
         // Default: clear vsync_ack, will be set on write to h80000F
         vsync_ack <= 1'b0;
         if (cpu_addr[8] == 1'b0) begin
@@ -1741,10 +1750,19 @@ begin
             if (cpu_addr[7:1]==ADDR_POST_CODE[7:1] && cpu_wr) post_code_cpu <= cpu_dout[13:8];
             //--------------- reset ----------------------------------
             if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_wr) begin
-                reset_request_toggle_mclk <= ~reset_request_toggle_mclk;
+                if (cpu_dout[15:8] == 8'hFF) begin
+                    // Shutdown request: disable CPU permanently until next reset
+                    cpu_shutdown <= 1'b1;
+                end else begin
+                    // Normal reset request
+                    reset_request_toggle_mclk <= ~reset_request_toggle_mclk;
+                end
             end
             // ------------ video ----------------------------------------------------
-            if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_wr) vfrontreq <= cpu_dout[0];
+            if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_wr) begin
+                vfrontreq <= cpu_dout[0];
+                $display("[%d] VFRONTREQ WRITE: vfrontreq_req=%b (current vfront=%b)", $time, cpu_dout[0], vfront);
+            end
             if (cpu_addr[7:1]==ADDR_VBLANK_INTR_CTRL[7:1] && cpu_wr) begin
                 vsync_ack <= 1'b1;
                 vsync_irq_enable <= cpu_dout[0];

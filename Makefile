@@ -45,6 +45,7 @@ SIM_DIRS = nextp8.srcs/tb_nextp8_boot \
            nextp8.srcs/tb_ps2_interface \
            nextp8.srcs/models/tests/tb_ps2_interface_device \
            nextp8.srcs/models/tests/test_ps2_interface_comms \
+           nextp8.srcs/models/tests/tb_vga_display \
            nextp8.srcs/tb_keyboard \
            nextp8.srcs/tb_mouse \
            nextp8.srcs/tb_nextp8_keyboard \
@@ -100,6 +101,7 @@ help:
 	@echo "  make test-tb_mouse            - Run tb_mouse (mouse peripheral)"
 	@echo "  make test-tb_nextp8_keyboard  - Run tb_nextp8_keyboard (keyboard system integration)"
 	@echo "  make test-tb_nextp8_mouse     - Run tb_nextp8_mouse (mouse system integration)"
+	@echo "  make test-tb_vga_display      - Run tb_vga_display (VGA display model test)"
 	@echo ""
 	@echo "Utility Targets:"
 	@echo "  make clean      - Remove all generated files"
@@ -261,6 +263,11 @@ test-tb_nextp8_mouse:
 	@echo "=== Running tb_nextp8_mouse: tb_nextp8_mouse (mouse system integration test) ==="
 	@$(MAKE) -C nextp8.srcs/tb_nextp8_mouse || (echo "ERROR: tb_nextp8_mouse failed"; exit 1)
 	@echo ""
+test-tb_vga_display:
+	@echo "=== Running tb_vga_display: tb_vga_display (VGA display model test) ==="
+	@$(MAKE) -C nextp8.srcs/models/tests/tb_vga_display || (echo "ERROR: tb_vga_display failed"; exit 1)
+	@echo ""
+
 
 # Clean targets
 clean-test:

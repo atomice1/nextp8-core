@@ -597,7 +597,8 @@ module sram #(
 
             end else begin
                 // OE# HIGH - tri-state outputs after tHZOE delay
-                real time_since_oe_rise = $realtime - time_oe_n_rise;
+                automatic real time_since_oe_rise;
+                time_since_oe_rise = $realtime - time_oe_n_rise;
 
                 if (time_since_oe_rise >= tHZOE || oe_n_prev === 1'b1) begin
                     output_enabled = 0;

@@ -1,13 +1,15 @@
-# Makefile for tb_nextp8_boot - Full nextp8_top boot testbench
+# Makefile for tb_vga_display using Vivado xsim
+# Tests VGA output from nextp8_top with vga_display_model
 #
 # Usage:
-#   make		  - Compile and run simulation
-#   make clean	- Remove generated files
-#   make wave	 - Open waveform viewer (after simulation)
-
+#   make          - Compile and run simulation
+#   make clean    - Remove generated files
+#   make wave     - Open waveform viewer (after simulation)
+#
 # Paths
-SRC_DIR = ../sources_1
-IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
+SRC_DIR = ../../../sources_1
+IP_GEN_DIR = ../../../../nextp8.gen/sources_1/ip
+MODELS_DIR = ../..
 TB_DIR = .
 
 # Verilog source files
@@ -17,7 +19,6 @@ VERILOG_SOURCES = \
 	$(SRC_DIR)/hdmi/encoder.v \
 	$(SRC_DIR)/hdmi/hdmidataencoder.v \
 	$(SRC_DIR)/hdmi/hdmi.v \
-	$(SRC_DIR)/keyboard.sv \
 	$(SRC_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)
@@ -34,8 +35,9 @@ SYSTEMVERILOG_SOURCES = \
 	$(SRC_DIR)/ps2_interface.sv \
 	$(SRC_DIR)/keyboard.sv \
 	$(SRC_DIR)/mouse.sv \
-	../models/sram.sv \
-	exec_tb.sv
+	$(MODELS_DIR)/sram.sv \
+	$(MODELS_DIR)/vga_display_model.sv \
+	$(TB_DIR)/tb_vga_display.sv
 
 # VHDL source files
 VHDL_SOURCES = \
@@ -52,51 +54,59 @@ VHDL_SOURCES = \
 	$(SRC_DIR)/TG68K.C-master/TG68KdotC_Kernel.vhd
 
 # Simulation parameters
-TOP = exec_tb
-SNAPSHOT = exec_tb_snap
-TIMEOUT ?= 60
-MEM_FILE ?= hello_test_rom.mem
-POST_TARGET ?= 10
+TOP = tb_vga_display
+SNAPSHOT = tb_vga_display_snap
+TIMEOUT ?= 300
 
 # xsim commands
-XVLOG = xvlog
 XVHDL = xvhdl
+XVLOG = xvlog
 XELAB = xelab
 XSIM = xsim
 
 # Build directory
 WORK_DIR = xsim.dir
 
-.PHONY: all sim run clean wave help rom
+.PHONY: all sim run clean wave help
 
-all: rom sim
-
-# Build ROM
-rom:
-	@echo "=== Building hello test ROM ==="
-	@$(MAKE) -f Makefile.rom
-	@echo ""
+all: sim
 
 # Compile VHDL sources
-compile_vhdl:
+compile_vhdl: $(VHDL_SOURCES)
 	@echo "=== Compiling VHDL sources ==="
-	$(XVHDL) $(VHDL_SOURCES)
+	@$(XVHDL) --work work $(VHDL_SOURCES)
 	@echo ""
 
 # Compile Verilog sources
-compile_verilog: compile_vhdl
-	@echo "=== Compiling Verilog/SystemVerilog sources ==="
-	$(XVLOG) $(IP_SOURCES) $(VERILOG_SOURCES)
-	$(XVLOG) --sv $(SYSTEMVERILOG_SOURCES)
+compile_verilog: compile_vhdl $(VERILOG_SOURCES)
+	@echo "=== Compiling Verilog sources ==="
+	@$(XVLOG) --work work $(VERILOG_SOURCES)
+	@echo ""
+
+# Compile IP simulation netlists
+compile_ip: compile_verilog $(IP_SOURCES)
+	@echo "=== Compiling IP simulation netlists ==="
+	@for ip in $(IP_SOURCES); do \
+		if [ -f "$$ip" ]; then \
+			$(XVLOG) --work work "$$ip" || exit 1; \
+		else \
+			echo "WARNING: IP source not found: $$ip"; \
+			echo "Run 'make regenerate-ip' from project root to generate IP simulation files."; \
+		fi; \
+	done
+	@echo ""
+
+# Compile SystemVerilog sources
+compile_sv: compile_ip $(SYSTEMVERILOG_SOURCES)
+	@echo "=== Compiling SystemVerilog sources ==="
+	@$(XVLOG) --sv $(SYSTEMVERILOG_SOURCES)
 	@echo ""
 
 # Elaborate design
-elaborate: compile_verilog
+elaborate: compile_sv
 	@echo "=== Elaborating design ==="
-	$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
+	@$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
 		--timescale 1ns/1ps \
-		--generic_top MEM_FILE=$(MEM_FILE) \
-		--generic_top POST_TARGET=$(POST_TARGET) \
 		-L unisims_ver -L unimacro_ver -L secureip \
 		-L blk_mem_gen_v8_4_11 -L xpm \
 		glbl
@@ -105,26 +115,26 @@ elaborate: compile_verilog
 # Run simulation
 sim: elaborate
 	@echo "=== Running simulation (timeout: $(TIMEOUT)s) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
+	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -onfinish quit -runall || \
 		(if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
 			exit 1; \
-		else \
-			exit $$?; \
-		fi)
-	@echo ""
+		fi; \
+		exit $$?)
 	@echo "=== Simulation complete ==="
+	@if [ -f vga_output.ppm ]; then \
+		echo "SUCCESS: Generated vga_output.ppm"; \
+	fi
 
 # Alternative: just run (if already compiled)
 run:
 	@echo "=== Running simulation (assuming already compiled) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
+	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -onfinish quit -runall || \
 		(if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
 			exit 1; \
-		else \
-			exit $$?; \
-		fi)
+		fi; \
+		exit $$?)
 
 # Open waveform viewer
 wave:
@@ -143,32 +153,21 @@ clean:
 	rm -f *.jou *.log *.pb
 	rm -f *.wdb
 	rm -f xsim.ini
-	@$(MAKE) -f Makefile.rom clean
+	rm -f vga_output.ppm
 	@echo "Clean complete"
 
 # Help target
 help:
-	@echo "Makefile for exec_tb - Full nextp8_top Execution Testbench"
+	@echo "Makefile for tb_vga_display - VGA Display Model Testbench"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make		  - Compile and run simulation"
-	@echo "  make sim	  - Same as 'make'"
-	@echo "  make run	  - Run simulation (skip recompile)"
-	@echo "  make wave	 - Open waveform viewer"
-	@echo "  make clean	- Remove all generated files"
-	@echo "  make help	 - Show this help message"
+	@echo "  make          - Compile and run simulation (default)"
+	@echo "  make sim      - Same as 'make'"
+	@echo "  make run      - Run simulation (skip recompile)"
+	@echo "  make wave     - Open waveform viewer"
+	@echo "  make clean    - Remove all generated files"
+	@echo "  make help     - Show this help message"
 	@echo ""
-	@echo "Options:"
-	@echo "  TIMEOUT=<sec>	  - Simulation timeout in seconds (default: 60)"
-	@echo "  MEM_FILE=<file>	 - Memory file to load into SRAM (default: hello_test_rom.mem)"
-	@echo "  POST_TARGET=<val>\t - POST code target value (default: 10)"
+	@echo "Output:"
+	@echo "  vga_output.ppm - PPM image file of VGA display buffer"
 	@echo ""
-	@echo "Examples:"
-	@echo "  make\t\t\t\t  # Run with defaults"
-	@echo "  make sim TIMEOUT=120\t\t  # Run with 120 second timeout"
-	@echo "  make sim MEM_FILE=dhrystone-rom.mem  # Run with Dhrystone ROM"
-	@echo "  make sim POST_TARGET=5\t\t  # Run with different POST target"
-	@echo ""
-	@echo "This testbench instantiates the full nextp8_top module"
-	@echo "with simulated external interfaces (SRAM, UART etc.)"
-	@echo "Exits successfully when POST code reaches 10 and the expected UART is output."
