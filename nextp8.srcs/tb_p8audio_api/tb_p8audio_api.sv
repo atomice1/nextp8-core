@@ -832,10 +832,14 @@ module tb_p8audio_api;
             disable test_all_channels_busy_auto_queue;
         end
         sfx_cmd(4, -1, 0);
-        wait_for_sfx_on_channel(0, 4, PCM_TIMEOUT_LONG, ok0);
-        if (!ok0) begin
-            $display("FAIL: auto-queued sfx did not play on ch0");
-            pass = 1'b0;
+        // Auto-assign preempts the round-robin selected channel (PICO-8 behavior)
+        begin
+            int ch_got;
+            wait_for_sfx_any(4, PCM_TIMEOUT_LONG, ok0, ch_got);
+            if (!ok0) begin
+                $display("FAIL: auto-assign did not preempt any channel for sfx4");
+                pass = 1'b0;
+            end
         end
         mmio_write(ADDR_SFX_LEN, 16'h0000);
     end endtask
@@ -859,6 +863,28 @@ module tb_p8audio_api;
             pass = 1'b0;
         end
         mmio_write(ADDR_SFX_LEN, 16'h0000);
+    end endtask
+
+    task automatic test_sfx_explicit_preempt(output bit pass);
+        bit ok;
+    begin : test_sfx_explicit_preempt
+        pass = 1'b1;
+        // Start a looping SFX on ch0 so it never finishes naturally
+        sfx_cmd(5, 0, 0);
+        wait_for_sfx_on_channel(0, 5, PCM_TIMEOUT_SHORT, ok);
+        if (!ok) begin
+            $display("FAIL: looping sfx5 did not start on ch0");
+            pass = 1'b0;
+            disable test_sfx_explicit_preempt;
+        end
+        // Preempt with sfx1 on the same channel - should start immediately
+        sfx_cmd(1, 0, 0);
+        wait_for_sfx_on_channel(0, 1, PCM_TIMEOUT_SHORT, ok);
+        if (!ok) begin
+            $display("FAIL: sfx1 did not preempt looping sfx5 on ch0 within short timeout");
+            pass = 1'b0;
+        end
+        sfx_cmd(-1, 0, 0);
     end endtask
 
     task automatic test_pcm_mixing(output bit pass);
@@ -1028,38 +1054,69 @@ module tb_p8audio_api;
         bit ok0, ok1, ok2, ok3;
     begin : test_music_mask
         pass = 1'b1;
-        music_cmd(0, 16'h0000, 4'h0);
-        wait_for_music_pattern(6'd0, PCM_TIMEOUT_XLONG, ok0);
-        if (!ok0) begin
-            $display("FAIL: music did not advance with mask=0");
-            pass = 1'b0;
-            disable test_music_mask;
-        end
-        ensure_idle_for(0, 4000, ok0);
-        ensure_idle_for(1, 4000, ok1);
-        ensure_idle_for(2, 4000, ok2);
-        ensure_idle_for(3, 4000, ok3);
-        if (!(ok0 && ok1 && ok2 && ok3)) begin
-            $display("FAIL: channels not idle with mask=0");
-            pass = 1'b0;
-            disable test_music_mask;
-        end
-
-        music_cmd(0, 16'h0000, 4'h5);
+        // channel 1 masked only
+        music_cmd(0, 16'h0000, 4'h2);
         wait_for_sfx_on_channel(0, 0, PCM_TIMEOUT_LONG, ok0);
+        wait_for_sfx_on_channel(1, 1, PCM_TIMEOUT_LONG, ok1);
         wait_for_sfx_on_channel(2, 2, PCM_TIMEOUT_LONG, ok2);
-        if (!(ok0 && ok2)) begin
-            $display("FAIL: mask=0x5 did not start on ch0/ch2");
+        if (!(ok0 && ok1 && ok2)) begin
+            $display("FAIL: music did not start on ch0/ch1/ch2");
             pass = 1'b0;
             disable test_music_mask;
         end
-        ensure_idle_for(1, 4000, ok1);
+        // ch3 is disabled in pattern 0 so should remain idle
         ensure_idle_for(3, 4000, ok3);
-        if (!(ok1 && ok3)) begin
-            $display("FAIL: mask=0x5 did not mute ch1/ch3");
+        if (!ok3) begin
+            $display("FAIL: music started ch3 but pattern 0 has ch3 disabled");
             pass = 1'b0;
+            disable test_music_mask;
+        end
+        sfx_cmd(7, -1, 0);
+        wait_for_sfx_on_channel(3, 7, PCM_TIMEOUT_LONG, ok3);
+        if (!ok3) begin
+            $display("FAIL: auto sfx did not use ch3 when music playing on other channels");
+            pass = 1'b0;
+            disable test_music_mask;
+        end
+        sfx_cmd(8, -1, 0);
+        wait_for_sfx_on_channel(0, 8, PCM_TIMEOUT_LONG, ok0);
+        if (!ok0) begin
+            $display("FAIL: auto sfx did not use ch0 when sfx playing on all channels and ch0 not masked");
+            pass = 1'b0;
+            disable test_music_mask;
+        end
+        sfx_cmd(9, -1, 0);
+        wait_for_sfx_on_channel(2, 9, PCM_TIMEOUT_LONG, ok2);
+        if (!ok2) begin
+            $display("FAIL: auto sfx did not use ch2 when sfx playing on all channels and ch2 masked");
+            pass = 1'b0;
+            disable test_music_mask;
         end
         music_cmd(-1, 16'h0000, 0);
+        sfx_cmd(-1, 0, 0);
+        sfx_cmd(-1, 2, 0);
+        sfx_cmd(-1, 3, 0);
+        wait_for_idle(0, PCM_TIMEOUT_SHORT, ok0);
+        wait_for_idle(1, PCM_TIMEOUT_SHORT, ok1);
+        wait_for_idle(2, PCM_TIMEOUT_SHORT, ok2);
+        wait_for_idle(3, PCM_TIMEOUT_SHORT, ok3);
+    end endtask
+
+    task automatic test_sfx_rapid_preempt(output bit pass);
+        bit ok;
+    begin : test_sfx_rapid_preempt
+        pass = 1'b1;
+        // Trigger sfx0 on ch0, then immediately sfx1 on ch0 (one mclk cycle between writes).
+        // The DMA for sfx0 may not have started yet when sfx1 is triggered.
+        // sfx1 must win and play on ch0.
+        sfx_cmd(0, 0, 0);
+        sfx_cmd(1, 0, 0);  // back-to-back: 1 mclk gap between write pulses
+        wait_for_sfx_on_channel(0, 1, PCM_TIMEOUT_SHORT, ok);
+        if (!ok) begin
+            $display("FAIL: rapid-fire sfx1 did not preempt sfx0 on ch0");
+            pass = 1'b0;
+        end
+        sfx_cmd(-1, 0, 0);
     end endtask
 
     task automatic test_music_loop_fade(output bit pass);
@@ -1223,6 +1280,8 @@ module tb_p8audio_api;
             19: test_music_loop_fade(pass);
             20: test_music_fade_out_time(pass);
             21: test_music_advance_timing(pass);
+            22: test_sfx_explicit_preempt(pass);
+            23: test_sfx_rapid_preempt(pass);
             default: begin
                 $display("Unknown test id: %0d", test_id);
                 pass = 1'b0;
@@ -1278,6 +1337,8 @@ module tb_p8audio_api;
         run_test("music_loop_fade", 19, 1'b1);
         run_test("music_fade_out_time", 20, 1'b1);
         run_test("music_advance_timing", 21, 1'b1);
+        run_test("sfx_explicit_preempt", 22, 1'b1);
+        run_test("sfx_rapid_preempt", 23, 1'b1);
 
         tf_summary();
         if (tf_fail != 0) begin

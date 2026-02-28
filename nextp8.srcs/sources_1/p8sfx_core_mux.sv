@@ -235,6 +235,7 @@ reg [7:0] sample_ctr_8x [0:7];   // Sample counter for note timing (0-182)
 reg [7:0] note_ctr_8x [0:7];     // Note counter (0-speed-1)
 
 // Current note parameters
+reg [5:0] cur_note_idx_8x [0:7]; // Note index at last decode (for stat reporting)
 reg [5:0] cur_pitch_8x [0:7];   // 0-63
 reg [2:0] cur_wave_8x [0:7];    // 0-7
 reg [2:0] cur_vol_8x [0:7];     // 0-7
@@ -529,6 +530,10 @@ integer i;
 // DMA request queue (one bit per context)
 reg [7:0] pending_load_sys;      // clk_sys: Bit[i] = context i has pending load request
 
+// Force stop/release toggle registers (clk_sys domain, used in CDC below)
+reg [7:0] force_stop_toggle_sys;
+reg [7:0] force_release_toggle_sys;
+
 // Per-context load request parameters (captured on play_strobe)
 reg [5:0]  sfx_index_req_8x [0:7];   // clk_sys: Requested SFX index per context
 reg [5:0]  sfx_offset_req_8x [0:7];  // clk_sys: Requested note offset per context
@@ -556,18 +561,21 @@ reg [1:0] filt_dampen_sys_8x [0:7];
 reg [7:0] load_done_toggle_sys;  // clk_sys: Toggle when context load completes
 
 //==============================================================
-// DMA Request Capture (clk_sys domain)
+// DMA Request Capture + Force Stop/Release Toggle Generation (clk_sys domain)
 //==============================================================
 always @(posedge clk_sys) begin
     if (!resetn_sys) begin
         pending_load_sys <= 8'd0;
+        force_stop_toggle_sys <= 8'd0;
+        force_release_toggle_sys <= 8'd0;
         for (i=0; i<8; i=i+1) begin
             sfx_index_req_8x[i] <= 6'd0;
             sfx_offset_req_8x[i] <= 6'd0;
             sfx_length_req_8x[i] <= 6'd0;
         end
     end else begin
-        // Capture play_strobe pulses and store request parameters
+        // Capture play_strobe pulses, store request parameters.
+        // Preemption of an active voice is handled in the PCM domain via load_done_pcm_sticky.
         // Map 4 voice inputs to MAIN contexts (1,3,5,7)
         for (i=0; i<4; i=i+1) begin
             if (play_strobe[i]) begin
@@ -578,6 +586,13 @@ always @(posedge clk_sys) begin
             end else if (dma_state == L_SCAN && ctx_to_load == ctx_from_voice(i, 1'b1)) begin
                 // Clear pending flag when load completes
                 pending_load_sys[ctx_from_voice(i, 1'b1)] <= 1'b0;
+            end
+            // External force_stop/force_release from host
+            if (force_stop[i]) begin
+                force_stop_toggle_sys[ctx_from_voice(i, 1'b1)] <= ~force_stop_toggle_sys[ctx_from_voice(i, 1'b1)];
+            end
+            if (force_release[i]) begin
+                force_release_toggle_sys[ctx_from_voice(i, 1'b1)] <= ~force_release_toggle_sys[ctx_from_voice(i, 1'b1)];
             end
         end
 
@@ -759,32 +774,13 @@ end
 reg [7:0] load_done_pcm_sticky;  // Sticky flag for load completion (persist until cleared)
 
 // Force stop/release synchronizers and sticky flags
-reg [7:0] force_stop_toggle_sys;
 (* ASYNC_REG = "TRUE" *) reg [7:0] force_stop_toggle_pcm;       // CDC stage 1
 (* ASYNC_REG = "TRUE" *) reg [7:0] force_stop_toggle_pcm_q;     // CDC stage 2
 reg [7:0] force_stop_pcm_sticky;  // Sticky flags for force_stop (persist until cleared)
 
-reg [7:0] force_release_toggle_sys;
 (* ASYNC_REG = "TRUE" *) reg [7:0] force_release_toggle_pcm;    // CDC stage 1
 (* ASYNC_REG = "TRUE" *) reg [7:0] force_release_toggle_pcm_q;  // CDC stage 2
 reg [7:0] force_release_pcm_sticky;  // Sticky flags for force_release (persist until cleared)
-
-// Generate toggles on force_stop/force_release inputs (clk_sys domain)
-always @(posedge clk_sys) begin
-    if (!resetn_sys) begin
-        force_stop_toggle_sys <= 8'd0;
-        force_release_toggle_sys <= 8'd0;
-    end else begin
-        for (i=0; i<4; i=i+1) begin
-            if (force_stop[i]) begin
-                force_stop_toggle_sys[ctx_from_voice(i, 1'b1)] <= ~force_stop_toggle_sys[ctx_from_voice(i, 1'b1)];  // Contexts 1,3,5,7
-            end
-            if (force_release[i]) begin
-                force_release_toggle_sys[ctx_from_voice(i, 1'b1)] <= ~force_release_toggle_sys[ctx_from_voice(i, 1'b1)];  // Contexts 1,3,5,7
-            end
-        end
-    end
-end
 
 // HWFX synchronizers (clk_sys -> clk_pcm_8x)
 always @(posedge clk_sys) begin
@@ -1098,6 +1094,9 @@ task decode_current_note;
     reg [5:0] pitch;
     reg       should_attack;
     begin
+        // Save the note index being decoded for stat(50..53).
+        cur_note_idx_8x[ctx_idx] <= note_idx;
+
         // Save previous note for slide effect
         prev_pitch_8x[ctx_idx] <= cur_pitch;
         prev_vol_8x[ctx_idx] <= cur_vol;
@@ -1163,9 +1162,7 @@ task advance_note;
         new_note_idx = note_idx; // default
 
         // Advance note index based on mode
-        if (pcm_state[ctx_idx] == PCM_WARM_UP) begin
-            // Don't advance the note or we will miss the first note.
-        end else if (is_custom_context(ctx_idx)) begin
+        if (is_custom_context(ctx_idx)) begin
             // Custom instruments play in continuous loop mode
             if (note_idx == NOTE_MAX_INDEX) begin
                 new_note_idx = 6'd0;
@@ -1797,7 +1794,7 @@ task update_status_outputs;
         if (is_main_context(ctx_idx)) begin
             looping[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? (loop_start < loop_end) : 1'b0;
             stat_sfx_index[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? sfx_index_req_8x[ctx_idx] : 6'h3F;
-            stat_note_index[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? note_idx : 6'h3F;
+            stat_note_index[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) ? cur_note_idx_8x[ctx_idx] : 6'h3F;
         end
     end
 endtask
@@ -1851,6 +1848,7 @@ always @(posedge clk_pcm_8x) begin
             phase_acc_8x[i] <= 22'd0;
             detune_acc_8x[i] <= 22'd0;
             // Initialize all other per-context registers
+            cur_note_idx_8x[i] <= 6'd0;
             cur_pitch_8x[i] <= 6'd0;
             cur_wave_8x[i] <= 3'd0;
             cur_vol_8x[i] <= 3'd0;

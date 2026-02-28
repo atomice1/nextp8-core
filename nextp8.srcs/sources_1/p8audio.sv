@@ -423,7 +423,7 @@ reg [1:0] fb_idx;                         // mclk: Frame byte fetch index
 reg [5:0] loop_start, loop_end;           // mclk: Loop start/end frame indices
 reg       loop_start_seen, loop_end_seen; // mclk: Track if loop markers encountered
 reg       stop_on_loop;                   // mclk: Stop flag
-reg [3:0] music_mask;                     // mclk: Channel enable mask for music
+reg [3:0] music_mask;                     // mclk: SFX auto-assign avoidance mask (1=prefer last for auto-assign)
 wire      loop_def = loop_start_seen && loop_end_seen; // mclk: Loop active when both markers seen
 
 reg [3:0] seq_played_mask;                // mclk: Channels triggered by current pattern
@@ -456,16 +456,44 @@ reg [5:0]   q_index [0:3];  // mclk: Queued SFX index
 reg [5:0]   q_off   [0:3];  // mclk: Queued note offset
 reg [15:0]  q_len   [0:3];  // mclk: Queued note length
 
-function [1:0] find_idle;
-    input dummy;  // Dummy input required by Verilog
+reg [1:0] find_idle_next;   // mclk: Round-robin start index for auto-assign
+
+// Round-robin auto-channel selection task.
+// Searches all 4 channels starting from find_idle_next (wrapping), using
+// 4-level priority: P1=idle+unmasked, P2=unmasked+music, P3=idle, P4=fallback.
+task automatic find_idle;
+    output reg [1:0] result;
+    reg       found;
+    reg [1:0] ci;
+    integer   fi;
     begin
-        if (!voice_busy[0] && !music_mask[0]) find_idle=2'd0;
-        else if (!voice_busy[1] && !music_mask[1]) find_idle=2'd1;
-        else if (!voice_busy[2] && !music_mask[2]) find_idle=2'd2;
-        else if (!voice_busy[3] && !music_mask[3]) find_idle=2'd3;
-        else find_idle=2'd0;
+        found  = 1'b0;
+        result = find_idle_next;  // P4 fallback
+        // Priority 1: idle and not music-masked
+        for (fi=0; fi<NUM_VOICES; fi=fi+1) begin
+            ci = find_idle_next + fi[1:0];
+            if (!found && !voice_busy[ci] && !music_mask[ci]) begin
+                result = ci; found = 1'b1;
+            end
+        end
+        // Priority 2: not music-masked and currently playing music (preemptable)
+        if (!found) for (fi=0; fi<NUM_VOICES; fi=fi+1) begin
+            ci = find_idle_next + fi[1:0];
+            if (!found && !music_mask[ci] && seq_played_mask[ci]) begin
+                result = ci; found = 1'b1;
+            end
+        end
+        // Priority 3: idle (music-masked channel with no music)
+        if (!found) for (fi=0; fi<NUM_VOICES; fi=fi+1) begin
+            ci = find_idle_next + fi[1:0];
+            if (!found && !voice_busy[ci]) begin
+                result = ci; found = 1'b1;
+            end
+        end
+        // Priority 4: fallback = find_idle_next (result already set)
+        find_idle_next = result + 2'd1;
     end
-endfunction
+endtask
 
 // SFX queueing variables
 integer l;
@@ -492,6 +520,7 @@ reg [1:0] leftmost_nonloop;
 always @(posedge mclk) begin
     if (!resetn_sys) begin
         // SFX queueing resets
+        find_idle_next <= 2'd0;
         for (l=0;l<NUM_VOICES;l=l+1) begin
             q_valid[l]<=0; q_index[l]<=0; q_off[l]<=0; q_len[l]<=0;
             play_strobe_sys[l]<=0; play_sfx_index[l]<=0; play_sfx_off[l]<=0; play_sfx_len[l]<=0;
@@ -499,7 +528,7 @@ always @(posedge mclk) begin
             force_release_sys[l]<=0;
         end
         // MUSIC command handler resets
-        music_state<=MUSIC_IDLE; music_mask<=4'b1111; cur_frame<=0;
+        music_state<=MUSIC_IDLE; music_mask<=4'b0000; cur_frame<=0;
         music_fade_ctr_in<=0; music_fade_ctr_out<=0; music_fade_len<=0;
         // Sequencer resets
         seq_dma_req<=0; fb_idx<=0;
@@ -535,14 +564,12 @@ always @(posedge mclk) begin
                         for (m=0; m<NUM_VOICES; m=m+1) begin
                             force_stop_sys[m] <= 1'b1;
                             q_valid[m] <= 1'b0;
-                            music_mask[m] <= 1'b0;
                             seq_played_mask[m] <= 1'b0;
                         end
                     end else begin  // Specific channel
                         chx = ch_f[1:0];
                         force_stop_sys[chx] <= 1'b1;
                         q_valid[chx] <= 1'b0;
-                        music_mask[chx] <= 1'b0;
                         seq_played_mask[chx] <= 1'b0;
                     end
                 end else if (idx_f==6'h3e) begin  // N=-2: Release from looping
@@ -559,13 +586,18 @@ always @(posedge mclk) begin
                         end
                     end
                 end else if (ch_f==3'b111) begin  // CHANNEL=-1: Auto-select idle channel
-                    chx = find_idle(1'b0);
+                    find_idle(chx);
+
                     if (!voice_busy[chx]) begin
+                        // Idle channel found: start immediately
                         play_sfx_index[chx] <= idx_f;
                         play_sfx_off[chx]   <= off_f;
                         play_sfx_len[chx]   <= reg_sfx_len;
                         play_strobe_sys[chx] <= 1'b1;
                     end else begin
+                        // Channel busy (music or user SFX): preempt via force-stop + queue
+                        seq_played_mask[chx] <= 1'b0;
+                        force_stop_sys[chx]  <= 1'b1;
                         q_index[chx] <= idx_f;
                         q_off[chx]   <= off_f;
                         q_len[chx]   <= reg_sfx_len;
@@ -580,18 +612,16 @@ always @(posedge mclk) begin
                     end
                 end else begin
                     chx = ch_f[1:0];
-                    music_mask[chx] <= 1'b0;
                     seq_played_mask[chx] <= 1'b0;
-                    if (seq_played_mask[chx]) begin
-                        // If the requested channel is currently playing music, stop it first
-                        force_stop_sys[chx] <= 1'b1;
-                    end
-                    if (!voice_busy[chx] && !seq_played_mask[chx]) begin
+                    if (!voice_busy[chx]) begin
+                        // Channel idle: start immediately
                         play_sfx_index[chx] <= idx_f;
                         play_sfx_off[chx]   <= off_f;
                         play_sfx_len[chx]   <= reg_sfx_len;
                         play_strobe_sys[chx] <= 1'b1;
                     end else begin
+                        // Channel busy: force-stop current SFX and queue the new one
+                        force_stop_sys[chx] <= 1'b1;
                         q_index[chx] <= idx_f;
                         q_off[chx]   <= off_f;
                         q_len[chx]   <= reg_sfx_len;
@@ -601,7 +631,7 @@ always @(posedge mclk) begin
             end
         end
 
-        // SFX queue processing - trigger queued SFX when voices become available
+        // SFX queue processing - fire queued SFX once voice becomes idle
         for (l=0;l<NUM_VOICES;l=l+1) begin
             if (q_valid[l] && (voice_done[l] || !voice_busy[l])) begin
                 play_sfx_index[l] <= q_index[l];
@@ -634,13 +664,12 @@ always @(posedge mclk) begin
                 end
             end else begin
                 // Start music from pattern n
-                music_mask <= (msk==4'b0000) ? 4'b1111 : msk;
+                music_mask         <= msk;
                 music_fade_len     <= reg_music_fade;
                 music_fade_ctr_in  <= reg_music_fade;
                 music_fade_ctr_out <= 0;
                 music_state<=MUSIC_LOADING;
                 cur_frame <= pat;
-                music_mask <= msk;
                 loop_start_seen<=0; loop_end_seen<=0; stop_on_loop<=0;
                 stat_music_pattern <= {10'd0, pat};
                 // pat << 2 = pat * 4 bytes per frame, then divide by 2 for word address
@@ -677,16 +706,14 @@ always @(posedge mclk) begin
                 fb_idx <= 0;
                 seq_played_mask <= 4'b0000;
                 for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
-                    if (music_mask[ch]) begin
-                        if (frame_bytes[ch][6]) begin
-                            // CONTINUE: no retrigger
-                        end else begin
-                            play_sfx_index[ch] <= frame_bytes[ch][5:0];
-                            play_sfx_off[ch]   <= 6'd0;
-                            play_sfx_len[ch]   <= 16'd0;   // full SFX
-                            play_strobe_sys[ch] <= 1'b1;
-                            seq_played_mask[ch] <= 1'b1;
-                        end
+                    if (frame_bytes[ch][6]) begin
+                        // Channel disabled in pattern (bit 6 set): no retrigger
+                    end else begin
+                        play_sfx_index[ch] <= frame_bytes[ch][5:0];
+                        play_sfx_off[ch]   <= 6'd0;
+                        play_sfx_len[ch]   <= 16'd0;   // full SFX
+                        play_strobe_sys[ch] <= 1'b1;
+                        seq_played_mask[ch] <= 1'b1;
                     end
                 end
                 if (frame_bytes[0][7]) begin loop_start<=cur_frame; loop_start_seen<=1'b1; end
@@ -695,26 +722,21 @@ always @(posedge mclk) begin
                 music_state <= MUSIC_PLAYING;
             end
             MUSIC_PLAYING: begin
-                if (music_mask == 4'b0000) begin
-                    // SFX override on all channels - stop immediately
-                    music_state <= MUSIC_IDLE;
-                end else begin
-                    // Dynamically find leftmost non-looping channel among triggered channels
-                    leftmost_nonloop = 2'd0;  // default
-                    if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
-                        leftmost_nonloop = 2'd0;
-                    end else if (seq_played_mask[1] && !voice_looping_sys_q[1]) begin
-                        leftmost_nonloop = 2'd1;
-                    end else if (seq_played_mask[2] && !voice_looping_sys_q[2]) begin
-                        leftmost_nonloop = 2'd2;
-                    end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
-                        leftmost_nonloop = 2'd3;
-                    end
+                // Dynamically find leftmost non-looping channel among triggered channels
+                leftmost_nonloop = 2'd0;  // default
+                if (seq_played_mask[0] && !voice_looping_sys_q[0]) begin
+                    leftmost_nonloop = 2'd0;
+                end else if (seq_played_mask[1] && !voice_looping_sys_q[1]) begin
+                    leftmost_nonloop = 2'd1;
+                end else if (seq_played_mask[2] && !voice_looping_sys_q[2]) begin
+                    leftmost_nonloop = 2'd2;
+                end else if (seq_played_mask[3] && !voice_looping_sys_q[3]) begin
+                    leftmost_nonloop = 2'd3;
+                end
 
-                    // Advance immediately if nothing triggered, otherwise wait for a non-looping voice to complete
-                    if (seq_played_mask == 4'b0000 || voice_done[leftmost_nonloop]) begin
-                        music_state <= MUSIC_ADVANCE;
-                    end
+                // Advance immediately if nothing triggered, otherwise wait for a non-looping voice to complete
+                if (seq_played_mask == 4'b0000 || voice_done[leftmost_nonloop]) begin
+                    music_state <= MUSIC_ADVANCE;
                 end
             end
             MUSIC_ADVANCE: begin
@@ -740,9 +762,9 @@ always @(posedge mclk) begin
                 end
             end
             MUSIC_STOPPING: begin
-                // force_stop all channels in music_mask
+                // force_stop all channels that music triggered this pattern
                 for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
-                    if (music_mask[ch]) begin
+                    if (seq_played_mask[ch]) begin
                         force_stop_sys[ch] <= 1'b1;
                     end
                 end
