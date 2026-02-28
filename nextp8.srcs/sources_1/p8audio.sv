@@ -631,7 +631,7 @@ always @(posedge mclk) begin
             end
         end
 
-        // SFX queue processing - fire queued SFX once voice becomes idle
+        // SFX queue processing - trigger queued SFX once voice becomes idle
         for (l=0;l<NUM_VOICES;l=l+1) begin
             if (q_valid[l] && (voice_done[l] || !voice_busy[l])) begin
                 play_sfx_index[l] <= q_index[l];
