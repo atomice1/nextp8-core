@@ -194,6 +194,14 @@ set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_ou
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 3.0 [get_ports ram_we_n_o]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_we_n_o]
 
+## sram_we_active is intentionally falling-edge triggered to extend CS# through the WE pulse.
+## The negedge-launched path to SRAM outputs is non-critical: it just keeps CS# asserted.
+## Give it a full clock period (2 half-periods) rather than the default half-period check.
+set_multicycle_path -setup 2 -fall_from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
+    -to [get_ports {ram_cs_n_o ram_lb_n_o ram_ub_n_o ram_oe_n_o ram_addr_o[*] ram_data_io[*]}]
+set_multicycle_path -hold 1 -fall_from [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] \
+    -to [get_ports {ram_cs_n_o ram_lb_n_o ram_ub_n_o ram_oe_n_o ram_addr_o[*] ram_data_io[*]}]
+
 ## SRAM data is bidirectional
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -max 10.0 [get_ports ram_data_io[*]]
 set_output_delay -clock [get_clocks -of_objects [get_pins nextp8_inst/pll/clk_out3]] -min 0.0 [get_ports ram_data_io[*]]
