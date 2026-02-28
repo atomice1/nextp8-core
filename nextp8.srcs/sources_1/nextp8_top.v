@@ -966,7 +966,6 @@ always @(posedge mclk) begin
         if (vsync_ack) begin
             $display("[%d] VSYNC IRQ CLEARED", $time);
             vsync_irq <= 1'b0;
-            vsync_ack <= 1'b0;
         end
     end
 end
@@ -1736,10 +1735,10 @@ begin
         js1_latched <= js1_latched | (js1_q & ~js1_q_prev);
         mouse_buttons_latched <= mouse_buttons_latched | (mouse_buttons_q & ~mouse_buttons_q_prev);
     end
+    vsync_ack <= 1'b0;
 
     if (!reset_mclk_q && memio_go && memio_rd && cpu_wr && !cpu_shutdown) begin
         // Default: clear vsync_ack, will be set on write to h80000F
-        vsync_ack <= 1'b0;
         if (cpu_addr[8] == 1'b0) begin
             // ------------  ql-sd io -------------------------------------------------
             if (cpu_addr[7:1]==ADDR_SDSPI_DATA_IN[7:1] && cpu_wr ) qlsd_din <= cpu_dout[7:0];
