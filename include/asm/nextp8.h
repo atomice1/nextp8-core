@@ -13,14 +13,14 @@
  */
 
 #define _MEMIO_BASE         0x800000
-#define _PARAMS             (_MEMIO_BASE + 0x0)
-#define _BUILD_TIMESTAMP_HI (_MEMIO_BASE + 0x2)
-#define _BUILD_TIMESTAMP_LO (_MEMIO_BASE + 0x4)
-#define _HW_VERSION_HI      (_MEMIO_BASE + 0x6)
-#define _HW_VERSION_LO      (_MEMIO_BASE + 0x8)
-#define _DEBUG_REG_HI       (_MEMIO_BASE + 0xa)
-#define _DEBUG_REG_LO       (_MEMIO_BASE + 0xc)
-#define _POST_CODE          (_MEMIO_BASE + 0xf)
+#define _PARAMS             (_MEMIO_BASE + 0x1)
+#define _POST_CODE          (_MEMIO_BASE + 0x3)
+#define _BUILD_TIMESTAMP_HI (_MEMIO_BASE + 0x4)
+#define _BUILD_TIMESTAMP_LO (_MEMIO_BASE + 0x6)
+#define _HW_VERSION_HI      (_MEMIO_BASE + 0x8)
+#define _HW_VERSION_LO      (_MEMIO_BASE + 0xa)
+#define _DEBUG_REG_HI       (_MEMIO_BASE + 0xc)
+#define _DEBUG_REG_LO       (_MEMIO_BASE + 0xe)
 #define _RESET_TYPE         (_MEMIO_BASE + 0x11)
 #define _RESET_REQ          (_MEMIO_BASE + 0x11)
 #define _VBLANK_INTR_CTRL   (_MEMIO_BASE + 0x13)

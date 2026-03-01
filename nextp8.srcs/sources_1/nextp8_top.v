@@ -131,14 +131,14 @@ parameter PATCH_VERSION = 8'h00;
 parameter VERSION = {API_VERSION, MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION};
 
 // MMIO register addresses
-localparam [7:0] ADDR_PARAMS                   = 8'h00;
-localparam [7:0] ADDR_BUILD_TIMESTAMP_HI       = 8'h02;
-localparam [7:0] ADDR_BUILD_TIMESTAMP_LO       = 8'h04;
-localparam [7:0] ADDR_HW_VERSION_HI            = 8'h06;
-localparam [7:0] ADDR_HW_VERSION_LO            = 8'h08;
-localparam [7:0] ADDR_DEBUG_REG_HI             = 8'h0A;
-localparam [7:0] ADDR_DEBUG_REG_LO             = 8'h0C;
-localparam [7:0] ADDR_POST_CODE                = 8'h0F;
+localparam [7:0] ADDR_PARAMS                   = 8'h01;
+localparam [7:0] ADDR_POST_CODE                = 8'h03;
+localparam [7:0] ADDR_BUILD_TIMESTAMP_HI       = 8'h04;
+localparam [7:0] ADDR_BUILD_TIMESTAMP_LO       = 8'h06;
+localparam [7:0] ADDR_HW_VERSION_HI            = 8'h08;
+localparam [7:0] ADDR_HW_VERSION_LO            = 8'h0A;
+localparam [7:0] ADDR_DEBUG_REG_HI             = 8'h0C;
+localparam [7:0] ADDR_DEBUG_REG_LO             = 8'h0E;
 localparam [7:0] ADDR_RESET_TYPE               = 8'h11;
 localparam [7:0] ADDR_RESET_REQ                = 8'h11;
 localparam [7:0] ADDR_VBLANK_INTR_CTRL         = 8'h13;
