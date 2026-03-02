@@ -37,11 +37,9 @@ SYSTEMVERILOG_SOURCES = \
 # VHDL source files
 VHDL_SOURCES = \
 	$(SRC_DIR)/p8video.vhd \
-	$(SRC_DIR)/ps2_read_keyboard.vhd \
 	$(SRC_DIR)/dac.vhd \
 	$(SRC_DIR)/hdmi_out_xilinx.vhd \
 	$(SRC_DIR)/i2c.vhd \
-	$(SRC_DIR)/ps2_in.vhd \
 	$(SRC_DIR)/spi.vhd \
 	$(SRC_DIR)/uart.vhd \
 	$(SRC_DIR)/TG68K.C-master/TG68K_Pack.vhd \

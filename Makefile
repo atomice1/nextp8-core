@@ -86,7 +86,6 @@ help:
 	@echo "  make test-tb_p8video          - Run p8video_tb (video module test)"
 	@echo "  make test-tb_p8audio_sfx      - Run tb_p8audio_sfx (audio SFX test, full)"
 	@echo "  make test-tb_p8audio_sfx-quick - Run tb_p8audio_sfx (audio SFX test, SFX 8 only)"
-	@echo "  make test-tb_ps2_keyboard     - Run tb_ps2_read_keyboard (PS/2 test)"
 	@echo "  make test-tb_p8audio_music    - Run tb_p8audio_music (audio music test)"
 	@echo "  make test-tb_nextp8_p8audio   - Run tb_nextp8_p8audio (integrated audio test)"
 	@echo "  make test-tb_waveform_gen     - Run tb_waveform_gen (waveform generation test)"
