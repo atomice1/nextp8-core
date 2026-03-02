@@ -15,13 +15,8 @@ module tb_funcval;
     reg clock_200_i = 0;
     always #2.5 clock_200_i = ~clock_200_i;  // 200 MHz
 
-    // Derived 50Mhz clock
     reg clock_50_i = 0;
-    reg [2:0] clk_div = 0;
-    always @(posedge clock_200_i) begin
-        clk_div <= clk_div + 1;
-        clock_50_i <= clk_div[2];
-    end
+    always #10 clock_50_i = ~clock_50_i;     // 50 MHz
 
     // Reset
     reg reset_n = 0;
