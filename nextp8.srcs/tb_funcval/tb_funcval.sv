@@ -577,16 +577,18 @@ module tb_funcval;
     // 0x380086: Row 6 (Enter, L, K, J, H, Delete, Right arrow)
     // 0x380087: Row 7 (Space, Sym Shift, M, N, B, Left arrow, Down arrow)
 
-    // Initialize keyboard_matrix array
+    // Initialize keyboard_matrix array.
+    // Spectrum Next keyboard columns are active-low: 0 = key pressed, 1 = released.
+    // All 0xFF = all keys released (columns pulled high).
     initial begin
-        keyboard_matrix[0] = 8'h00;
-        keyboard_matrix[1] = 8'h00;
-        keyboard_matrix[2] = 8'h00;
-        keyboard_matrix[3] = 8'h00;
-        keyboard_matrix[4] = 8'h00;
-        keyboard_matrix[5] = 8'h00;
-        keyboard_matrix[6] = 8'h00;
-        keyboard_matrix[7] = 8'h00;
+        keyboard_matrix[0] = 8'hFF;
+        keyboard_matrix[1] = 8'hFF;
+        keyboard_matrix[2] = 8'hFF;
+        keyboard_matrix[3] = 8'hFF;
+        keyboard_matrix[4] = 8'hFF;
+        keyboard_matrix[5] = 8'hFF;
+        keyboard_matrix[6] = 8'hFF;
+        keyboard_matrix[7] = 8'hFF;
     end
 
     // VGA framebuffer readback signals
@@ -626,7 +628,7 @@ module tb_funcval;
         screenshot_trigger <= 1'b0;
 
         if (sram_we_strobe && mmio_periph_selected) begin
-            $display("MMIO Write: Addr=0x%06X, Data=0x%04X", sram_addr, sram_write_data);
+            //$display("MMIO Write: Addr=0x%06X, Data=0x%04X", sram_addr, sram_write_data);
             case (sram_addr)
                 // Keyboard: Writing scancode triggers send_scancode task
                 21'h1C0000: begin
@@ -691,15 +693,24 @@ module tb_funcval;
                     joy1 <= sram_write_data[7:0];
                 end
 
-                // Built-in keyboard matrix (0x380080 - 0x380087)
-                21'h1C0040: keyboard_matrix[0] <= sram_write_data[7:0];  // Row 0
-                21'h1C0041: keyboard_matrix[1] <= sram_write_data[7:0];  // Row 1
-                21'h1C0042: keyboard_matrix[2] <= sram_write_data[7:0];  // Row 2
-                21'h1C0043: keyboard_matrix[3] <= sram_write_data[7:0];  // Row 3
-                21'h1C0044: keyboard_matrix[4] <= sram_write_data[7:0];  // Row 4
-                21'h1C0045: keyboard_matrix[5] <= sram_write_data[7:0];  // Row 5
-                21'h1C0046: keyboard_matrix[6] <= sram_write_data[7:0];  // Row 6
-                21'h1C0047: keyboard_matrix[7] <= sram_write_data[7:0];  // Row 7
+                // Built-in keyboard matrix (0x380080 - 0x380087, byte-addressed, stride 1)
+                // Two rows per 16-bit word; even byte addr uses D[15:8], odd uses D[7:0]
+                21'h1C0040: begin
+                    if (!ram_ub_n) keyboard_matrix[0] <= sram_write_data[15:8]; // 0x380080 Row 0
+                    if (!ram_lb_n) keyboard_matrix[1] <= sram_write_data[7:0];  // 0x380081 Row 1
+                end
+                21'h1C0041: begin
+                    if (!ram_ub_n) keyboard_matrix[2] <= sram_write_data[15:8]; // 0x380082 Row 2
+                    if (!ram_lb_n) keyboard_matrix[3] <= sram_write_data[7:0];  // 0x380083 Row 3
+                end
+                21'h1C0042: begin
+                    if (!ram_ub_n) keyboard_matrix[4] <= sram_write_data[15:8]; // 0x380084 Row 4
+                    if (!ram_lb_n) keyboard_matrix[5] <= sram_write_data[7:0];  // 0x380085 Row 5
+                end
+                21'h1C0043: begin
+                    if (!ram_ub_n) keyboard_matrix[6] <= sram_write_data[15:8]; // 0x380086 Row 6
+                    if (!ram_lb_n) keyboard_matrix[7] <= sram_write_data[7:0];  // 0x380087 Row 7
+                end
             endcase
         end
     end
@@ -861,18 +872,19 @@ module tb_funcval;
     assign joyp9 = joysel ? joy1[5] : joy0[5];
 
     // Built-in keyboard matrix: combinatorial multiplexer
-    // keyb_row_o is active-low (one bit low, others high-Z)
-    // Decode which row is active and return the corresponding columns
+    // keyb_row_o is active-low (one bit low, others high-Z or don't-care)
+    // mkeyboard drives one bit 0 at a time; other bits may be X in simulation.
+    // Use case equality (===) so X in inactive rows is treated as non-zero (not selected).
     wire [2:0] active_row;
-    assign active_row = (~keyb_row[7]) ? 3'd7 :
-                        (~keyb_row[6]) ? 3'd6 :
-                        (~keyb_row[5]) ? 3'd5 :
-                        (~keyb_row[4]) ? 3'd4 :
-                        (~keyb_row[3]) ? 3'd3 :
-                        (~keyb_row[2]) ? 3'd2 :
-                        (~keyb_row[1]) ? 3'd1 :
-                        (~keyb_row[0]) ? 3'd0 :
-                        3'd0;  // No row active or invalid state
+    assign active_row = (keyb_row[7] === 1'b0) ? 3'd7 :
+                        (keyb_row[6] === 1'b0) ? 3'd6 :
+                        (keyb_row[5] === 1'b0) ? 3'd5 :
+                        (keyb_row[4] === 1'b0) ? 3'd4 :
+                        (keyb_row[3] === 1'b0) ? 3'd3 :
+                        (keyb_row[2] === 1'b0) ? 3'd2 :
+                        (keyb_row[1] === 1'b0) ? 3'd1 :
+                        (keyb_row[0] === 1'b0) ? 3'd0 :
+                        3'd0;  // No row active
 
     // Return the selected row's columns (7 bits)
     assign keyb_col = keyboard_matrix[active_row][6:0];
