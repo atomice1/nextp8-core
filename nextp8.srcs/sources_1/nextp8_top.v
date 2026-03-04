@@ -958,13 +958,13 @@ always @(posedge mclk) begin
 
         // Set IRQ on rising edge of vsync if enabled
         if (video_vs_posedge && vsync_irq_enable) begin
-            $display("[%d] VSYNC IRQ ASSERTED", $time);
+            //$display("[%d] VSYNC IRQ ASSERTED", $time);
             vsync_irq <= 1'b1;
         end
 
         // Clear IRQ on acknowledgment
         if (vsync_ack) begin
-            $display("[%d] VSYNC IRQ CLEARED", $time);
+            //$display("[%d] VSYNC IRQ CLEARED", $time);
             vsync_irq <= 1'b0;
         end
     end
@@ -1176,7 +1176,10 @@ wire cpu_enable = !cpu_shutdown && pll_locked && ((estate == 3'b000 && (cpu_idle
 // This gives the SRAM time to respond to address changes while ensuring
 // data is stable before the CPU samples it on the next rising edge
 always @(negedge mclk) begin
-    sram_rdata = ram_data_io;  // Blocking assignment for immediate update
+    // When only one byte lane is active, the other lane is undriven (Z).
+    // This breaks TG68K so set the inactive byte to 0 to ensure stable data is always present.
+    sram_rdata[15:8] = (ram_ub_n_o && !ram_lb_n_o) ? 8'd0 : ram_data_io[15:8];
+    sram_rdata[7:0]  = (ram_lb_n_o && !ram_ub_n_o) ? 8'd0 : ram_data_io[7:0];
 end
 
 // P8 Audio DMA arbiter signals (depend on estate)
