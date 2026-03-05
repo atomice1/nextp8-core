@@ -9,7 +9,8 @@
 module tb_funcval;
 
     // Parameters
-    parameter ROM_FILE = "";  // Must be specified on command line
+    parameter ROM_FILE = "";             // Must be specified on command line
+    parameter SDCARD_IMAGE = "";         // Optional: path to SD card image file
 
     // Clock generation
     reg clock_200_i = 0;
@@ -82,7 +83,7 @@ module tb_funcval;
     wire sd_cs1_n;
     wire sd_sclk;
     wire sd_mosi;
-    wire sd_miso;  // Controlled via MMIO
+    wire sd_miso;  // Driven by sdspi_model
 
     // Flash
     wire flash_cs_n;
@@ -384,6 +385,21 @@ module tb_funcval;
         .rgb_b_o(vga_pixel_b)
     );
 
+    // SD Card SPI Model
+    sdspi_model #(
+        .LGMEMSZ(23),              // 8 MB card
+        .CARDIMAGE(SDCARD_IMAGE),
+        .CCS(1),                   // SDHC mode (block addressing)
+        .DEBUG(0)
+    ) sd_card (
+        .clk(clock_50_i),
+        .reset(~reset_n),
+        .spi_cs_n(sd_cs0_n),
+        .spi_clk(sd_sclk),
+        .spi_mosi(sd_mosi),
+        .spi_miso(sd_miso)
+    );
+
     // Debug UART (connected to accel GPIO pins for debug terminal)
     logic       debug_uart_tx;
     logic       debug_uart_rx;  // Connected via assign statement
@@ -438,8 +454,11 @@ module tb_funcval;
         .speed(15'd434)  // 115200 baud @ 50MHz
     );
 
-    // Wire up bidirectional PS/2 signals
-    assign ps2_clk = (ps2_clk_kb_out == 1'b0 || ps2_clk_mouse_out == 1'b0) ? 1'b0 : 1'bz;
+    pullup(ps2_clk);
+    pullup(ps2_data);
+    pullup(ps2_pin6);
+    pullup(ps2_pin2);
+    assign ps2_clk = (ps2_clk_kb_out == 1'b0) ? 1'b0 : 1'bz;
     assign ps2_data = (ps2_data_kb_out == 1'b0) ? 1'b0 : 1'bz;
     assign ps2_pin6 = (ps2_clk_mouse_out == 1'b0) ? 1'b0 : 1'bz;
     assign ps2_pin2 = (ps2_data_mouse_out == 1'b0) ? 1'b0 : 1'bz;
@@ -558,6 +577,21 @@ module tb_funcval;
     integer wav_file = 0;              // WAV file handle
     integer wav_sample_count = 0;      // Number of samples recorded
     integer wav_counter = 0;           // WAV file counter for unique filenames
+
+    // Wave capture control register (0x380047)
+    reg wave_capture_active = 1'b0;    // 0x380047: VCD wave capture enable
+    integer wave_capture_file_opened = 0; // Tracks whether $dumpfile has been called
+
+    // Auto-start wave capture if +DUMP_WAVES plusarg was passed to xsim
+    initial begin
+        if ($test$plusargs("DUMP_WAVES")) begin
+            $dumpfile("tb_funcval_wave.vcd");
+            $dumpvars(0, tb_funcval);
+            wave_capture_file_opened = 1;
+            wave_capture_active      = 1'b1;
+            $display("Wave capture started via +DUMP_WAVES -> tb_funcval_wave.vcd");
+        end
+    end
 
     // Joystick control registers (0x380061 - 0x380063)
     reg [7:0] joy0 = 8'h00;  // 0x380061: Joystick 0 state
@@ -680,6 +714,23 @@ module tb_funcval;
                         // Stop recording: close WAV file
                         wav_stop_recording();
                         wav_recording <= 1'b0;
+                    end
+                end
+
+                // Wave capture control (1=start VCD, 0=stop)
+                21'h1C0023: begin
+                    if (sram_write_data[0] && !wave_capture_active) begin
+                        if (!wave_capture_file_opened) begin
+                            $dumpfile("tb_funcval_wave.vcd");
+                            wave_capture_file_opened = 1;
+                        end
+                        $dumpvars(0, tb_funcval);
+                        wave_capture_active <= 1'b1;
+                        $display("Wave capture started -> tb_funcval_wave.vcd");
+                    end else if (!sram_write_data[0] && wave_capture_active) begin
+                        $dumpoff;
+                        wave_capture_active <= 1'b0;
+                        $display("Wave capture stopped");
                     end
                 end
 

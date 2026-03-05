@@ -15,9 +15,11 @@ IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
 MODELS_DIR = ../models
 TB_DIR = .
 
-# Check that ROM_FILE is provided
+# Check that ROM_FILE is provided (not needed for wave/clean/help targets)
+ifeq ($(filter wave clean help,$(MAKECMDGOALS)),)
 ifndef ROM_FILE
 $(error ROM_FILE parameter is required. Usage: make ROM_FILE=test.mem)
+endif
 endif
 
 # Verilog source files
@@ -49,6 +51,8 @@ SYSTEMVERILOG_SOURCES = \
 	$(MODELS_DIR)/ds1307_device.sv \
 	$(MODELS_DIR)/keyboard_device.sv \
 	$(MODELS_DIR)/mouse_device.sv \
+	$(TB_DIR)/../tb_nextp8_loader/spi_slave.sv \
+	$(TB_DIR)/../tb_nextp8_loader/sdspi_model.sv \
 	$(TB_DIR)/tb_funcval.sv
 
 # VHDL source files
@@ -69,12 +73,24 @@ TOP = tb_funcval
 SNAPSHOT = tb_funcval_snap
 TIMEOUT ?= 300
 
+# Optional SD card image (passed via SDCARD_IMAGE make variable or env var)
+SDCARD_IMAGE ?=
+ifdef SDCARD_IMAGE
+EXTRA_GENERIC = --generic_top "SDCARD_IMAGE=$(SDCARD_IMAGE)"
+else
+EXTRA_GENERIC =
+endif
+
 # xsim commands
 XVHDL = xvhdl
 XVLOG = xvlog
 XELAB = xelab
 XSIM = xsim
 XVLOG_FLAGS = -d SIMULATION
+XSIM_EXTRA_ARGS ?=
+# Use 'all' for full signal capture (required for $dumpvars / wave viewer).
+# Override with DEBUG_LEVEL=typical for faster sims that don't need waveforms.
+DEBUG_LEVEL ?= all
 
 # Build directory
 WORK_DIR = xsim.dir
@@ -117,19 +133,30 @@ compile_sv: compile_ip $(SYSTEMVERILOG_SOURCES)
 # Elaborate design
 elaborate: compile_sv
 	@echo "=== Elaborating design ==="
-	@$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
+	@$(XELAB) $(TOP) -s $(SNAPSHOT) -debug $(DEBUG_LEVEL) \
 		--timescale 1ns/1ps \
 		--generic_top "ROM_FILE=$(ROM_FILE)" \
+		$(EXTRA_GENERIC) \
 		-L unisims_ver -L unimacro_ver -L secureip \
 		-L blk_mem_gen_v8_4_11 -L xpm \
 		glbl
 	@echo ""
 
+# Wave-capture TCL batch script (used when DUMP_WAVES is requested)
+SIM_TCL ?= $(TB_DIR)/sim_waves.tcl
+
+# If XSIM_WAVES=1, use tclbatch (logs all signals); otherwise use -runall.
+ifneq ($(XSIM_WAVES),1)
+SIM_RUN_ARGS = -onfinish quit -runall
+else
+SIM_RUN_ARGS = -tclbatch $(SIM_TCL)
+endif
+
 # Run simulation
 sim: elaborate
 	@echo "=== Running simulation (timeout: $(TIMEOUT)s) ==="
 	@echo "ROM_FILE: $(ROM_FILE)"
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -onfinish quit -runall || \
+	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) $(SIM_RUN_ARGS) $(XSIM_EXTRA_ARGS) || \
 		(if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
 			exit 1; \
