@@ -77,6 +77,19 @@ module sdspi_model #(
     logic reading_multiblock;
     integer current_block_addr;
 
+    // Write state machine states
+    localparam WRITE_IDLE       = 2'd0;
+    localparam WRITE_WAIT_TOKEN = 2'd1;
+    localparam WRITE_RECV_DATA  = 2'd2;
+    localparam WRITE_RECV_CRC   = 2'd3;
+    logic [1:0] write_rx_state;
+    logic writing_multiblock;
+    integer write_block_addr;
+    integer write_rx_idx;
+    logic [7:0] write_blk_buf [0:511];  // Receive buffer for write data
+    logic sending_busy;                 // Card is busy after write
+    integer busy_bytes_remaining;
+
     // CSD and CID registers (16 bytes each)
     logic [7:0] m_csd [0:15];
     logic [7:0] m_cid [0:15];
@@ -159,6 +172,16 @@ module sdspi_model #(
         have_token = 0;
         reading_multiblock = 0;
         current_block_addr = 0;
+        writing_multiblock = 0;
+        write_block_addr = 0;
+        write_rx_state = WRITE_IDLE;
+        write_rx_idx = 0;
+        write_block_addr = 0;
+        writing_multiblock = 0;
+        sending_busy = 0;
+        busy_bytes_remaining = 0;
+        for (int i = 0; i < 512; i++)
+            write_blk_buf[i] = 8'h00;
         sending_response = 0;
         sending_data = 0;
         rsp_idx = 0;
@@ -269,6 +292,12 @@ module sdspi_model #(
         tx_buffer_idx <= 0;
         tx_buffer_len <= 0;
         rsp_delay <= 0;
+        // Reset write state machine so a new CS assertion starts clean
+        write_rx_state <= WRITE_IDLE;
+        writing_data <= 0;
+        writing_multiblock <= 0;
+        sending_busy <= 0;
+        busy_bytes_remaining <= 0;
         if (DEBUG) $display("[SDSPI] CS deasserted at time %0t", $time);
     end
 
@@ -293,10 +322,73 @@ module sdspi_model #(
         // Detect rising edge of spi_rx_valid
         if (spi_rx_valid && !spi_rx_valid_q && !spi_cs_n) begin
             if (spi_rx_data != 8'hff || cmd_idx != 0)
-                $display("[SDSPI] <<< Received byte: 0x%02x (binary: %08b), cmd_idx=%0d", spi_rx_data, spi_rx_data, cmd_idx);
+                $display("[SDSPI] <<< Received byte: 0x%02x (binary: %08b), cmd_idx=%0d, write_rx_state=%0d", spi_rx_data, spi_rx_data, cmd_idx, write_rx_state);
 
-            // Skip 0xFF bytes when waiting for command start (sync/idle)
-            if (cmd_idx == 0 && spi_rx_data == 8'hFF) begin
+            // Write data reception takes priority over command parsing
+            if (write_rx_state != WRITE_IDLE) begin
+                case (write_rx_state)
+                    WRITE_WAIT_TOKEN: begin
+                        if (spi_rx_data == 8'hFF) begin
+                            // Waiting pad byte, ignore
+                        end else if ((!writing_multiblock && spi_rx_data == 8'hFE) ||
+                                     (writing_multiblock  && spi_rx_data == 8'hFC)) begin
+                            if (DEBUG) $display("[SDSPI] Write data start token received");
+                            write_rx_state <= WRITE_RECV_DATA;
+                            write_rx_idx   <= 0;
+                        end else if (writing_multiblock && spi_rx_data == 8'hFD) begin
+                            // CMD25 stop-transmission token
+                            $display("[SDSPI] CMD25: Stop token received, multi-block write complete");
+                            writing_data   <= 0;
+                            write_rx_state <= WRITE_IDLE;
+                        end else begin
+                            $display("[SDSPI] ERROR: Unexpected write token 0x%02x", spi_rx_data);
+                        end
+                    end
+                    WRITE_RECV_DATA: begin
+                        write_blk_buf[write_rx_idx] = spi_rx_data;  // blocking OK for memory array
+                        if (write_rx_idx == SECTOR_SIZE - 1) begin
+                            write_rx_state <= WRITE_RECV_CRC;
+                            write_rx_idx   <= 0;
+                        end else begin
+                            write_rx_idx <= write_rx_idx + 1;
+                        end
+                    end
+                    WRITE_RECV_CRC: begin
+                        if (write_rx_idx == 0) begin
+                            write_rx_idx <= 1;  // Wait for second CRC byte
+                        end else begin
+                            // Second CRC byte received — commit write to card memory
+                            begin : write_commit
+                                integer wr_byte_addr;
+                                wr_byte_addr = write_block_addr * SECTOR_SIZE;
+                                for (int i = 0; i < SECTOR_SIZE; i++)
+                                    card_memory[wr_byte_addr + i] = write_blk_buf[i];
+                            end
+                            $display("[SDSPI] Write block %0d committed to card memory", write_block_addr);
+                            // Send data response token: 0x05 = data accepted (format 0bxxx00101)
+                            tx_byte_buffer[0] = 8'h05;
+                            tx_buffer_len     = 1;
+                            tx_buffer_idx     = 0;
+                            sending_response  = 1;
+                            // Card busy while programming
+                            sending_busy          <= 1;
+                            busy_bytes_remaining  <= 8;
+                            if (writing_multiblock) begin
+                                // Advance to next block, wait for next start token
+                                write_block_addr <= write_block_addr + 1;
+                                write_rx_state   <= WRITE_WAIT_TOKEN;
+                                write_rx_idx     <= 0;
+                            end else begin
+                                writing_data   <= 0;
+                                write_rx_state <= WRITE_IDLE;
+                            end
+                        end
+                    end
+                    default: ;
+                endcase
+
+            // Normal command parsing (no active write)
+            end else if (cmd_idx == 0 && spi_rx_data == 8'hFF) begin
                 // Sync byte, skip it
             end else if (cmd_idx < 6) begin
                 // Collecting command bytes
@@ -391,6 +483,12 @@ module sdspi_model #(
                         end
                     end
                 end
+            end else if (sending_busy && busy_bytes_remaining > 0 && !sending_response) begin
+                spi_tx_data = 8'h00;  // Card busy after write
+                spi_tx_dv <= 1;
+                busy_bytes_remaining <= busy_bytes_remaining - 1;
+                if (busy_bytes_remaining == 1)
+                    sending_busy <= 0;
             end else begin
                 spi_tx_data = 8'hFF;  // Idle (blocking assignment)
                 spi_tx_dv <= 1;
@@ -609,19 +707,44 @@ module sdspi_model #(
                     end
                 end
 
-                // CMD24: WRITE_BLOCK
+                // CMD24: WRITE_SINGLE_BLOCK
                 6'd24: begin
                     block_addr = block_address_mode ? arg : (arg / SECTOR_SIZE);
-                    if (DEBUG) $display("[SDSPI] CMD24: WRITE_BLOCK, block=%0d", block_addr);
+                    if (DEBUG) $display("[SDSPI] CMD24: WRITE_SINGLE_BLOCK, block=%0d", block_addr);
 
                     if (block_addr >= NBLOCKS) begin
                         send_r1_response(8'h04); // Illegal command
                     end else begin
                         send_r1_response(8'h00); // OK
-                        writing_data = 1;
-                        // Write implementation would go here
-                        // For now, just accept the data
+                        writing_data <= 1;
+                        writing_multiblock <= 0;
+                        write_block_addr <= block_addr;
+                        write_rx_state <= WRITE_WAIT_TOKEN;
+                        write_rx_idx <= 0;
                     end
+                end
+
+                // CMD25: WRITE_MULTIPLE_BLOCK
+                6'd25: begin
+                    block_addr = block_address_mode ? arg : (arg / SECTOR_SIZE);
+                    if (DEBUG) $display("[SDSPI] CMD25: WRITE_MULTIPLE_BLOCK, start_block=%0d", block_addr);
+
+                    if (block_addr >= NBLOCKS) begin
+                        send_r1_response(8'h04); // Illegal command
+                    end else begin
+                        send_r1_response(8'h00); // OK
+                        writing_data <= 1;
+                        writing_multiblock <= 1;
+                        write_block_addr <= block_addr;
+                        write_rx_state <= WRITE_WAIT_TOKEN;
+                        write_rx_idx <= 0;
+                    end
+                end
+
+                // ACMD23: SET_WR_BLK_ERASE_COUNT (preceded by CMD55)
+                6'd23: begin
+                    if (DEBUG) $display("[SDSPI] ACMD23: SET_WR_BLK_ERASE_COUNT, count=%0d", arg[22:0]);
+                    send_r1_response(8'h00); // OK
                 end
 
                 default: begin
