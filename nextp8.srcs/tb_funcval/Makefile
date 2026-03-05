@@ -15,8 +15,20 @@ IP_GEN_DIR = ../../nextp8.gen/sources_1/ip
 MODELS_DIR = ../models
 TB_DIR = .
 
+# Project root (two levels up from tb_funcval)
+PROJECT_DIR = $(abspath ../..)
+REGEN_TCL   = $(PROJECT_DIR)/scripts/regenerate_ip.tcl
+
+# IP source .xci files (inputs to Vivado IP generation).
+# The generated netlists use _1 suffixes; the .xci sources use _2.
+IP_XCI_DIR = $(abspath ../sources_1/ip)
+IP_XCI_SOURCES = \
+	$(IP_XCI_DIR)/pll_2/pll.xci \
+	$(IP_XCI_DIR)/pll_hdmi_2/pll_hdmi.xci \
+	$(IP_XCI_DIR)/vram_2/vram.xci
+
 # Check that ROM_FILE is provided (not needed for wave/clean/help targets)
-ifeq ($(filter wave clean help,$(MAKECMDGOALS)),)
+ifeq ($(filter wave clean help generate-ip,$(MAKECMDGOALS)),)
 ifndef ROM_FILE
 $(error ROM_FILE parameter is required. Usage: make ROM_FILE=test.mem)
 endif
@@ -95,9 +107,19 @@ DEBUG_LEVEL ?= all
 # Build directory
 WORK_DIR = xsim.dir
 
-.PHONY: all sim run clean wave help
+.PHONY: all sim run clean wave help generate-ip
 
 all: sim
+
+# Generate IP simulation netlists using Vivado batch mode.
+# '&:' is a grouped-target rule (GNU Make 4.3+): the single recipe produces
+# all listed targets, so Vivado runs only once even when all files are missing.
+# Dependencies are the .xci source files, so a change to any xci triggers regen.
+$(IP_SOURCES) &: $(IP_XCI_SOURCES) $(REGEN_TCL)
+	@echo "=== Generating IP simulation netlists ==="
+	cd $(PROJECT_DIR) && vivado -mode batch -source scripts/regenerate_ip.tcl -nojournal -nolog
+
+generate-ip: $(IP_SOURCES)
 
 # Compile VHDL sources
 compile_vhdl: $(VHDL_SOURCES)
@@ -115,12 +137,7 @@ compile_verilog: compile_vhdl $(VERILOG_SOURCES)
 compile_ip: compile_verilog $(IP_SOURCES)
 	@echo "=== Compiling IP simulation netlists ==="
 	@for ip in $(IP_SOURCES); do \
-		if [ -f "$$ip" ]; then \
-			$(XVLOG) $(XVLOG_FLAGS) --work work "$$ip" || exit 1; \
-		else \
-			echo "WARNING: IP source not found: $$ip"; \
-			echo "Run 'make regenerate-ip' from project root to generate IP simulation files."; \
-		fi; \
+		$(XVLOG) $(XVLOG_FLAGS) --work work "$$ip" || exit 1; \
 	done
 	@echo ""
 

@@ -246,7 +246,6 @@ module ds1307_device (
     // START condition detection (SDA falls while SCL high)
     // Only recognize START when device is NOT driving SDA low
     always @(negedge i2c_sda_in) begin
-        $display("[DS1307] %0t SDA negedge detected, SCL=%b sda_out=%b", $time, i2c_scl_in, i2c_sda_out);
         if (i2c_scl_in && i2c_sda_out == 1'b1) begin
             // SCL high and device not driving low = valid START from master
             state <= ADDR_RX;
@@ -259,7 +258,6 @@ module ds1307_device (
     // STOP condition detection (SDA rises while SCL high)
     // Only recognize STOP when device is NOT driving SDA low
     always @(posedge i2c_sda_in) begin
-        $display("[DS1307] %0t SDA posedge detected, SCL=%b sda_out=%b", $time, i2c_scl_in, i2c_sda_out);
         if (i2c_scl_in && i2c_sda_out == 1'b1) begin
             // SCL high and device not driving low = valid STOP from master
             state <= IDLE;
