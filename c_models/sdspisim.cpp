@@ -102,7 +102,6 @@ void	SDSPISIM::load(const char *fname) {
 		CSD(); // update CSD
 	} else {
 		fprintf(stderr, "Can't open %s for reading: %s\n", fname, strerror(errno));
-		abort();
 	}
 }
 // }}}
