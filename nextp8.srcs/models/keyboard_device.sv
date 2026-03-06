@@ -6,6 +6,7 @@ module keyboard_device #(
 ) (
     input  logic clk,
     input  logic reset,
+    input  logic debug_enable = 1'b1,
     input  wire  ps2_clk_in,
     input  wire  ps2_data_in,
     output logic ps2_clk_out,
@@ -106,6 +107,7 @@ module keyboard_device #(
     ) ps2_dev (
         .CLK(clk),
         .nRESET(~reset),
+        .debug_enable(debug_enable),
         .PS2_CLK_IN(ps2_clk_in),
         .PS2_DATA_IN(ps2_data_in),
         .PS2_CLK_OUT(ps2_clk_out),
@@ -139,12 +141,12 @@ module keyboard_device #(
 
             // Debug state transitions
             if (state != next_state) begin
-                $display("Time %t: kbd_model STATE %0d -> %0d", $time, state, next_state);
+                if (debug_enable) $display("Time %t: kbd_model STATE %0d -> %0d", $time, state, next_state);
             end
 
             // Capture received commands
             if (ps2_rx_valid) begin
-                $display("Time %t: kbd_model RX_VALID data=0x%h state=%0d", $time, ps2_rx_data, state);
+                if (debug_enable) $display("Time %t: kbd_model RX_VALID data=0x%h state=%0d", $time, ps2_rx_data, state);
                 last_cmd_reg <= ps2_rx_data;
             end
 
@@ -243,13 +245,13 @@ module keyboard_device #(
                 end
                 // Determine next state after ACK transmission completes
                 if (ps2_tx_done) begin
-                    $display("Time %t: kbd_model ST_SEND_ACK tx_done, last_cmd=0x%h", $time, last_cmd_reg);
+                    if (debug_enable) $display("Time %t: kbd_model ST_SEND_ACK tx_done, last_cmd=0x%h", $time, last_cmd_reg);
                     case (last_cmd_reg)
                         CMD_RESET: next_state = ST_SEND_SELF_TEST_OK;
                         CMD_READ_ID: next_state = ST_SEND_ID_BYTE1;
                         CMD_SET_SCANCODE_SET: begin
                             next_state = ST_WAIT_SCAN_SET;
-                            $display("Time %t: kbd_model Transitioning to ST_WAIT_SCAN_SET", $time);
+                            if (debug_enable) $display("Time %t: kbd_model Transitioning to ST_WAIT_SCAN_SET", $time);
                         end
                         CMD_QUERY_SCANCODE_SET: begin
                             // Scan code set query (0x00) - send the current value
@@ -286,7 +288,7 @@ module keyboard_device #(
 
             ST_WAIT_SCAN_SET: begin
                 if (ps2_rx_valid) begin
-                    $display("kbd_model: Received scan code set byte 0x%h", ps2_rx_data);
+                    if (debug_enable) $display("kbd_model: Received scan code set byte 0x%h", ps2_rx_data);
                     // Send ACK for the scan code set byte
                     next_state = ST_SEND_ACK;
                 end
@@ -318,7 +320,7 @@ module keyboard_device #(
 
             ST_SEND_SCANCODE: begin
                 if (!ps2_tx_busy && !ps2_tx_done) begin
-                    $display("kbd_model: Sending scan code 0x%02x from queue (count=%0d)", scancode_queue[queue_read_ptr], queue_count);
+                    if (debug_enable) $display("kbd_model: Sending scan code 0x%02x from queue (count=%0d)", scancode_queue[queue_read_ptr], queue_count);
                     ps2_tx_data = scancode_queue[queue_read_ptr];
                     ps2_tx_start = 1'b1;
                 end
@@ -334,7 +336,7 @@ module keyboard_device #(
     // This task works by setting signals that the always_ff block monitors
     task send_scancode(input logic [7:0] scancode);
         automatic logic [3:0] temp_count = queue_count;
-        $display("kbd_model: Request to send scancode 0x%02x (queue count=%0d) state=%0d", scancode, temp_count, state);
+        if (debug_enable) $display("kbd_model: Request to send scancode 0x%02x (queue count=%0d) state=%0d", scancode, temp_count, state);
         if (temp_count < 16) begin
             task_scancode = scancode;
             task_enqueue = 1'b1;

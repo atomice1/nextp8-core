@@ -21,7 +21,8 @@
 `timescale 1ns/1ns
 
 module mouse #(
-    parameter SIM = 0  // Set to 1 in simulation to reduce delays
+    parameter SIM     = 0,  // Set to 1 in simulation to reduce delays
+    parameter VERBOSE = 0   // Set to 1 to enable $display debug output
 ) (
     input wire clk,
     input wire reset,
@@ -123,17 +124,17 @@ always @(posedge clk) begin
                 // Wait for power-on BAT (0xAA, 0xFC, 0xFD) or timeout
                 if (valid) begin
                     if (rbyte == RESP_BAT_OK || rbyte == RESP_BAT_ERR1 || rbyte == RESP_BAT_ERR2) begin
-                        $display("Mouse init: received power-on BAT 0x%02x, skipping reset", rbyte);
+                        if (VERBOSE) $display("Mouse init: received power-on BAT 0x%02x, skipping reset", rbyte);
                         // Power-on BAT received, delay before next command
                         init_counter <= POST_BAT_DELAY;
                         init_state <= INIT_POST_BAT_DELAY;
                     end else begin
                         // Unexpected byte, keep waiting
-                        $display("Mouse init: unexpected byte 0x%02x during power-on wait", rbyte);
+                        if (VERBOSE) $display("Mouse init: unexpected byte 0x%02x during power-on wait", rbyte);
                     end
                 end else if (init_counter == 20'd0) begin
                     // Timeout, send reset command
-                    $display("Mouse init: power-on wait timeout, sending reset");
+                    if (VERBOSE) $display("Mouse init: power-on wait timeout, sending reset");
                     init_state <= INIT_SEND_FF;
                 end else begin
                     init_counter <= init_counter - 20'd1;
@@ -143,7 +144,7 @@ always @(posedge clk) begin
             INIT_SEND_FF: begin
                 // Send 0xFF (Reset)
                 if (!tx_busy) begin
-                    $display("Mouse init: sending Reset command");
+                    if (VERBOSE) $display("Mouse init: sending Reset command");
                     tx_data <= CMD_RESET;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_FF;
@@ -153,7 +154,7 @@ always @(posedge clk) begin
             INIT_WAIT_ACK_FF: begin
                 // Wait for ACK after reset command
                 if (valid) begin
-                    $display("Mouse init: received byte 0x%02x after reset", rbyte);
+                    if (VERBOSE) $display("Mouse init: received byte 0x%02x after reset", rbyte);
                     if (rbyte == RESP_ACK) begin
                         init_state <= INIT_WAIT_BAT_FF;
                     end else if (rbyte == RESP_RESEND) begin
@@ -167,7 +168,7 @@ always @(posedge clk) begin
             INIT_WAIT_BAT_FF: begin
                 // Wait for BAT (0xAA, 0xFC, 0xFD) after ACK
                 if (valid) begin
-                    $display("Mouse init: received byte 0x%02x waiting for BAT", rbyte);
+                    if (VERBOSE) $display("Mouse init: received byte 0x%02x waiting for BAT", rbyte);
                     if (rbyte == RESP_BAT_OK || rbyte == RESP_BAT_ERR1 || rbyte == RESP_BAT_ERR2) begin
                         init_state <= INIT_WAIT_00;
                     end else begin
@@ -179,12 +180,12 @@ always @(posedge clk) begin
             INIT_WAIT_00: begin
                 // Wait for device ID (0x00) after BAT
                 if (valid) begin
-                    $display("Mouse init: received device ID 0x%02x after BAT", rbyte);
+                    if (VERBOSE) $display("Mouse init: received device ID 0x%02x after BAT", rbyte);
                     if (rbyte == RESP_DEVICE_ID) begin
                         init_counter <= POST_BAT_DELAY;
                         init_state <= INIT_POST_BAT_DELAY;
                     end else begin
-                        $display("Mouse init: WARNING - unexpected device ID, expected 0x00");
+                        if (VERBOSE) $display("Mouse init: WARNING - unexpected device ID, expected 0x00");
                         // Continue anyway
                         init_counter <= POST_BAT_DELAY;
                         init_state <= INIT_POST_BAT_DELAY;
@@ -195,7 +196,7 @@ always @(posedge clk) begin
             INIT_POST_BAT_DELAY: begin
                 // Delay after BAT result before attempting Intellimouse detection
                 if (init_counter == 20'd0) begin
-                    $display("Mouse init: POST_BAT_DELAY complete, starting Intellimouse detection @ %0t", $time);
+                    if (VERBOSE) $display("Mouse init: POST_BAT_DELAY complete, starting Intellimouse detection @ %0t", $time);
                     init_state <= INIT_SEND_F3_200;
                 end else begin
                     init_counter <= init_counter - 20'd1;
@@ -205,7 +206,7 @@ always @(posedge clk) begin
             // Intellimouse detection sequence: Set Sample Rate 200
             INIT_SEND_F3_200: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending Set Sample Rate command (0xF3)");
+                    if (VERBOSE) $display("Mouse init: sending Set Sample Rate command (0xF3)");
                     tx_data <= CMD_SET_SAMPLE_RATE;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_F3_200;
@@ -224,7 +225,7 @@ always @(posedge clk) begin
 
             INIT_SEND_C8: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending rate 200 (0xC8)");
+                    if (VERBOSE) $display("Mouse init: sending rate 200 (0xC8)");
                     tx_data <= RATE_200;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_C8;
@@ -244,7 +245,7 @@ always @(posedge clk) begin
             // Set Sample Rate 100
             INIT_SEND_F3_100: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending Set Sample Rate command (0xF3)");
+                    if (VERBOSE) $display("Mouse init: sending Set Sample Rate command (0xF3)");
                     tx_data <= CMD_SET_SAMPLE_RATE;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_F3_100;
@@ -263,7 +264,7 @@ always @(posedge clk) begin
 
             INIT_SEND_64: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending rate 100 (0x64)");
+                    if (VERBOSE) $display("Mouse init: sending rate 100 (0x64)");
                     tx_data <= RATE_100;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_64;
@@ -283,7 +284,7 @@ always @(posedge clk) begin
             // Set Sample Rate 80
             INIT_SEND_F3_80: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending Set Sample Rate command (0xF3)");
+                    if (VERBOSE) $display("Mouse init: sending Set Sample Rate command (0xF3)");
                     tx_data <= CMD_SET_SAMPLE_RATE;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_F3_80;
@@ -302,7 +303,7 @@ always @(posedge clk) begin
 
             INIT_SEND_50: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending rate 80 (0x50)");
+                    if (VERBOSE) $display("Mouse init: sending rate 80 (0x50)");
                     tx_data <= RATE_80;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_50;
@@ -322,7 +323,7 @@ always @(posedge clk) begin
             // Get Device ID to check if Intellimouse
             INIT_SEND_F2: begin
                 if (!tx_busy) begin
-                    $display("Mouse init: sending Get Device ID command (0xF2)");
+                    if (VERBOSE) $display("Mouse init: sending Get Device ID command (0xF2)");
                     tx_data <= CMD_READ_DEVICE_TYPE;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_F2;
@@ -342,12 +343,12 @@ always @(posedge clk) begin
             INIT_WAIT_DEVICE_ID: begin
                 // Wait for device ID response (0x00 = standard, 0x03 = Intellimouse)
                 if (valid) begin
-                    $display("Mouse init: received device ID 0x%02x", rbyte);
+                    if (VERBOSE) $display("Mouse init: received device ID 0x%02x", rbyte);
                     if (rbyte == RESP_INTELLIMOUSE_ID) begin
-                        $display("Mouse init: Intellimouse detected (4-byte packets)");
+                        if (VERBOSE) $display("Mouse init: Intellimouse detected (4-byte packets)");
                         intellimouse_mode <= 1'b1;
                     end else begin
-                        $display("Mouse init: Standard PS/2 mouse (3-byte packets)");
+                        if (VERBOSE) $display("Mouse init: Standard PS/2 mouse (3-byte packets)");
                         intellimouse_mode <= 1'b0;
                     end
                     init_state <= INIT_SEND_F4;
@@ -357,12 +358,12 @@ always @(posedge clk) begin
             INIT_SEND_F4: begin
                 // Send 0xF4 (Enable Data Reporting) command
                 if (!tx_busy) begin
-                    $display("Mouse init: sending Enable Data Reporting command (tx_busy=0) @ %0t", $time);
+                    if (VERBOSE) $display("Mouse init: sending Enable Data Reporting command (tx_busy=0) @ %0t", $time);
                     tx_data <= CMD_ENABLE;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_F4;
                 end else begin
-                    $display("Mouse init: waiting in SEND_F4 (tx_busy=1) @ %0t", $time);
+                    if (VERBOSE) $display("Mouse init: waiting in SEND_F4 (tx_busy=1) @ %0t", $time);
                 end
             end
 
@@ -392,7 +393,7 @@ end
 
 // Mouse position monitor
 always @(mouse_x, mouse_y) begin
-    $display("Mouse position updated: X=%0d Y=%0d", mouse_x, mouse_y);
+    if (VERBOSE) $display("Mouse position updated: X=%0d Y=%0d", mouse_x, mouse_y);
 end
 
 // Packet decoder
@@ -426,7 +427,7 @@ always @(posedge clk) begin
                     packet_cnt <= 2'd0;
                 end
                 // Display status byte for debugging
-                $display("Mouse packet status byte: 0x%02x", rbyte);
+                if (VERBOSE) $display("Mouse packet status byte: 0x%02x", rbyte);
                 // Decode status byte bits
                 // rbyte[0] = Left button
                 // rbyte[1] = Right button
@@ -435,43 +436,43 @@ always @(posedge clk) begin
                 // rbyte[5] = YSign
                 // rbyte[6] = X overflow
                 // rbyte[7] = Y overflow
-                $display("  Buttons: L=%b R=%b M=%b, XSign=%b YSign=%b, Xovfl=%b Yovfl=%b",
+                if (VERBOSE) $display("  Buttons: L=%b R=%b M=%b, XSign=%b YSign=%b, Xovfl=%b Yovfl=%b",
                          rbyte[0], rbyte[1], rbyte[2],
                          rbyte[4], rbyte[5],
                          rbyte[6], rbyte[7]);
             end else if(packet_cnt == 2'd1) begin
                 // Byte 1: X movement (unsigned, sign from status_byte[4])
                 // Sign-extend using status byte bit 4 (XSign)
-                $display("Mouse packet X movement byte: 0x%02x", rbyte);
+                if (VERBOSE) $display("Mouse packet X movement byte: 0x%02x", rbyte);
                 // Sign-extend and accumulate
-                $display("  X movement sign-extended: %0d", { {8{status_byte[4]}}, rbyte});
+                if (VERBOSE) $display("  X movement sign-extended: %0d", { {8{status_byte[4]}}, rbyte});
                 mouse_x <= mouse_x + { {8{status_byte[4]}}, rbyte};
             end else if(packet_cnt == 2'd2) begin
                 // Byte 2: Y movement (unsigned, sign from status_byte[5])
                 // Sign-extend using status byte bit 5 (YSign)
-                $display("Mouse packet Y movement byte: 0x%02x", rbyte);
+                if (VERBOSE) $display("Mouse packet Y movement byte: 0x%02x", rbyte);
                 // Sign-extend and accumulate
-                $display("  Y movement sign-extended: %0d", { {8{status_byte[5]}}, rbyte});
+                if (VERBOSE) $display("  Y movement sign-extended: %0d", { {8{status_byte[5]}}, rbyte});
                 mouse_y <= mouse_y + { {8{status_byte[5]}}, rbyte};
 
                 // If 3-byte mode, reset packet counter and print position
                 if (!intellimouse_mode) begin
                     packet_cnt <= 2'd0;
-                    $display("Mouse accumulated position: X=%0d Y=%0d", mouse_x, mouse_y);
+                    if (VERBOSE) $display("Mouse accumulated position: X=%0d Y=%0d", mouse_x, mouse_y);
                 end
             end else begin
                 // Byte 3: Z movement (scroll wheel, 4-bit signed in lower nibble)
                 // Only in Intellimouse mode (4-byte packets)
-                $display("Mouse packet Z movement byte: 0x%02x", rbyte);
+                if (VERBOSE) $display("Mouse packet Z movement byte: 0x%02x", rbyte);
                 // Sign-extend from bit 3 (lower 4 bits are 2's complement)
-                $display("  Z movement sign-extended: %0d", { {12{rbyte[3]}}, rbyte[3:0]});
+                if (VERBOSE) $display("  Z movement sign-extended: %0d", { {12{rbyte[3]}}, rbyte[3:0]});
                 mouse_z <= mouse_z + { {12{rbyte[3]}}, rbyte[3:0]};
 
                 // Reset packet counter
                 packet_cnt <= 2'd0;
 
                 // Print out new mouse position
-                $display("Mouse accumulated position: X=%0d Y=%0d Z=%0d", mouse_x, mouse_y, mouse_z);
+                if (VERBOSE) $display("Mouse accumulated position: X=%0d Y=%0d Z=%0d", mouse_x, mouse_y, mouse_z);
             end
         end
     end

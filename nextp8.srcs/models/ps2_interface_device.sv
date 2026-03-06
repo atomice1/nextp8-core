@@ -10,6 +10,7 @@ module ps2_interface_device #(
 ) (
     input logic         CLK,
     input logic         nRESET,
+    input wire          debug_enable = 1'b1,
 
     input wire          PS2_CLK_IN,
     input wire          PS2_DATA_IN,
@@ -512,10 +513,10 @@ module ps2_interface_device #(
             case (ps2_state)
                 PS2_IDLE: begin
                     if (TX_START == 1'b1) begin
-                        $display("Time %t: ps2_interface_device: PS2_IDLE->PS2_TX (TX_START)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_IDLE->PS2_TX (TX_START)", $time);
                         ps2_state <= PS2_TX;
                     end else if (inhibit_counter >= MIN_INHIBIT_CYCLES) begin
-                        $display("Time %t: ps2_interface_device: PS2_IDLE->PS2_INHIBIT (inhibit_counter=%0d >= MIN=%0d)",
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_IDLE->PS2_INHIBIT (inhibit_counter=%0d >= MIN=%0d)",
                                  $time, inhibit_counter, MIN_INHIBIT_CYCLES);
                         ps2_state <= PS2_INHIBIT;
                     end else begin
@@ -526,26 +527,26 @@ module ps2_interface_device #(
                     if (ps2c_sync[1] == 1'b0) begin
                         ps2_state <= PS2_INHIBIT;
                     end else if (ps2d_sync[1] == 1'b0) begin
-                        $display("Time %t: ps2_interface_device: PS2_INHIBIT->PS2_RX (CLK released, DATA=0)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_INHIBIT->PS2_RX (CLK released, DATA=0)", $time);
                         ps2_state <= PS2_RX;
                     end else begin
-                        $display("Time %t: ps2_interface_device: PS2_INHIBIT->PS2_IDLE (CLK released, DATA=1)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_INHIBIT->PS2_IDLE (CLK released, DATA=1)", $time);
                         force_idle_pulse <= 1'b1;
                         ps2_state <= PS2_IDLE;
                     end
                 end
                 PS2_RX: begin
                     if (valid_pulse == 1'b1) begin
-                        $display("Time %t: ps2_interface_device: PS2_RX->PS2_RX_ACK (valid byte received, sending ACK)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_RX->PS2_RX_ACK (valid byte received, sending ACK)", $time);
                         ps2_state <= PS2_RX_ACK;
                         rx_ack_state <= RX_ACK_DATA_LOW;
                         rx_ack_counter <= 16'h0000;
                     end else if (error_pulse == 1'b1) begin
-                        $display("Time %t: ps2_interface_device: PS2_RX->PS2_IDLE (error=%b data=0x%h)",
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_RX->PS2_IDLE (error=%b data=0x%h)",
                                  $time, error_pulse, data_reg);
                         ps2_state <= PS2_IDLE;
                     end else if (inhibit_counter >= MIN_INHIBIT_CYCLES) begin
-                        $display("Time %t: ps2_interface_device: PS2_RX->PS2_INHIBIT (host inhibit during RX)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_RX->PS2_INHIBIT (host inhibit during RX)", $time);
                         ps2_state <= PS2_INHIBIT;
                     end else begin
                         ps2_state <= PS2_RX;
@@ -554,21 +555,21 @@ module ps2_interface_device #(
                 PS2_RX_ACK: begin
                     // RX acknowledgment state machine runs below
                     if (rx_ack_state == RX_ACK_RELEASE) begin
-                        $display("Time %t: ps2_interface_device: PS2_RX_ACK->PS2_IDLE (ACK sequence complete)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_RX_ACK->PS2_IDLE (ACK sequence complete)", $time);
                         ps2_state <= PS2_IDLE;
                         rx_ack_state <= RX_ACK_IDLE;
                     end else if (inhibit_counter >= MIN_INHIBIT_CYCLES) begin
-                        $display("Time %t: ps2_interface_device: PS2_RX_ACK->PS2_INHIBIT (host inhibit during ACK)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_RX_ACK->PS2_INHIBIT (host inhibit during ACK)", $time);
                         ps2_state <= PS2_INHIBIT;
                         rx_ack_state <= RX_ACK_IDLE;
                     end
                 end
                 PS2_TX: begin
                     if (inhibit_counter >= MIN_INHIBIT_CYCLES) begin
-                        $display("Time %t: ps2_interface_device: PS2_TX->PS2_INHIBIT (host inhibit during TX)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_TX->PS2_INHIBIT (host inhibit during TX)", $time);
                         ps2_state <= PS2_INHIBIT;
                     end else if (tx_state == TX_ST_RELEASE) begin
-                        $display("Time %t: ps2_interface_device: PS2_TX->PS2_IDLE (TX complete)", $time);
+                        if (debug_enable) $display("Time %t: ps2_interface_device: PS2_TX->PS2_IDLE (TX complete)", $time);
                         ps2_state <= PS2_IDLE;
                     end else begin
                         ps2_state <= PS2_TX;

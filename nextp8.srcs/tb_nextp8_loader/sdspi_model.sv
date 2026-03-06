@@ -29,6 +29,7 @@ module sdspi_model #(
 ) (
     input  wire clk,                // Fast clock for SPI slave synchronization
     input  wire reset,              // Reset signal
+    input  wire debug_enable = 1'b1, // Runtime debug enable (overrides DEBUG parameter)
     input  wire spi_cs_n,           // Active-low chip select
     input  wire spi_clk,            // SPI clock
     input  wire spi_mosi,           // Master Out Slave In
@@ -298,7 +299,7 @@ module sdspi_model #(
         writing_multiblock <= 0;
         sending_busy <= 0;
         busy_bytes_remaining <= 0;
-        if (DEBUG) $display("[SDSPI] CS deasserted at time %0t", $time);
+        if (DEBUG || debug_enable) $display("[SDSPI] CS deasserted at time %0t", $time);
     end
 
     // CS edge detection (synchronous to clk)
@@ -308,7 +309,7 @@ module sdspi_model #(
 
         // CS asserted (negedge): preload idle byte
         if (spi_cs_n_q && !spi_cs_n) begin
-            if (DEBUG) $display("[SDSPI] *** CS asserted (goes low) at time %0t ***", $time);
+            if (DEBUG || debug_enable) $display("[SDSPI] *** CS asserted (goes low) at time %0t ***", $time);
             spi_tx_data = 8'hFF;
             spi_tx_dv <= 1;
         end
@@ -322,7 +323,7 @@ module sdspi_model #(
         // Detect rising edge of spi_rx_valid
         if (spi_rx_valid && !spi_rx_valid_q && !spi_cs_n) begin
             if (spi_rx_data != 8'hff || cmd_idx != 0)
-                $display("[SDSPI] <<< Received byte: 0x%02x (binary: %08b), cmd_idx=%0d, write_rx_state=%0d", spi_rx_data, spi_rx_data, cmd_idx, write_rx_state);
+                if (debug_enable || DEBUG) $display("[SDSPI] <<< Received byte: 0x%02x (binary: %08b), cmd_idx=%0d, write_rx_state=%0d", spi_rx_data, spi_rx_data, cmd_idx, write_rx_state);
 
             // Write data reception takes priority over command parsing
             if (write_rx_state != WRITE_IDLE) begin
@@ -332,12 +333,12 @@ module sdspi_model #(
                             // Waiting pad byte, ignore
                         end else if ((!writing_multiblock && spi_rx_data == 8'hFE) ||
                                      (writing_multiblock  && spi_rx_data == 8'hFC)) begin
-                            if (DEBUG) $display("[SDSPI] Write data start token received");
+                            if (DEBUG || debug_enable) $display("[SDSPI] Write data start token received");
                             write_rx_state <= WRITE_RECV_DATA;
                             write_rx_idx   <= 0;
                         end else if (writing_multiblock && spi_rx_data == 8'hFD) begin
                             // CMD25 stop-transmission token
-                            $display("[SDSPI] CMD25: Stop token received, multi-block write complete");
+                            if (debug_enable || DEBUG) $display("[SDSPI] CMD25: Stop token received, multi-block write complete");
                             writing_data   <= 0;
                             write_rx_state <= WRITE_IDLE;
                         end else begin
@@ -364,7 +365,7 @@ module sdspi_model #(
                                 for (int i = 0; i < SECTOR_SIZE; i++)
                                     card_memory[wr_byte_addr + i] = write_blk_buf[i];
                             end
-                            $display("[SDSPI] Write block %0d committed to card memory", write_block_addr);
+                            if (debug_enable || DEBUG) $display("[SDSPI] Write block %0d committed to card memory", write_block_addr);
                             // Send data response token: 0x05 = data accepted (format 0bxxx00101)
                             tx_byte_buffer[0] = 8'h05;
                             tx_buffer_len     = 1;
@@ -394,7 +395,7 @@ module sdspi_model #(
                 // Collecting command bytes
                 // First byte must start with '01' pattern
                 if (cmd_idx == 0 && spi_rx_data[7:6] != 2'b01) begin
-                    $display("[SDSPI] ERROR: Invalid command start byte 0x%02x (expected bit[7:6]=01)", spi_rx_data);
+                    if (debug_enable || DEBUG) $display("[SDSPI] ERROR: Invalid command start byte 0x%02x (expected bit[7:6]=01)", spi_rx_data);
                 end else begin
                     cmd_buf[cmd_idx] <= spi_rx_data;
                     cmd_idx <= cmd_idx + 1;
@@ -405,7 +406,7 @@ module sdspi_model #(
                 cmd_arg <= {cmd_buf[1], cmd_buf[2], cmd_buf[3], cmd_buf[4]};
                 cmd_crc <= cmd_buf[5][7:1];
 
-                if (DEBUG) begin
+                if (DEBUG || debug_enable) begin
                     $display("[SDSPI] CMD%0d received, arg=0x%08x", cmd_buf[0][5:0], {cmd_buf[1], cmd_buf[2], cmd_buf[3], cmd_buf[4]});
                 end
 
@@ -413,7 +414,7 @@ module sdspi_model #(
                 if (cmd_buf[0][5:0] == 6'd12 && sending_data) begin
                     sending_data <= 0;
                     reading_multiblock <= 0;
-                    if (DEBUG) $display("[SDSPI] CMD12 interrupting data transmission");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD12 interrupting data transmission");
                 end
 
                 // Process command and set up response buffer
@@ -434,17 +435,17 @@ module sdspi_model #(
                 rsp_delay <= rsp_delay - 1;
                 spi_tx_data = 8'hFF;  // Send idle during delay (blocking assignment for immediate effect)
                 spi_tx_dv <= 1;
-                if (DEBUG && rsp_delay == 1) $display("[SDSPI] Response delay complete, starting response");
+                if ((DEBUG || debug_enable) && rsp_delay == 1 || debug_enable && rsp_delay == 1) $display("[SDSPI] Response delay complete, starting response");
             // Response has priority over data (needed for CMD12 during multi-block read)
             end else if (sending_response && tx_buffer_idx < tx_buffer_len) begin
-                $display("[SDSPI] >>> Loading byte %0d: 0x%02x", tx_buffer_idx, tx_byte_buffer[tx_buffer_idx]);
+                if (debug_enable || DEBUG) $display("[SDSPI] >>> Loading byte %0d: 0x%02x", tx_buffer_idx, tx_byte_buffer[tx_buffer_idx]);
                 spi_tx_data = tx_byte_buffer[tx_buffer_idx];  // Blocking assignment for immediate effect
                 spi_tx_dv <= 1;
                 tx_buffer_idx <= tx_buffer_idx + 1;
 
                 if (tx_buffer_idx + 1 >= tx_buffer_len) begin
                     sending_response <= 0;
-                    if (DEBUG) $display("[SDSPI] Response complete");
+                    if (DEBUG || debug_enable) $display("[SDSPI] Response complete");
                 end
             end else if (sending_data && data_idx < data_len && !sending_response) begin
                 spi_tx_data = data_buf[data_idx];  // Blocking assignment for immediate effect
@@ -452,7 +453,7 @@ module sdspi_model #(
                 data_idx <= data_idx + 1;
                 if (data_idx + 1 >= data_len) begin
                     sending_data <= 0;
-                    if (DEBUG) $display("[SDSPI] Data transmission complete");
+                    if (DEBUG || debug_enable) $display("[SDSPI] Data transmission complete");
 
                     // If in multi-block read mode, prepare next block
                     if (reading_multiblock) begin
@@ -460,7 +461,7 @@ module sdspi_model #(
                         integer next_byte_addr;
 
                         current_block_addr <= current_block_addr + 1;
-                        if (DEBUG) $display("[SDSPI] CMD18: Preparing next block %0d", current_block_addr + 1);
+                        if (DEBUG || debug_enable) $display("[SDSPI] CMD18: Preparing next block %0d", current_block_addr + 1);
 
                         // Check if we've reached the end of card
                         if (current_block_addr + 1 < NBLOCKS) begin
@@ -510,7 +511,7 @@ module sdspi_model #(
             case (cmd_num)
                 // CMD0: GO_IDLE_STATE
                 6'd0: begin
-                    if (DEBUG) $display("[SDSPI] CMD0: GO_IDLE_STATE");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD0: GO_IDLE_STATE");
                     reset_state <= SDSPI_CMD0_IDLE;
                     powerup_busy <= 1;
                     send_r1_response(8'h01); // In idle state
@@ -518,7 +519,7 @@ module sdspi_model #(
 
                 // CMD8: SEND_IF_COND
                 6'd8: begin
-                    if (DEBUG) $display("[SDSPI] CMD8: SEND_IF_COND, VHS=%0d, pattern=0x%02x",
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD8: SEND_IF_COND, VHS=%0d, pattern=0x%02x",
                                        arg[11:8], arg[7:0]);
                     reset_state <= SDSPI_RCVD_CMD8;
                     // R7 response: R1 + 32-bit response
@@ -535,14 +536,14 @@ module sdspi_model #(
 
                 // CMD55: APP_CMD
                 6'd55: begin
-                    if (DEBUG) $display("[SDSPI] CMD55: APP_CMD");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD55: APP_CMD");
                     // Return 0x01 if still in idle state, 0x00 if initialized
                     send_r1_response((reset_state == SDSPI_RESET_COMPLETE) ? 8'h00 : 8'h01);
                 end
 
                 // ACMD41: SD_SEND_OP_COND
                 6'd41: begin
-                    if (DEBUG) $display("[SDSPI] ACMD41: SD_SEND_OP_COND, HCS=%0d", arg[30]);
+                    if (DEBUG || debug_enable) $display("[SDSPI] ACMD41: SD_SEND_OP_COND, HCS=%0d", arg[30]);
                     if (arg[30])
                         host_supports_hcs <= 1;
 
@@ -557,7 +558,7 @@ module sdspi_model #(
 
                 // CMD58: READ_OCR
                 6'd58: begin
-                    if (DEBUG) $display("[SDSPI] CMD58: READ_OCR");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD58: READ_OCR");
                     // R3 response: R1 + OCR
                     tx_byte_buffer[0] = 8'h00; // R1: ready
                     // OCR: bit 31=power up complete, bit 30=CCS (SDHC), bits 23-15=voltage
@@ -574,13 +575,13 @@ module sdspi_model #(
                 // CMD59: CRC_ON_OFF
                 6'd59: begin
                     crc_on <= arg[0];
-                    if (DEBUG) $display("[SDSPI] CMD59: CRC_ON_OFF = %0d", arg[0]);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD59: CRC_ON_OFF = %0d", arg[0]);
                     send_r1_response(8'h00);
                 end
 
                 // CMD9: SEND_CSD
                 6'd9: begin
-                    if (DEBUG) $display("[SDSPI] CMD9: SEND_CSD");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD9: SEND_CSD");
                     send_r1_response(8'h00); // OK
 
                     // Prepare data packet with CSD register
@@ -599,7 +600,7 @@ module sdspi_model #(
 
                 // CMD10: SEND_CID
                 6'd10: begin
-                    if (DEBUG) $display("[SDSPI] CMD10: SEND_CID");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD10: SEND_CID");
                     send_r1_response(8'h00); // OK
 
                     // Prepare data packet with CID register
@@ -618,7 +619,7 @@ module sdspi_model #(
 
                 // CMD12: STOP_TRANSMISSION
                 6'd12: begin
-                    if (DEBUG) $display("[SDSPI] CMD12: STOP_TRANSMISSION");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD12: STOP_TRANSMISSION");
                     reading_multiblock <= 0;
                     // R1b response (stuff byte follows R1)
                     tx_byte_buffer[0] = 8'h00; // R1: OK
@@ -632,7 +633,7 @@ module sdspi_model #(
 
                 // CMD13: SEND_STATUS
                 6'd13: begin
-                    if (DEBUG) $display("[SDSPI] CMD13: SEND_STATUS");
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD13: SEND_STATUS");
                     // R2 response: R1 + status byte
                     tx_byte_buffer[0] = 8'h00; // R1: OK
                     tx_byte_buffer[1] = 8'h00; // Status: no errors
@@ -643,7 +644,7 @@ module sdspi_model #(
 
                 // CMD16: SET_BLOCKLEN
                 6'd16: begin
-                    if (DEBUG) $display("[SDSPI] CMD16: SET_BLOCKLEN, len=%0d", arg);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD16: SET_BLOCKLEN, len=%0d", arg);
                     if (arg == 512) begin
                         send_r1_response(8'h00); // OK
                     end else begin
@@ -654,7 +655,7 @@ module sdspi_model #(
                 // CMD17: READ_SINGLE_BLOCK
                 6'd17: begin
                     block_addr = block_address_mode ? arg : (arg / SECTOR_SIZE);
-                    if (DEBUG) $display("[SDSPI] CMD17: READ_SINGLE_BLOCK, block=%0d", block_addr);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD17: READ_SINGLE_BLOCK, block=%0d", block_addr);
 
                     if (block_addr >= NBLOCKS) begin
                         send_r1_response(8'h04); // Illegal command
@@ -681,7 +682,7 @@ module sdspi_model #(
                 // CMD18: READ_MULTIPLE_BLOCK
                 6'd18: begin
                     block_addr = block_address_mode ? arg : (arg / SECTOR_SIZE);
-                    if (DEBUG) $display("[SDSPI] CMD18: READ_MULTIPLE_BLOCK, start_block=%0d", block_addr);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD18: READ_MULTIPLE_BLOCK, start_block=%0d", block_addr);
 
                     if (block_addr >= NBLOCKS) begin
                         send_r1_response(8'h04); // Illegal command
@@ -710,7 +711,7 @@ module sdspi_model #(
                 // CMD24: WRITE_SINGLE_BLOCK
                 6'd24: begin
                     block_addr = block_address_mode ? arg : (arg / SECTOR_SIZE);
-                    if (DEBUG) $display("[SDSPI] CMD24: WRITE_SINGLE_BLOCK, block=%0d", block_addr);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD24: WRITE_SINGLE_BLOCK, block=%0d", block_addr);
 
                     if (block_addr >= NBLOCKS) begin
                         send_r1_response(8'h04); // Illegal command
@@ -727,7 +728,7 @@ module sdspi_model #(
                 // CMD25: WRITE_MULTIPLE_BLOCK
                 6'd25: begin
                     block_addr = block_address_mode ? arg : (arg / SECTOR_SIZE);
-                    if (DEBUG) $display("[SDSPI] CMD25: WRITE_MULTIPLE_BLOCK, start_block=%0d", block_addr);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD25: WRITE_MULTIPLE_BLOCK, start_block=%0d", block_addr);
 
                     if (block_addr >= NBLOCKS) begin
                         send_r1_response(8'h04); // Illegal command
@@ -743,12 +744,12 @@ module sdspi_model #(
 
                 // ACMD23: SET_WR_BLK_ERASE_COUNT (preceded by CMD55)
                 6'd23: begin
-                    if (DEBUG) $display("[SDSPI] ACMD23: SET_WR_BLK_ERASE_COUNT, count=%0d", arg[22:0]);
+                    if (DEBUG || debug_enable) $display("[SDSPI] ACMD23: SET_WR_BLK_ERASE_COUNT, count=%0d", arg[22:0]);
                     send_r1_response(8'h00); // OK
                 end
 
                 default: begin
-                    if (DEBUG) $display("[SDSPI] CMD%0d: Unknown command", cmd_num);
+                    if (DEBUG || debug_enable) $display("[SDSPI] CMD%0d: Unknown command", cmd_num);
                     send_r1_response(8'h04); // Illegal command
                 end
             endcase

@@ -17,7 +17,10 @@ module vga_display_model (
     // Pixel readback outputs (combinatorial)
     output wire [3:0]  rgb_r_o,
     output wire [3:0]  rgb_g_o,
-    output wire [3:0]  rgb_b_o
+    output wire [3:0]  rgb_b_o,
+
+    // Debug enable
+    input  wire        debug_enable = 1'b1
 );
 
     localparam H_SYNC       = 136;
@@ -94,7 +97,7 @@ module vga_display_model (
         if (in_active_region && pixel_x < 1024 && pixel_y < 768) begin
             if (!seen_pixel && (rgb_r_i != 0 || rgb_g_i != 0 || rgb_b_i != 0)) begin
                 seen_pixel <= 1'b1;
-                $display("First non-zero pixel captured at (%0d, %0d) = R:%0h G:%0h B:%0h", pixel_x, pixel_y, rgb_r_i, rgb_g_i, rgb_b_i);
+                if (debug_enable) $display("First non-zero pixel captured at (%0d, %0d) = R:%0h G:%0h B:%0h", pixel_x, pixel_y, rgb_r_i, rgb_g_i, rgb_b_i);
             end
             pixel_buffer[pixel_y][pixel_x] <= {rgb_r_i, rgb_g_i, rgb_b_i};
         end

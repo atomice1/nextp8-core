@@ -360,7 +360,7 @@ wire pal_sel;
 
 // Palette control signals
 assign pal_write_en = pal_mem && cpu_wr;
-assign pal_read_en = pal_mem && cpu_rd && memio_go;
+assign pal_read_en  = pal_mem && cpu_rd && (estate == 3'b000);
 assign pal_sel = cpu_addr[4] ? vfront : ~vfront;
 
 // demultiplex the various data sources
@@ -930,6 +930,7 @@ p8video p8video (
     .VB(video_b)
     );
 
+/*
 // Debug monitor for vfront changes
 reg vfront_prev = 1'b0;
 always @(posedge mclk) begin
@@ -938,6 +939,7 @@ always @(posedge mclk) begin
         vfront_prev <= vfront;
     end
 end
+*/
 
 // VGA clocks to latch RGB data in external DACs
 // vgaclk_o clocks ADV7125 (highest 4 bits), vgaclkn_o clocks 74ALVC574 (lowest 4 bits)
@@ -1763,7 +1765,7 @@ begin
             // ------------ video ----------------------------------------------------
             if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_wr) begin
                 vfrontreq <= cpu_dout[0];
-                $display("[%d] VFRONTREQ WRITE: vfrontreq_req=%b (current vfront=%b)", $time, cpu_dout[0], vfront);
+                //$display("[%d] VFRONTREQ WRITE: vfrontreq_req=%b (current vfront=%b)", $time, cpu_dout[0], vfront);
             end
             if (cpu_addr[7:1]==ADDR_VBLANK_INTR_CTRL[7:1] && cpu_wr) begin
                 vsync_ack <= 1'b1;

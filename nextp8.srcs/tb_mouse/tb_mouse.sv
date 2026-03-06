@@ -63,7 +63,8 @@ mouse_device #(
 
 // Instantiate mouse module (DUT)
 mouse #(
-    .SIM(1)
+    .SIM(1),
+    .VERBOSE(1)
 ) dut (
     .clk(clk),
     .reset(reset),

@@ -7,7 +7,8 @@ module ds1307_device (
     input  wire i2c_scl_in,
     input  wire i2c_sda_in,
     output reg  i2c_scl_out,
-    output reg  i2c_sda_out
+    output reg  i2c_sda_out,
+    input  wire debug_enable = 1'b1
 );
 
     parameter I2C_ADDR = 7'h68;
@@ -53,7 +54,7 @@ module ds1307_device (
         // Output ports: 0 = drive low, 1 = release (high-Z)
         i2c_scl_out = 1'b1;
         i2c_sda_out = 1'b1;
-        $display("[DS1307] %0t Initialized - I2C address 0x%02x", $time, I2C_ADDR);
+        if (debug_enable) $display("[DS1307] %0t Initialized - I2C address 0x%02x", $time, I2C_ADDR);
     end
     
     // Monitor I2C bus activity (only on changes during transactions)
@@ -70,7 +71,7 @@ module ds1307_device (
         if (need_ack) begin
             i2c_sda_out = 1'b0;  // ACK: pull low
         end else if (state == DATA_TX && bit_count < 8) begin
-            $display("[DS1307] %0t DATA_TX: sending bit %d: %b (shift_reg=%b)", $time, bit_count, shift_reg[7], shift_reg);
+            if (debug_enable) $display("[DS1307] %0t DATA_TX: sending bit %d: %b (shift_reg=%b)", $time, bit_count, shift_reg[7], shift_reg);
             i2c_sda_out = shift_reg[7] ? 1'b1 : 1'b0;  // TX: MSB first
         end else begin
             i2c_sda_out = 1'b1;  // Release
@@ -92,19 +93,19 @@ module ds1307_device (
             if (bit_count < 8) begin
                 // Bits 0-7: sample data
                 shift_reg <= {shift_reg[6:0], i2c_sda_in};
-                $display("[DS1307] %0t posedge ADDR_RX: bit_count=%d sda=%b shift_reg=%08b", $time, bit_count, i2c_sda_in, {shift_reg[6:0], i2c_sda_in});
+                if (debug_enable) $display("[DS1307] %0t posedge ADDR_RX: bit_count=%d sda=%b shift_reg=%08b", $time, bit_count, i2c_sda_in, {shift_reg[6:0], i2c_sda_in});
                 
                 if (bit_count == 7) begin
                     // This is the 8th address bit - save it, ACK will be driven on negedge
                     cmd_byte <= {shift_reg[6:0], i2c_sda_in};
                     // DON'T set need_ack here - wait for negedge after this bit is sampled
                     ack_bit_seen <= 0;  // Reset flag for 9th bit
-                    $display("[DS1307] %0t ADDR: 0x%02x @ posedge (bit_count was 7)", $time, {shift_reg[6:0], i2c_sda_in});
+                    if (debug_enable) $display("[DS1307] %0t ADDR: 0x%02x @ posedge (bit_count was 7)", $time, {shift_reg[6:0], i2c_sda_in});
                 end
             end else begin
                 // Bit 8 (ACK bit): slave is pulling SDA low, don't sample it
                 ack_bit_seen <= 1;  // Mark that we've seen the 9th posedge with ACK active
-                $display("[DS1307] %0t 9th posedge (ACK bit): holding SDA low, need_ack=%b", $time, need_ack);
+                if (debug_enable) $display("[DS1307] %0t 9th posedge (ACK bit): holding SDA low, need_ack=%b", $time, need_ack);
             end
             
             bit_count <= bit_count + 1;
@@ -112,19 +113,19 @@ module ds1307_device (
             // Receiving register address byte
             if (bit_count < 8) begin
                 shift_reg <= {shift_reg[6:0], i2c_sda_in};
-                $display("[DS1307] %0t posedge REG_RX: bit_count=%d sda=%b shift_reg=%08b", $time, bit_count, i2c_sda_in, {shift_reg[6:0], i2c_sda_in});
+                if (debug_enable) $display("[DS1307] %0t posedge REG_RX: bit_count=%d sda=%b shift_reg=%08b", $time, bit_count, i2c_sda_in, {shift_reg[6:0], i2c_sda_in});
                 
                 if (bit_count == 7) begin
                     // This is the 8th register address bit
                     reg_addr <= {shift_reg[6:0], i2c_sda_in};
                     // DON'T set need_ack here - wait for negedge after this bit is sampled
                     ack_bit_seen <= 0;
-                    $display("[DS1307] %0t RegAddr: 0x%02x", $time, {shift_reg[6:0], i2c_sda_in});
+                    if (debug_enable) $display("[DS1307] %0t RegAddr: 0x%02x", $time, {shift_reg[6:0], i2c_sda_in});
                 end
             end else begin
                 // Bit 8 (ACK bit)
                 ack_bit_seen <= 1;
-                $display("[DS1307] %0t 9th posedge REG_RX (ACK bit): holding SDA low", $time);
+                if (debug_enable) $display("[DS1307] %0t 9th posedge REG_RX (ACK bit): holding SDA low", $time);
             end
             
             bit_count <= bit_count + 1;
@@ -132,18 +133,18 @@ module ds1307_device (
             // Receiving data bytes to write to registers
             if (bit_count < 8) begin
                 shift_reg <= {shift_reg[6:0], i2c_sda_in};
-                $display("[DS1307] %0t posedge DATA_RX: bit_count=%d sda=%b shift_reg=%08b", $time, bit_count, i2c_sda_in, {shift_reg[6:0], i2c_sda_in});
+                if (debug_enable) $display("[DS1307] %0t posedge DATA_RX: bit_count=%d sda=%b shift_reg=%08b", $time, bit_count, i2c_sda_in, {shift_reg[6:0], i2c_sda_in});
                 
                 if (bit_count == 7) begin
                     // This is the 8th data bit
                     // DON'T set need_ack here - wait for negedge after this bit is sampled
                     ack_bit_seen <= 0;
-                    $display("[DS1307] %0t Data byte received: 0x%02x -> reg[0x%02x]", $time, {shift_reg[6:0], i2c_sda_in}, reg_addr);
+                    if (debug_enable) $display("[DS1307] %0t Data byte received: 0x%02x -> reg[0x%02x]", $time, {shift_reg[6:0], i2c_sda_in}, reg_addr);
                 end
             end else begin
                 // Bit 8 (ACK bit)
                 ack_bit_seen <= 1;
-                $display("[DS1307] %0t 9th posedge DATA_RX (ACK bit): holding SDA low", $time);
+                if (debug_enable) $display("[DS1307] %0t 9th posedge DATA_RX (ACK bit): holding SDA low", $time);
             end
             
             bit_count <= bit_count + 1;
@@ -152,9 +153,9 @@ module ds1307_device (
             // On 9th bit, sample master's ACK/NACK
             if (bit_count == 8) begin
                 master_ack <= i2c_sda_in;  // Sample: 0=ACK, 1=NACK
-                $display("[DS1307] %0t posedge DATA_TX: 9th bit (master %s) sda=%b", $time, i2c_sda_in ? "NACK" : "ACK", i2c_sda_in);
+                if (debug_enable) $display("[DS1307] %0t posedge DATA_TX: 9th bit (master %s) sda=%b", $time, i2c_sda_in ? "NACK" : "ACK", i2c_sda_in);
             end
-            $display("[DS1307] %0t posedge DATA_TX: bit_count=%d->%d", $time, bit_count, (bit_count + 1));
+            if (debug_enable) $display("[DS1307] %0t posedge DATA_TX: bit_count=%d->%d", $time, bit_count, (bit_count + 1));
         end
     end
     
@@ -164,7 +165,7 @@ module ds1307_device (
         // Delay slightly after the falling edge for proper I2C timing
         if (bit_count == 8 && !need_ack && (state == ADDR_RX || state == REG_RX || state == DATA_RX)) begin
             #100 need_ack <= 1;  // Drive SDA low for ACK during 9th clock (delayed for setup time)
-            $display("[DS1307] %0t negedge after 8th bit: asserting ACK (need_ack=1)", $time);
+            if (debug_enable) $display("[DS1307] %0t negedge after 8th bit: asserting ACK (need_ack=1)", $time);
         end
         
         if (ack_bit_seen && need_ack) begin
@@ -183,31 +184,31 @@ module ds1307_device (
                         state <= DATA_TX;
                         bit_count <= 0;
                         shift_reg <= regs[reg_addr];
-                        $display("[DS1307] %0t State transition: ADDR_RX -> DATA_TX (READ)", $time);
-                        $display("[DS1307] %0t READ from reg addr=0x%02x: value=0x%02x", $time, reg_addr, regs[reg_addr]);
+                        if (debug_enable) $display("[DS1307] %0t State transition: ADDR_RX -> DATA_TX (READ)", $time);
+                        if (debug_enable) $display("[DS1307] %0t READ from reg addr=0x%02x: value=0x%02x", $time, reg_addr, regs[reg_addr]);
                     end else begin
                         // Write command - receive register address next
                         state <= REG_RX;
                         bit_count <= 0;  // Reset for next byte reception
-                        $display("[DS1307] %0t State transition: ADDR_RX -> REG_RX (WRITE)", $time);
-                        $display("[DS1307] %0t WRITE", $time);
+                        if (debug_enable) $display("[DS1307] %0t State transition: ADDR_RX -> REG_RX (WRITE)", $time);
+                        if (debug_enable) $display("[DS1307] %0t WRITE", $time);
                     end
                 end else begin
                     // Address mismatch - go back to IDLE
                     state <= IDLE;
-                    $display("[DS1307] %0t NACK - address mismatch", $time);
+                    if (debug_enable) $display("[DS1307] %0t NACK - address mismatch", $time);
                 end
             end else if (state == REG_RX) begin
                 // After receiving register address, move to data phase for write
                 state <= DATA_RX;
                 bit_count <= 0;  // Reset for data byte reception
-                $display("[DS1307] %0t State transition: REG_RX -> DATA_RX (receive data)", $time);
-                $display("[DS1307] %0t Register address captured: 0x%02x, ready for data", $time, reg_addr);
+                if (debug_enable) $display("[DS1307] %0t State transition: REG_RX -> DATA_RX (receive data)", $time);
+                if (debug_enable) $display("[DS1307] %0t Register address captured: 0x%02x, ready for data", $time, reg_addr);
             end else if (state == DATA_RX) begin
                 // After data byte, stay in DATA_RX for next data byte (auto-increment reg_addr)
                 reg_addr <= reg_addr + 1;
                 bit_count <= 0;
-                $display("[DS1307] %0t Data stored to reg[0x%02x], auto-increment to 0x%02x", $time, reg_addr, reg_addr + 1);
+                if (debug_enable) $display("[DS1307] %0t Data stored to reg[0x%02x], auto-increment to 0x%02x", $time, reg_addr, reg_addr + 1);
             end
         end else if (state == DATA_TX && bit_count == 8) begin
             // After 9th bit (master ACK/NACK sampled on posedge), act on negedge
@@ -216,18 +217,18 @@ module ds1307_device (
                 reg_addr <= reg_addr + 1;
                 shift_reg <= regs[reg_addr + 1];
                 bit_count <= 0;
-                $display("[DS1307] %0t Master ACK, sending next byte from addr=0x%02x", $time, reg_addr + 1);
+                if (debug_enable) $display("[DS1307] %0t Master ACK, sending next byte from addr=0x%02x", $time, reg_addr + 1);
             end else begin
                 // Master NACK - end of read
                 state <= IDLE;
                 bit_count <= 0;
-                $display("[DS1307] %0t Master NACK, ending read", $time);
+                if (debug_enable) $display("[DS1307] %0t Master NACK, ending read", $time);
             end
         end else if (state == DATA_TX && bit_count < 8) begin
             // Shift out next data bit on negedge SCL
             shift_reg <= {shift_reg[6:0], 1'b0};  // Shift left, MSB first
             bit_count <= bit_count + 1;
-            $display("[DS1307] %0t shift_reg: %b->%b", $time, shift_reg, {shift_reg[6:0], 1'b0});
+            if (debug_enable) $display("[DS1307] %0t shift_reg: %b->%b", $time, shift_reg, {shift_reg[6:0], 1'b0});
         end
     end
     
@@ -251,7 +252,7 @@ module ds1307_device (
             state <= ADDR_RX;
             bit_count <= 0;
             need_ack <= 0;
-            $display("[DS1307] %0t START condition detected from state %0d", $time, state);
+            if (debug_enable) $display("[DS1307] %0t START condition detected from state %0d", $time, state);
         end
     end
     
@@ -262,7 +263,7 @@ module ds1307_device (
             // SCL high and device not driving low = valid STOP from master
             state <= IDLE;
             need_ack <= 0;
-            $display("[DS1307] %0t STOP condition", $time);
+            if (debug_enable) $display("[DS1307] %0t STOP condition", $time);
         end
     end
 

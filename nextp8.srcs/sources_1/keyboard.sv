@@ -21,7 +21,8 @@
 `timescale 1ns/1ns
 
 module keyboard #(
-    parameter SIM = 0  // Set to 1 in simulation to reduce delays
+    parameter SIM     = 0,  // Set to 1 in simulation to reduce delays
+    parameter VERBOSE = 0   // Set to 1 to enable $display debug output
 ) (
     input wire clk,
     input wire reset,
@@ -106,17 +107,17 @@ always @(posedge clk) begin
                 // Wait for power-on BAT (0xAA, 0xFC, 0xFD) or timeout
                 if (valid) begin
                     if (rx_byte == RESP_BAT_OK || rx_byte == RESP_BAT_ERR1 || rx_byte == RESP_BAT_ERR2) begin
-                        $display("Keyboard init: received power-on BAT 0x%02x, skipping reset", rx_byte);
+                        if (VERBOSE) $display("Keyboard init: received power-on BAT 0x%02x, skipping reset", rx_byte);
                         // Power-on BAT received, delay before next command
                         init_counter <= POST_BAT_DELAY;
                         init_state <= INIT_POST_BAT_DELAY;
                     end else begin
                         // Unexpected byte, keep waiting
-                        $display("Keyboard init: unexpected byte 0x%02x during power-on wait", rx_byte);
+                        if (VERBOSE) $display("Keyboard init: unexpected byte 0x%02x during power-on wait", rx_byte);
                     end
                 end else if (init_counter == 20'd0) begin
                     // Timeout, send reset command
-                    $display("Keyboard init: power-on wait timeout, sending reset");
+                    if (VERBOSE) $display("Keyboard init: power-on wait timeout, sending reset");
                     init_state <= INIT_SEND_FF;
                 end else begin
                     init_counter <= init_counter - 20'd1;
@@ -126,7 +127,7 @@ always @(posedge clk) begin
             INIT_SEND_FF: begin
                 // Send 0xFF (Reset)
                 if (!tx_busy) begin
-                    $display("Keyboard init: sending Reset command");
+                    if (VERBOSE) $display("Keyboard init: sending Reset command");
                     tx_data <= CMD_RESET;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_FF;
@@ -136,7 +137,7 @@ always @(posedge clk) begin
             INIT_WAIT_ACK_FF: begin
                 // Wait for ACK after reset command
                 if (valid) begin
-                    $display("Keyboard init: received byte 0x%02x after reset", rx_byte);
+                    if (VERBOSE) $display("Keyboard init: received byte 0x%02x after reset", rx_byte);
                     if (rx_byte == RESP_ACK) begin
                         init_state <= INIT_WAIT_BAT_FF;
                     end else if (rx_byte == RESP_RESEND) begin
@@ -150,7 +151,7 @@ always @(posedge clk) begin
             INIT_WAIT_BAT_FF: begin
                 // Wait for BAT (0xAA) after ACK
                 if (valid) begin
-                    $display("Keyboard init: received byte 0x%02x waiting for BAT", rx_byte);
+                    if (VERBOSE) $display("Keyboard init: received byte 0x%02x waiting for BAT", rx_byte);
                     if (rx_byte == RESP_BAT_OK) begin
                         init_counter <= POST_BAT_DELAY;
                         init_state <= INIT_POST_BAT_DELAY;
@@ -163,7 +164,7 @@ always @(posedge clk) begin
             INIT_POST_BAT_DELAY: begin
                 // Delay after BAT result before sending next command
                 if (init_counter == 20'd0) begin
-                    $display("Keyboard init: POST_BAT_DELAY complete, transitioning to SEND_ED @ %0t", $time);
+                    if (VERBOSE) $display("Keyboard init: POST_BAT_DELAY complete, transitioning to SEND_ED @ %0t", $time);
                     init_state <= INIT_SEND_ED;
                 end else begin
                     init_counter <= init_counter - 20'd1;
@@ -173,12 +174,12 @@ always @(posedge clk) begin
             INIT_SEND_ED: begin
                 // Send 0xED (Set Status Indicators)
                 if (!tx_busy) begin
-                    $display("Keyboard init: sending Set LED command (tx_busy=0) @ %0t", $time);
+                    if (VERBOSE) $display("Keyboard init: sending Set LED command (tx_busy=0) @ %0t", $time);
                     tx_data <= CMD_SET_LED;
                     tx_start <= 1'b1;
                     init_state <= INIT_WAIT_ACK_ED;
                 end else begin
-                    $display("Keyboard init: waiting in SEND_ED (tx_busy=1) @ %0t", $time);
+                    if (VERBOSE) $display("Keyboard init: waiting in SEND_ED (tx_busy=1) @ %0t", $time);
                 end
             end
 
@@ -258,7 +259,7 @@ always @(posedge clk) begin
             // Ignore incoming bytes until initialization completes so ACKs do not
             // disturb the matrix state.
             if (init_state == INIT_DONE) begin
-                $display("Keyboard received byte: 0x%02x (extended=%b released=%b) @ %0t", rx_byte, key_extended, key_released, $time);
+                if (VERBOSE) $display("Keyboard received byte: 0x%02x (extended=%b released=%b) @ %0t", rx_byte, key_extended, key_released, $time);
                 // Track prefix bytes and apply them once the actual key code arrives.
                 if (rx_byte == 8'he0) begin
                     key_extended <= 1'b1;
@@ -272,7 +273,7 @@ always @(posedge clk) begin
                 end
             end else begin
                 // Still initializing, ignore incoming bytes
-                $display("Keyboard init: ignoring byte 0x%02x", rx_byte);
+                if (VERBOSE) $display("Keyboard init: ignoring byte 0x%02x", rx_byte);
             end
         end
     end

@@ -53,7 +53,8 @@ keyboard_device #(
 
 // Instantiate keyboard module (PS/2 HOST - DUT)
 keyboard #(
-    .SIM(1)
+    .SIM(1),
+    .VERBOSE(1)
 ) dut (
     .clk(clk),
     .reset(reset),

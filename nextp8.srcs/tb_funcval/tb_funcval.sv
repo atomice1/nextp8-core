@@ -328,6 +328,14 @@ module tb_funcval;
     // Peripheral Models
     // =========================================================================
 
+    // Model debug enable registers (0x3800B0 - 0x3800B8)
+    // Write 1 to enable verbose $display output for each device model.
+    logic model_debug_ds1307 = 1'b0;  // 0x3800B0: DS1307 I2C RTC debug
+    logic model_debug_kb     = 1'b0;  // 0x3800B2: PS/2 keyboard debug
+    logic model_debug_mouse  = 1'b0;  // 0x3800B4: PS/2 mouse debug
+    logic model_debug_vga    = 1'b0;  // 0x3800B6: VGA display model debug
+    logic model_debug_sdspi  = 1'b0;  // 0x3800B8: SD card SPI model debug
+
     // DS1307 RTC I2C Device
     logic i2c_scl_rtc_out, i2c_sda_rtc_out;
 
@@ -335,7 +343,8 @@ module tb_funcval;
         .i2c_scl_in(i2c_scl),
         .i2c_sda_in(i2c_sda),
         .i2c_scl_out(i2c_scl_rtc_out),
-        .i2c_sda_out(i2c_sda_rtc_out)
+        .i2c_sda_out(i2c_sda_rtc_out),
+        .debug_enable(model_debug_ds1307)
     );
 
     // PS/2 Keyboard Device
@@ -346,6 +355,7 @@ module tb_funcval;
     ) keyboard (
         .clk(clock_50_i),
         .reset(~reset_n),
+        .debug_enable(model_debug_kb),
         .ps2_clk_in(ps2_clk),
         .ps2_data_in(ps2_data),
         .ps2_clk_out(ps2_clk_kb_out),
@@ -360,6 +370,7 @@ module tb_funcval;
     ) mouse (
         .clk(clock_50_i),
         .reset(~reset_n),
+        .debug_enable(model_debug_mouse),
         .intellimouse_capable(1'b1),
         .ps2_clk_in(ps2_pin6),
         .ps2_data_in(ps2_pin2),
@@ -382,7 +393,8 @@ module tb_funcval;
         .y_i(vga_pixel_y),
         .rgb_r_o(vga_pixel_r),
         .rgb_g_o(vga_pixel_g),
-        .rgb_b_o(vga_pixel_b)
+        .rgb_b_o(vga_pixel_b),
+        .debug_enable(model_debug_vga)
     );
 
     // SD Card SPI Model
@@ -394,6 +406,7 @@ module tb_funcval;
     ) sd_card (
         .clk(clock_50_i),
         .reset(~reset_n),
+        .debug_enable(model_debug_sdspi),
         .spi_cs_n(sd_cs0_n),
         .spi_clk(sd_sclk),
         .spi_mosi(sd_mosi),
@@ -764,6 +777,12 @@ module tb_funcval;
                     if (!ram_ub_n) keyboard_matrix[6] <= sram_write_data[15:8]; // 0x380086 Row 6
                     if (!ram_lb_n) keyboard_matrix[7] <= sram_write_data[7:0];  // 0x380087 Row 7
                 end
+                // Model debug enable registers (0x3800B0 - 0x3800B8)
+                21'h1C0058: model_debug_ds1307 <= sram_write_data[0]; // 0x3800B0
+                21'h1C0059: model_debug_kb     <= sram_write_data[0]; // 0x3800B2
+                21'h1C005A: model_debug_mouse  <= sram_write_data[0]; // 0x3800B4
+                21'h1C005B: model_debug_vga    <= sram_write_data[0]; // 0x3800B6
+                21'h1C005C: model_debug_sdspi  <= sram_write_data[0]; // 0x3800B8
             endcase
         end
     end

@@ -6,6 +6,7 @@ module mouse_device #(
 ) (
     input  logic clk,
     input  logic reset,
+    input  logic debug_enable = 1'b1,
     input  logic intellimouse_capable,  // 1 = support Intellimouse mode, 0 = standard only
     input  wire  ps2_clk_in,
     input  wire  ps2_data_in,
@@ -99,6 +100,7 @@ module mouse_device #(
     ) ps2_dev (
         .CLK(clk),
         .nRESET(~reset),
+        .debug_enable(debug_enable),
         .PS2_CLK_IN(ps2_clk_in),
         .PS2_DATA_IN(ps2_data_in),
         .PS2_CLK_OUT(ps2_clk_out),
@@ -138,23 +140,23 @@ module mouse_device #(
             intellimouse_mode <= 1'b0;
             sample_rate_history[0] <= 8'd0;
             sample_rate_history[1] <= 8'd0;
-            $display("Time %t: mouse_model RESET: stream_mode=1, reporting=1", $time);
+            if (debug_enable) $display("Time %t: mouse_model RESET: stream_mode=1, reporting=1", $time);
         end else begin
             // Track stream_mode changes
             if (stream_mode_reg != prev_stream_mode) begin
-                $display("Time %t: mouse_model stream_mode changed: %b -> %b", $time, prev_stream_mode, stream_mode_reg);
+                if (debug_enable) $display("Time %t: mouse_model stream_mode changed: %b -> %b", $time, prev_stream_mode, stream_mode_reg);
                 prev_stream_mode <= stream_mode_reg;
             end
             state <= next_state;
 
             // Debug state transitions
             if (state != next_state) begin
-                $display("Time %t: mouse_model STATE %0d -> %0d", $time, state, next_state);
+                if (debug_enable) $display("Time %t: mouse_model STATE %0d -> %0d", $time, state, next_state);
             end
 
             // Capture received commands
             if (ps2_rx_valid) begin
-                $display("Time %t: mouse_model RX_VALID data=0x%h state=%0d", $time, ps2_rx_data, state);
+                if (debug_enable) $display("Time %t: mouse_model RX_VALID data=0x%h state=%0d", $time, ps2_rx_data, state);
                 last_cmd_reg <= ps2_rx_data;
             end
 
@@ -164,7 +166,7 @@ module mouse_device #(
             end
 
             if (ps2_force_idle) begin
-                $display("Time %t: mouse_model FORCE_IDLE - resetting to IDLE state", $time);
+                if (debug_enable) $display("Time %t: mouse_model FORCE_IDLE - resetting to IDLE state", $time);
                 state <= ST_IDLE;  // Reset to IDLE when host releases inhibit
             end
 
@@ -178,26 +180,26 @@ module mouse_device #(
                 case (last_cmd_reg)
                     CMD_ENABLE_REPORTING: begin
                         reporting_enabled_reg <= 1'b1;
-                        $display("Time %t: mouse_model: Reporting ENABLED", $time);
+                        if (debug_enable) $display("Time %t: mouse_model: Reporting ENABLED", $time);
                     end
                     CMD_DISABLE_REPORTING: begin
                         reporting_enabled_reg <= 1'b0;
-                        $display("Time %t: mouse_model: Reporting DISABLED", $time);
+                        if (debug_enable) $display("Time %t: mouse_model: Reporting DISABLED", $time);
                     end
                     CMD_SET_STREAM_MODE: begin
                         stream_mode_reg <= 1'b1;
-                        $display("Time %t: mouse_model: Stream mode ENABLED", $time);
+                        if (debug_enable) $display("Time %t: mouse_model: Stream mode ENABLED", $time);
                     end
                     CMD_SET_REMOTE_MODE: begin
                         stream_mode_reg <= 1'b0;
-                        $display("Time %t: mouse_model: Remote mode ENABLED (stream disabled)", $time);
+                        if (debug_enable) $display("Time %t: mouse_model: Remote mode ENABLED (stream disabled)", $time);
                     end
                     CMD_RESET: begin
                         reporting_enabled_reg <= 1'b0;
                         stream_mode_reg <= 1'b1;
                         sample_rate_reg <= 8'd100;
                         resolution_reg <= 8'd4;
-                        $display("Time %t: mouse_model: RESET - reporting disabled", $time);
+                        if (debug_enable) $display("Time %t: mouse_model: RESET - reporting disabled", $time);
                     end
                     CMD_SET_DEFAULTS: begin
                         reporting_enabled_reg <= 1'b0;
@@ -212,7 +214,7 @@ module mouse_device #(
             if (state == ST_WAIT_SAMPLE_RATE && ps2_rx_valid) begin
                 sample_rate_reg <= ps2_rx_data;
 
-                $display("Time %t: mouse_device received sample rate %0d, history=[%0d, %0d, %0d], capable=%0d",
+                if (debug_enable) $display("Time %t: mouse_device received sample rate %0d, history=[%0d, %0d, %0d], capable=%0d",
                          $time, ps2_rx_data, ps2_rx_data, sample_rate_history[0], sample_rate_history[1], intellimouse_capable);
 
                 // Shift sample rate history
@@ -227,7 +229,7 @@ module mouse_device #(
                     ps2_rx_data == 8'd80) begin
                     intellimouse_mode <= 1'b1;
                     device_id_reg <= RESP_INTELLIMOUSE_ID;
-                    $display("Time %t: Intellimouse mode ENABLED (magic sequence detected)", $time);
+                    if (debug_enable) $display("Time %t: Intellimouse mode ENABLED (magic sequence detected)", $time);
                 end
             end
 
@@ -239,7 +241,7 @@ module mouse_device #(
             // Queue management: enqueue from task (check BEFORE clearing pulse)
             if (task_enqueue && packet_count < 16) begin
                 if (intellimouse_mode) begin
-                    $display("Time %t: mouse_model ENQUEUE (4-byte): bytes=0x%h 0x%h 0x%h 0x%h, new_count=%0d",
+                    if (debug_enable) $display("Time %t: mouse_model ENQUEUE (4-byte): bytes=0x%h 0x%h 0x%h 0x%h, new_count=%0d",
                              $time, task_packet[0], task_packet[1], task_packet[2], task_packet[3], packet_count + 1);
                     packet_queue[queue_write_ptr] <= task_packet[0];
                     packet_queue[queue_write_ptr + 1] <= task_packet[1];
@@ -247,7 +249,7 @@ module mouse_device #(
                     packet_queue[queue_write_ptr + 3] <= task_packet[3];
                     queue_write_ptr <= queue_write_ptr + 4;
                 end else begin
-                    $display("Time %t: mouse_model ENQUEUE (3-byte): bytes=0x%h 0x%h 0x%h, new_count=%0d",
+                    if (debug_enable) $display("Time %t: mouse_model ENQUEUE (3-byte): bytes=0x%h 0x%h 0x%h, new_count=%0d",
                              $time, task_packet[0], task_packet[1], task_packet[2], packet_count + 1);
                     packet_queue[queue_write_ptr] <= task_packet[0];
                     packet_queue[queue_write_ptr + 1] <= task_packet[1];
@@ -296,7 +298,7 @@ module mouse_device #(
                         CMD_READ_DEVICE_TYPE: next_state = ST_SEND_ACK;
                         CMD_REQUEST_STATUS: next_state = ST_SEND_ACK;
                         CMD_RESET: next_state = ST_SEND_ACK;
-                        CMD_SET_SAMPLE_RATE: begin next_state = ST_SEND_ACK; $display("Time %t: mouse_model IDLE->SET_SAMPLE_RATE", $time); end
+                        CMD_SET_SAMPLE_RATE: begin next_state = ST_SEND_ACK; if (debug_enable) $display("Time %t: mouse_model IDLE->SET_SAMPLE_RATE", $time); end
                         CMD_SET_RESOLUTION: next_state = ST_SEND_ACK;
                         CMD_READ_DATA: next_state = ST_SEND_ACK;
                         CMD_ENABLE_REPORTING: next_state = ST_SEND_ACK;
@@ -308,7 +310,7 @@ module mouse_device #(
                     endcase
                 end else if (packet_count > 0 && reporting_enabled_reg && stream_mode_reg && !ps2_tx_busy) begin
                     // Send queued movement packet in stream mode
-                    $display("Time %t: mouse_model IDLE->SEND_MOVEMENT: packet_count=%0d reporting=%b stream=%b tx_busy=%b",
+                    if (debug_enable) $display("Time %t: mouse_model IDLE->SEND_MOVEMENT: packet_count=%0d reporting=%b stream=%b tx_busy=%b",
                              $time, packet_count, reporting_enabled_reg, stream_mode_reg, ps2_tx_busy);
                     next_state = ST_SEND_MOVEMENT_BYTE1;
                 end
@@ -466,7 +468,7 @@ module mouse_device #(
         // Z byte is 4-bit signed, sign-extended to 8 bits
         z_byte = {{4{z_movement[3]}}, z_movement[3:0]};
 
-        $display("mouse_model: Request to send movement packet (queue count=%0d) state=%0d", temp_count, state);
+        if (debug_enable) $display("mouse_model: Request to send movement packet (queue count=%0d) state=%0d", temp_count, state);
         // Queue the packet if space available
         if (temp_count < 16) begin
             task_packet[0] = status_byte;
