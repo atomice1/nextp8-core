@@ -804,9 +804,9 @@ assign vw1_overlay = (estate == 3'b000 && cpu_wr && (overlay_back_mem || overlay
 assign vaddr1_main = back_mem ? {~vfront, cpu_addr[12:1]} :
                      front_mem ? {vfront, cpu_addr[12:1]} :
                      {vfront, cpu_addr[12:1]};
-assign vaddr1_overlay = overlay_back_mem ? {1'b0, cpu_addr[12:1]} :
-                        overlay_front_mem ? {1'b1, cpu_addr[12:1]} :
-                        {1'b0, cpu_addr[12:1]};
+assign vaddr1_overlay = overlay_back_mem  ? {~vfront, cpu_addr[12:1]} :
+                        overlay_front_mem ? { vfront, cpu_addr[12:1]} :
+                        {~vfront, cpu_addr[12:1]};
 assign vdin1_main = cpu_dout;
 assign vdin1_overlay = cpu_dout;
 
