@@ -463,7 +463,9 @@ module tb_funcval;
     assign ps2_pin6 = (ps2_clk_mouse_out == 1'b0) ? 1'b0 : 1'bz;
     assign ps2_pin2 = (ps2_data_mouse_out == 1'b0) ? 1'b0 : 1'bz;
 
-    // Wire up bidirectional I2C signals
+    // Wire up bidirectional I2C signals (open-drain, require pullups)
+    pullup(i2c_scl);
+    pullup(i2c_sda);
     assign i2c_scl = (i2c_scl_rtc_out == 1'b0) ? 1'b0 : 1'bz;
     assign i2c_sda = (i2c_sda_rtc_out == 1'b0) ? 1'b0 : 1'bz;
 
