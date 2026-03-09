@@ -240,6 +240,7 @@ reg  [5:0]  play_sfx_off   [0:3]; // mclk: Starting note offset (0-31)
 reg  [15:0] play_sfx_len   [0:3]; // mclk: Number of notes to play (0=full)
 reg  [3:0]  force_stop_sys;       // mclk: One-cycle pulse to stop voice immediately
 reg  [3:0]  force_release_sys;    // mclk: One-cycle pulse to release voice from looping
+reg  [3:0]  user_sfx_mask;        // mclk: Channels claimed by user sfx(); music won't retrigger until music() called again
 
 //==============================================================
 // Time-multiplexed SFX core instance (mclk + clk_pcm_8x domains)
@@ -491,7 +492,7 @@ task automatic find_idle;
             end
         end
         // Priority 4: fallback = find_idle_next (result already set)
-        find_idle_next = result + 2'd1;
+        find_idle_next <= result + 2'd1;
     end
 endtask
 
@@ -534,6 +535,7 @@ always @(posedge mclk) begin
         seq_dma_req<=0; fb_idx<=0;
         frame_toggle_sys_d <= 1'b0; frame_toggle_sys_q <= 1'b0;
         seq_played_mask <= 4'b0000;
+        user_sfx_mask  <= 4'b0000;
         loop_start_seen<=0; loop_end_seen<=0; loop_start<=0; loop_end<=0; stop_on_loop<=0;
         stat_music_pattern<=0; stat_music_pattern_count<=0;
         // Note tick counter resets
@@ -613,6 +615,7 @@ always @(posedge mclk) begin
                 end else begin
                     chx = ch_f[1:0];
                     seq_played_mask[chx] <= 1'b0;
+                    user_sfx_mask[chx]   <= 1'b1;
                     if (!voice_busy[chx]) begin
                         // Channel idle: start immediately
                         play_sfx_index[chx] <= idx_f;
@@ -664,6 +667,7 @@ always @(posedge mclk) begin
                 end
             end else begin
                 // Start music from pattern n
+                user_sfx_mask      <= 4'b0000;  // music regains all channels on fresh start
                 music_mask         <= msk;
                 music_fade_len     <= reg_music_fade;
                 music_fade_ctr_in  <= reg_music_fade;
@@ -706,8 +710,8 @@ always @(posedge mclk) begin
                 fb_idx <= 0;
                 seq_played_mask <= 4'b0000;
                 for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
-                    if (frame_bytes[ch][6]) begin
-                        // Channel disabled in pattern (bit 6 set): no retrigger
+                    if (frame_bytes[ch][6] || user_sfx_mask[ch]) begin
+                        // Channel disabled in pattern (bit 6) or user-claimed: no retrigger
                     end else begin
                         play_sfx_index[ch] <= frame_bytes[ch][5:0];
                         play_sfx_off[ch]   <= 6'd0;
