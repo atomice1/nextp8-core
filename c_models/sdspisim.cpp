@@ -80,6 +80,7 @@ SDSPISIM::SDSPISIM(const bool debug) {
 	m_reading_data = false;
 	m_have_token = false;
 	m_multiblock_write = false;
+	m_altcmd_flag = false;
 	m_debug = debug;
 	m_crc_on = false;
 }

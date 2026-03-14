@@ -7,7 +7,7 @@ XELAB = xelab
 XSIM = xsim
 
 # Source files
-SRCS = ../sources_1/p8sfx_core_mux.sv ./tb_waveform_gen.v
+SRCS = ../sources_1/fp_ops.sv ../sources_1/p8sfx_core_mux.sv ./tb_waveform_gen.v
 
 # Simulation snapshot name
 SNAPSHOT = tb_waveform_gen_snap

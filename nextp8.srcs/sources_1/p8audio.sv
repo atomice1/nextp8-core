@@ -20,7 +20,9 @@
 `timescale 1ns/1ps
 `default_nettype wire
 
-module p8audio (
+module p8audio #(
+    parameter PCM_WID = 12                  // PCM output bit width
+) (
     // Clock and reset
     input  wire        mclk,        // mclk: 33MHz system clock
     input  wire        clk_pcm,     // clk_pcm: 22.05kHz PCM sample clock
@@ -39,7 +41,7 @@ module p8audio (
     input wire           read_en,   // mclk: Read enable
 
     // PCM mono out - clk_pcm domain
-    output reg signed [7:0] pcm_out,   // clk_pcm: PCM audio output sample (mixed, zero when inactive)
+    output reg signed [PCM_WID-1:0] pcm_out,   // clk_pcm: PCM audio output sample (mixed, zero when inactive)
 
     // Shared DMA master to Base RAM - mclk domain
     output wire [30:0]  dma_addr,    // mclk: DMA address (word address, 16-bit words)
@@ -173,9 +175,10 @@ dma_arbiter #(
 //==============================================================
 // Voices - Clock Domain: mixed (see comments)
 //==============================================================
-wire signed [7:0]  voice_pcm [0:3];             // clk_pcm: S8F7 PCM output per voice (zero when inactive)
+wire signed [PCM_WID-1:0]  voice_pcm [0:3];    // clk_pcm: PCM output per voice (zero when inactive)
 wire [3:0]         voice_busy_pcm;               // clk_pcm_8x: Voice active status
 wire [3:0]         voice_done_pcm;               // clk_pcm_8x: Context done pulse
+wire [3:0]         voice_pass_done_pcm;          // clk_pcm_8x: 32 notes played (level)
 wire [3:0]         voice_looping_pcm;            // clk_pcm_8x: Context looping status
 wire [5:0]         v_stat_sfx_index_pcm [0:3];   // clk_pcm_8x: Current SFX index
 wire [5:0]         v_stat_note_index_pcm[0:3];   // clk_pcm_8x: Current note index
@@ -188,6 +191,10 @@ wire [3:0] voice_busy = voice_busy_sys_q;    // mclk: Synchronized voice busy st
 (* ASYNC_REG = "TRUE" *) reg [3:0] voice_done_sys_d;                  // mclk: CDC stage 1
 (* ASYNC_REG = "TRUE" *) reg [3:0] voice_done_sys_q;                  // mclk: CDC stage 2 (stable)
 wire [3:0] voice_done = voice_done_sys_q;    // mclk: Synchronized voice done pulses
+
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_pass_done_sys_d;             // mclk: CDC stage 1
+(* ASYNC_REG = "TRUE" *) reg [3:0] voice_pass_done_sys_q;             // mclk: CDC stage 2 (stable)
+wire [3:0] voice_pass_done = voice_pass_done_sys_q;
 
 (* ASYNC_REG = "TRUE" *) reg [3:0] voice_looping_sys_d;               // mclk: CDC stage 1
 (* ASYNC_REG = "TRUE" *) reg [3:0] voice_looping_sys_q;               // mclk: CDC stage 2 (stable)
@@ -207,6 +214,8 @@ always @(posedge mclk) begin
         voice_busy_sys_q <= 4'b0000;
         voice_done_sys_d <= 4'b0000;
         voice_done_sys_q <= 4'b0000;
+        voice_pass_done_sys_d <= 4'b0000;
+        voice_pass_done_sys_q <= 4'b0000;
         voice_looping_sys_d <= 4'b0000;
         voice_looping_sys_q <= 4'b0000;
         for (k=0; k<NUM_VOICES; k=k+1) begin
@@ -220,6 +229,8 @@ always @(posedge mclk) begin
         voice_busy_sys_q <= voice_busy_sys_d;
         voice_done_sys_d <= voice_done_pcm;
         voice_done_sys_q <= voice_done_sys_d;
+        voice_pass_done_sys_d <= voice_pass_done_pcm;
+        voice_pass_done_sys_q <= voice_pass_done_sys_d;
         voice_looping_sys_d <= voice_looping_pcm;
         voice_looping_sys_q <= voice_looping_sys_d;
         for (k=0; k<NUM_VOICES; k=k+1) begin
@@ -245,7 +256,7 @@ reg  [3:0]  user_sfx_mask;        // mclk: Channels claimed by user sfx(); music
 //==============================================================
 // Time-multiplexed SFX core instance (mclk + clk_pcm_8x domains)
 //==============================================================
-p8sfx_core_mux core_mux_inst (
+p8sfx_core_mux #(.PCM_WID(PCM_WID)) core_mux_inst (
     .clk_sys             (mclk),
     .clk_pcm_8x          (clk_pcm_8x),
     .resetn_sys          (resetn_sys),
@@ -260,6 +271,7 @@ p8sfx_core_mux core_mux_inst (
     .force_release       (force_release_sys),
     .voice_busy          (voice_busy_pcm),
     .sfx_done            (voice_done_pcm),
+    .sfx_pass_done       (voice_pass_done_pcm),
     .looping             (voice_looping_pcm),
     // DMA client
     .dma_addr            (core_mux_dma_addr),
@@ -368,40 +380,44 @@ wire music_fade_out_pcm = (music_fade_ctr_out_pcm != 16'd0);
 // Mix all 4 voices with saturation
 // Note: Voices output zero when inactive, so we can unconditionally add them
 
-// Mixer: S10F7 register for summing 4 S8F7 voices (range: -512 to +508)
-reg signed [9:0] sum;       // clk_pcm: S10F7 mixer sum (10 bits for arithmetic headroom)
+// Mixer: sum register with 2 extra bits of headroom for summing 4 voices
+reg signed [PCM_WID+1:0] sum;       // clk_pcm: mixer sum (PCM_WID+2 bits for arithmetic headroom)
 reg signed [31:0] num;      // clk_pcm: Signed numerator for fade calculation
 reg signed [31:0] numo;     // clk_pcm: Signed numerator for fade-out calculation
 reg signed [31:0] denom;    // clk_pcm: Signed denominator for fade calculation
+
+// Saturation limits for mixer output
+localparam signed [PCM_WID+1:0] MIX_SAT_MAX = (1 << (PCM_WID-1)) - 1;
+localparam signed [PCM_WID+1:0] MIX_SAT_MIN = -(1 << (PCM_WID-1));
 
 always @(posedge clk_pcm) begin
     if (!resetn_pcm || !reg_ctrl[0]) begin
         pcm_out<=0;
     end else begin
-        // Mix 4 voices: S8F7 + S8F7 + S8F7 + S8F7 = S10F7
-        sum = $signed({voice_pcm[0][7], voice_pcm[0][7], voice_pcm[0]})
-            + $signed({voice_pcm[1][7], voice_pcm[1][7], voice_pcm[1]})
-            + $signed({voice_pcm[2][7], voice_pcm[2][7], voice_pcm[2]})
-            + $signed({voice_pcm[3][7], voice_pcm[3][7], voice_pcm[3]});
+        // Mix 4 voices: sign-extend each by 2 bits for headroom
+        sum = $signed({{2{voice_pcm[0][PCM_WID-1]}}, voice_pcm[0]})
+            + $signed({{2{voice_pcm[1][PCM_WID-1]}}, voice_pcm[1]})
+            + $signed({{2{voice_pcm[2][PCM_WID-1]}}, voice_pcm[2]})
+            + $signed({{2{voice_pcm[3][PCM_WID-1]}}, voice_pcm[3]});
 
         // Apply fade effects
         denom = $signed({{16{1'b0}}, music_fade_len_pcm == 16'd0 ? 16'd1 : music_fade_len_pcm});
         if (music_fade_in_pcm) begin
             // Fade in: multiply by (len - ctr) / len
             num = $signed(denom - music_fade_ctr_in_pcm);
-            sum = ($signed({{22{sum[9]}}, sum}) * num) / denom;
+            sum = ($signed({{(30-PCM_WID){sum[PCM_WID+1]}}, sum}) * num) / denom;
         end
         if (music_fade_out_pcm) begin
             // Fade out: multiply by ctr / len
             numo = $signed({{16{1'b0}}, music_fade_ctr_out_pcm});
-            sum = ($signed({{22{sum[9]}}, sum}) * numo) / denom;
+            sum = ($signed({{(30-PCM_WID){sum[PCM_WID+1]}}, sum}) * numo) / denom;
         end
 
 
-        // Saturation to S8F7 output (range: -128 to +127)
-        if (sum > 10'sd127) sum = 10'sd127;
-        if (sum < -10'sd128) sum = -10'sd128;
-        pcm_out <= sum[7:0];
+        // Saturation to PCM_WID output
+        if (sum > MIX_SAT_MAX) sum = MIX_SAT_MAX;
+        if (sum < MIX_SAT_MIN) sum = MIX_SAT_MIN;
+        pcm_out <= sum[PCM_WID-1:0];
     end
 end
 
@@ -415,11 +431,13 @@ localparam [2:0] MUSIC_LOADED   = 3'd2;
 localparam [2:0] MUSIC_PLAYING  = 3'd3;
 localparam [2:0] MUSIC_ADVANCE  = 3'd4;
 localparam [2:0] MUSIC_STOPPING = 3'd5;
+localparam [2:0] MUSIC_SCAN_LOOP = 3'd6;
 
 reg [5:0] cur_frame;                      // mclk: Current music pattern frame index
 reg [2:0] music_state;                    // mclk: Music sequencer state
 reg [7:0] frame_bytes [0:3];              // mclk: Current frame data (4 bytes)
 reg [1:0] fb_idx;                         // mclk: Frame byte fetch index
+reg [5:0] scan_frame;                     // mclk: Pattern index for backward loop search
 
 reg [5:0] loop_start, loop_end;           // mclk: Loop start/end frame indices
 reg       loop_start_seen, loop_end_seen; // mclk: Track if loop markers encountered
@@ -514,6 +532,8 @@ reg [5:0] next_frame;
 // Sequencer variables
 integer ch;
 reg [1:0] leftmost_nonloop;
+reg [1:0] leftmost_triggered;
+reg       all_looping;
 
 //==============================================================
 // SFX queueing + MUSIC sequencer + Note tick counter (mclk domain)
@@ -532,7 +552,7 @@ always @(posedge mclk) begin
         music_state<=MUSIC_IDLE; music_mask<=4'b0000; cur_frame<=0;
         music_fade_ctr_in<=0; music_fade_ctr_out<=0; music_fade_len<=0;
         // Sequencer resets
-        seq_dma_req<=0; fb_idx<=0;
+        seq_dma_req<=0; fb_idx<=0; scan_frame<=0;
         frame_toggle_sys_d <= 1'b0; frame_toggle_sys_q <= 1'b0;
         seq_played_mask <= 4'b0000;
         user_sfx_mask  <= 4'b0000;
@@ -722,8 +742,18 @@ always @(posedge mclk) begin
                 end
                 if (frame_bytes[0][7]) begin loop_start<=cur_frame; loop_start_seen<=1'b1; end
                 if (frame_bytes[1][7]) begin loop_end<=cur_frame;   loop_end_seen<=1'b1; end
-                if (frame_bytes[3][7]) begin stop_on_loop<=1'b1; end
-                music_state <= MUSIC_PLAYING;
+                if (frame_bytes[2][7]) begin stop_on_loop<=1'b1; end
+                stat_music_tick_count <= 0;  // reset per-pattern tick counter (matches PICO-8 stat(56) behavior)
+                // If end_loop seen but no begin_loop found yet, scan backward to find it
+                if (frame_bytes[1][7] && !loop_start_seen && !frame_bytes[0][7] && cur_frame != 0) begin
+                    scan_frame <= cur_frame - 1;
+                    seq_dma_addr_temp = (reg_music_base + ({26'd0, cur_frame - 6'd1} << 2)) >> 1;
+                    seq_dma_addr <= seq_dma_addr_temp[30:0];
+                    seq_dma_req  <= 1'b1;
+                    music_state <= MUSIC_SCAN_LOOP;
+                end else begin
+                    music_state <= MUSIC_PLAYING;
+                end
             end
             MUSIC_PLAYING: begin
                 // Dynamically find leftmost non-looping channel among triggered channels
@@ -738,12 +768,63 @@ always @(posedge mclk) begin
                     leftmost_nonloop = 2'd3;
                 end
 
-                // Advance immediately if nothing triggered, otherwise wait for a non-looping voice to complete
-                if (seq_played_mask == 4'b0000 || voice_done[leftmost_nonloop]) begin
+                // Check if all triggered channels have looping SFXes
+                all_looping = (seq_played_mask != 4'b0000) &&
+                              ((seq_played_mask & ~voice_looping_sys_q) == 4'b0000);
+
+                // Find leftmost triggered channel (for all-looping case)
+                leftmost_triggered = 2'd0;
+                if      (seq_played_mask[0]) leftmost_triggered = 2'd0;
+                else if (seq_played_mask[1]) leftmost_triggered = 2'd1;
+                else if (seq_played_mask[2]) leftmost_triggered = 2'd2;
+                else if (seq_played_mask[3]) leftmost_triggered = 2'd3;
+
+                // Advance when pattern is complete:
+                // - No channels triggered: advance immediately
+                // - All triggered channels looping: advance when leftmost has played 32 notes
+                // - Otherwise: advance when leftmost non-looping channel finishes
+                if (seq_played_mask == 4'b0000 ||
+                    (all_looping && voice_pass_done[leftmost_triggered]) ||
+                    (!all_looping && voice_done[leftmost_nonloop])) begin
                     music_state <= MUSIC_ADVANCE;
+                end else begin
+                    // Note tick counter: only advance while playing and not transitioning to ADVANCE
+                    if (note_tick_toggle_sys_q != note_tick_toggle_sys_d) begin
+                        stat_music_tick_count <= stat_music_tick_count + 1;
+                    end
+                end
+            end
+            MUSIC_SCAN_LOOP: begin
+                // Backward DMA scan to find begin_loop marker
+                if (seq_dma_ack) begin
+                    if (dma_rdata[15]) begin
+                        // Found begin_loop: byte 0 bit 7 set
+                        loop_start <= scan_frame;
+                        loop_start_seen <= 1'b1;
+                        music_state <= MUSIC_PLAYING;
+                    end else if (scan_frame == 0) begin
+                        // Reached pattern 0 without finding begin_loop
+                        music_state <= MUSIC_PLAYING;
+                    end else begin
+                        // Continue scanning backward
+                        scan_frame <= scan_frame - 1;
+                        seq_dma_addr_temp = (reg_music_base + ({26'd0, scan_frame - 6'd1} << 2)) >> 1;
+                        seq_dma_addr <= seq_dma_addr_temp[30:0];
+                        seq_dma_req  <= 1'b1;
+                    end
                 end
             end
             MUSIC_ADVANCE: begin
+                // Force-stop all channels from the current pattern so they reach
+                // PCM_IDLE before the next pattern's SFX loads arrive.
+                // This prevents timing skew (busy channels lagging idle ones)
+                // and ensures channels disabled in the next pattern don't keep playing.
+                for (ch=0; ch<NUM_VOICES; ch=ch+1) begin
+                    if (seq_played_mask[ch]) begin
+                        force_stop_sys[ch] <= 1'b1;
+                    end
+                end
+
                 // MUSIC sequencer pattern advancement
                 if (loop_def && cur_frame==loop_end && stop_on_loop) begin
                     music_state<=MUSIC_STOPPING;
@@ -776,12 +857,9 @@ always @(posedge mclk) begin
             end
         endcase
 
-        // Note tick counter - detect edge from clk_pcm domain
+        // Note tick CDC synchronizer from clk_pcm to mclk
         note_tick_toggle_sys_d <= note_tick_toggle_pcm;
         note_tick_toggle_sys_q <= note_tick_toggle_sys_d;
-        if (note_tick_toggle_sys_q != note_tick_toggle_sys_d) begin
-            stat_music_tick_count <= stat_music_tick_count + 1;
-        end
 
         // Music stop request - detect edge from clk_pcm domain
         music_stop_toggle_sys_d <= music_stop_toggle_pcm;
@@ -810,9 +888,9 @@ always @(*) begin                       // mclk: Combinational read mux
         ADDR_STAT52[7:1]: dout = voice_busy[2] ? {10'd0, v_stat_note_index[2]} : 16'hFFFF;
         ADDR_STAT53[7:1]: dout = voice_busy[3] ? {10'd0, v_stat_note_index[3]} : 16'hFFFF;
         // stat(54..56): music pattern id / count / tick count
-        ADDR_STAT54[7:1]: dout = stat_music_pattern;
-        ADDR_STAT55[7:1]: dout = stat_music_pattern_count;
-        ADDR_STAT56[7:1]: dout = stat_music_tick_count;
+        ADDR_STAT54[7:1]: dout = stat_music_playing ? {10'd0, stat_music_pattern} : 16'hFFFF;
+        ADDR_STAT55[7:1]: dout = stat_music_playing ? stat_music_pattern_count : 16'hFFFF ;
+        ADDR_STAT56[7:1]: dout = stat_music_playing ? stat_music_tick_count : 16'hFFFF;
         ADDR_STAT57[7:1]: dout = {15'd0, stat_music_playing};
         default: dout = 16'h0000;
     endcase

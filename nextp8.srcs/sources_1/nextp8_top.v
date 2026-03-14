@@ -402,7 +402,8 @@ assign audioext_r_o = audioR;
 
 
 // P8 audio output (from p8audio module below)
-wire signed [7:0] p8audio_pcm_out;
+localparam P8_PCM_WID = 12;
+wire signed [P8_PCM_WID-1:0] p8audio_pcm_out;
 
 // Reset synchronizer for clk65 domain (for DAC and HDMI mixing)
 (* ASYNC_REG = "TRUE" *) reg reset65_d, reset65_q;  // clk65 domain
@@ -529,7 +530,7 @@ assign p8audio_write_en = p8audio_mem && cpu_wr && memio_go;
 assign p8audio_read_en  = p8audio_mem && cpu_rd && memio_go;
 
 // P8 Audio module instantiation
-p8audio p8audio_inst (
+p8audio #(.PCM_WID(P8_PCM_WID)) p8audio_inst (
     // Clock and reset
     .mclk       (mclk),
     .clk_pcm    (clk_pcm),          // 22.05 kHz sample clock (proper clock)
@@ -1450,7 +1451,7 @@ spi qlsdspi(
 // da_start_sys_d and da_start_sys_q already declared above near audio section
 
 // P8 audio PCM synchronizer (clk_pcm -> clk_sys)
-(* ASYNC_REG = "TRUE" *) reg signed [7:0] p8audio_pcm_out_sys_d, p8audio_pcm_out_sys_q;
+(* ASYNC_REG = "TRUE" *) reg signed [P8_PCM_WID-1:0] p8audio_pcm_out_sys_d, p8audio_pcm_out_sys_q;
 
 // Synchronization logic in clk_sys domain
 always @(posedge clk_sys) begin
@@ -1502,8 +1503,8 @@ always @(posedge clk_sys) begin
         ql_sd_cs1_n_o_q <= 1'b1;
 
         // P8 audio PCM
-        p8audio_pcm_out_sys_d <= 8'd0;
-        p8audio_pcm_out_sys_q <= 8'd0;
+        p8audio_pcm_out_sys_d <= {P8_PCM_WID{1'b0}};
+        p8audio_pcm_out_sys_q <= {P8_PCM_WID{1'b0}};
     end else begin
         // ESP UART
         esp_din_d <= esp_din;
@@ -1838,7 +1839,7 @@ wire [15:0] pcm_audio_L,pcm_audio_R;  // clk65 domain
 (* ASYNC_REG = "TRUE" *) reg video_vs_d, video_vs_q;  // clk65 domain
 
 // P8 audio PCM synchronizer (clk_pcm -> clk65)
-(* ASYNC_REG = "TRUE" *) reg signed [7:0] p8audio_pcm_out_65_d, p8audio_pcm_out_65_q;  // clk65 domain
+(* ASYNC_REG = "TRUE" *) reg signed [P8_PCM_WID-1:0] p8audio_pcm_out_65_d, p8audio_pcm_out_65_q;  // clk65 domain
 
 always @(posedge clk65) begin
     // Video signals (clk_video -> clk65)
@@ -1872,9 +1873,9 @@ assign rgb_b_o = video_b_q[7:4];
 // Mix digital audio (da_playing) with P8 audio (p8audio_pcm_out)
 // P8 audio is mono, send to both channels
 assign pcm_audio_L = (da_playing ? (da_mono_65_q ? da_data : {da_data[7:0], 8'd0}) : 16'd0) +
-                     {p8audio_pcm_out_65_q, 8'd0};
+                     {p8audio_pcm_out_65_q, {(16-P8_PCM_WID){1'b0}}};
 assign pcm_audio_R = (da_playing ? (da_mono_65_q ? da_data : {da_data[15:8], 8'd0}) : 16'd0) +
-                     {p8audio_pcm_out_65_q, 8'd0};
+                     {p8audio_pcm_out_65_q, {(16-P8_PCM_WID){1'b0}}};
 
 hdmi_out_xilinx hdmiqout (
     .clock_pixel_i     (clk65),

@@ -66,7 +66,7 @@ module tb_p8audio_sfx;
     //====================
     // PCM output
     //====================
-    wire signed [7:0] pcm_out;
+    wire signed [11:0] pcm_out;
 
     //====================
     // DMA interface
@@ -116,7 +116,7 @@ module tb_p8audio_sfx;
     //====================
     // DUT: p8audio
     //====================
-    p8audio dut (
+    p8audio #(.PCM_WID(12)) dut (
         .mclk(clk_sys), .clk_pcm(clk_pcm), .clk_pcm_8x(clk_pcm_8x),
         .resetn_sys(resetn_sys_q), .resetn_pcm(resetn_pcm_q), .resetn_pcm_8x(resetn_pcm_8x_q),
         .address(address), .din(din), .dout(dout), .nUDS(nUDS), .nLDS(nLDS), .write_en(write_en), .read_en(read_en),
@@ -451,8 +451,8 @@ module tb_p8audio_sfx;
             count=0;
             // Capture at the PCM clock
             while (count < n_samples) begin
-                // Write little-endian PCM samples as bytes
-                $fwrite(wav, "%c%c", 8'd0, pcm_out[7:0]);
+                // Write little-endian 16-bit PCM: sign-extend 12-bit sample by left-shifting 4
+                $fwrite(wav, "%c%c", {pcm_out[3:0], 4'b0}, pcm_out[11:4]);
                 @(posedge clk_pcm);
                 count = count + 1;
             end

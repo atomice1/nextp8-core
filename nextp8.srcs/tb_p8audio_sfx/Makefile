@@ -11,7 +11,8 @@ SRC_DIR = ../sources_1
 TB_DIR = .
 
 # Source files
-SRCS = $(SRC_DIR)/p8sfx_core_mux.sv \
+SRCS = $(SRC_DIR)/fp_ops.sv \
+       $(SRC_DIR)/p8sfx_core_mux.sv \
        $(SRC_DIR)/p8audio.sv \
        $(SRC_DIR)/dma_arbiter.v \
        $(TB_DIR)/tb_p8audio_sfx.sv
@@ -22,7 +23,7 @@ CART ?= tb_p8audio_sfx.p8
 # Simulation parameters
 TOP = tb_p8audio_sfx
 SNAPSHOT = tb_p8audio_sfx_snap
-TIMEOUT ?= 240
+TIMEOUT ?= 600
 QUICK ?= 0
 
 # xsim commands

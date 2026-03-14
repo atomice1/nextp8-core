@@ -6,7 +6,7 @@
 // Clock: clk_pcm_8x (176.4 kHz) for 8-way time division multiplexing
 //        clk_sys (nominally 33 MHz) for DMA and control
 //
-// Copyright (C) 2025 Chris January
+// Copyright (C) 2025-2026 Chris January
 //
 // This source file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published
@@ -25,7 +25,9 @@
 `timescale 1ns/1ps
 `default_nettype wire
 
-module p8sfx_core_mux (
+module p8sfx_core_mux #(
+    parameter PCM_WID = 12                    // Final PCM output width (S<PCM_WID>F<PCM_WID-1>)
+) (
     // Clocks & Reset
     input         clk_sys,                    // System clock for DMA (33 MHz)
     input         clk_pcm_8x,                 // 8x PCM sample clock (176.4 kHz)
@@ -47,6 +49,7 @@ module p8sfx_core_mux (
     // Status outputs per MAIN context (clk_pcm_8x domain)
     output wire [3:0] voice_busy,             // clk_pcm_8x: High while each MAIN context is playing
     output reg [3:0]  sfx_done,               // clk_pcm_8x: 1-cycle pulse when SFX completes
+    output reg [3:0]  sfx_pass_done,          // clk_pcm_8x: 1-cycle pulse when 32 notes have been played
     output reg [3:0]  looping,                // clk_pcm_8x: Loop status per MAIN context
 
     // DMA client (clk_sys domain) - shared across all contexts
@@ -56,7 +59,7 @@ module p8sfx_core_mux (
     input             dma_ack,                // clk_sys: DMA acknowledge
 
     // PCM output (clk_pcm_8x domain) - 4 MAIN contexts (contexts 1,3,5,7)
-    output reg signed [7:0] pcm_out [0:3],    // clk_pcm_8x: S8F7 PCM output per MAIN context
+    output reg signed [PCM_WID-1:0] pcm_out [0:3],    // clk_pcm_8x: PCM output per MAIN context
 
     // Status exports per MAIN context (clk_pcm_8x domain)
     output reg [5:0] stat_sfx_index [0:3],    // clk_pcm_8x: Current SFX index per MAIN context
@@ -65,6 +68,227 @@ module p8sfx_core_mux (
     // Hardware FX bytes (clk_sys domain inputs, CDC'd internally)
     input [7:0] hwfx_5f40, hwfx_5f41, hwfx_5f42, hwfx_5f43
 );
+
+
+//==============================================================
+// PCM Chain Bit-Width Constants
+//==============================================================
+// Waveform generation internal precision
+localparam WAVE_WID = 22;   // S22F18: total width for internal waveform math
+localparam WAVE_PRC = 18;   // S22F18: fractional bits
+
+// Phase accumulator width (wraps at 110 * 2^18)
+localparam PHASE_WID = WAVE_PRC+7; // U25F18: phase accumulator width
+localparam PHASE_PRC = WAVE_PRC;
+localparam [PHASE_WID-1:0] PHASE_ACC_MAX = 110 << PHASE_PRC;
+
+// Final PCM output width (derived from module parameter PCM_WID)
+localparam PCM_PRC  = PCM_WID - 1;  // Fractional bits
+
+// Sample width throughout the processing chain (waveform_gen output through post-processing)
+localparam SAMP_WID = PCM_WID;  // total width
+localparam SAMP_PRC = PCM_PRC;  // fractional bits
+
+// Effective volume width (cur_vol << VOL_PRC)
+localparam VOL_WID = 8;    // U8F5: total width for eff_vol
+localparam VOL_PRC = 5;    // U8F5: fractional bits (shift from 3-bit cur_vol)
+// Volume divisor: max eff_vol = ((2^(VOL_WID-VOL_PRC))-1) << VOL_PRC
+localparam signed [VOL_WID:0] VOL_DIVISOR = ((1 << (VOL_WID - VOL_PRC)) - 1) << VOL_PRC;
+
+// Phase increment (eff_inc, base_inc, detune_inc)
+localparam INC_WID  = WAVE_PRC;  // U18F18: phase increment total width
+localparam INC_PRC  = WAVE_PRC;  // Phase increment precision (= waveform phase precision)
+
+// Phase multiplier (phase_mult, for custom instrument pitch scaling)
+localparam PMUL_WID = 18;        // U18F12: phase multiplier total width
+localparam PMUL_PRC = 12;        // U18F12: phase multiplier fractional bits
+
+// Vibrato working precision (vib_temp, vibrato_alpha in calculate_eff_inc)
+localparam VIB_WID  = 12;        // S12F11: vibrato temp/alpha total width
+localparam VIB_PRC  = 11;        // S12F11: vibrato fractional bits
+
+// Note offset interpolation (note_offset, note_offset_lut)
+localparam NOFF_WID     = 24;    // U24F24: note offset total width
+localparam NOFF_PRC     = NOFF_WID; // U24F24: note offset fractional bits
+localparam NOFF_LUT_WID = NOFF_WID - 7;  // LUT stores top bits, zero-padded on load
+
+// Pitch LUT entry width (pitch_phase_inc)
+localparam PITCH_WID = 15;       // U15F(INC_PRC): pitch table entry width
+
+// LFSR register width (noise generation)
+localparam LFSR_WID  = 16;       // U16: Galois LFSR width
+
+// Brown noise state
+localparam BROWN_WID = INC_WID + 1;  // S19F18: brown noise total width
+localparam BROWN_PRC = INC_PRC;       // Brown noise precision (= phase precision)
+
+// Dampen filter alpha
+localparam DAMP_WID  = 8;        // U8F8: damp alpha total width
+localparam DAMP_PRC  = 8;        // U8F8: damp alpha fractional bits
+
+// Saturation limits for PCM mixing (SAMP_WID+1 bits wide)
+localparam signed [SAMP_WID:0] SAMP_MAX = (1 << (SAMP_WID - 1)) - 1;
+localparam signed [SAMP_WID:0] SAMP_MIN = -(1 << (SAMP_WID - 1));
+
+// Bitcrush clipping threshold (high bitcrush mode)
+localparam signed [SAMP_WID-1:0] SAMP_BCR_CLIP = (1 << (SAMP_WID - 3)) - 1;
+
+//==============================================================
+// Fixed-Point Arithmetic Macros
+//==============================================================
+// Base macros matching fp_ops.sv logic (see fp_ops.sv for derivation).
+// Using macros instead of parameterized class static functions to work
+// around Verilator scheduling issues with class methods.
+//
+// Sign/zero extension uses width-cast idiom: $signed(N'($signed(x))) for
+// sign-extension, N'(x) for zero-extension.  This avoids bit-select inside
+// replication ({count{expr[bit]}}) which Verilator's parser rejects.
+//
+// Parameters: WX/PX = result width/precision, WY/PY = y width/precision,
+//             WZ/PZ = z width/precision, PS = post-shift
+// MUL_SHIFT = PY + PZ - PX - PS;  DIV_SHIFT = PY - PX - PS
+// All current specializations have MUL_SHIFT >= 0 and DIV_SHIFT >= 0.
+
+// SS: signed × signed → signed
+`define FP_MUL_SS(WX, PX, WY, PY, WZ, PZ, PS, y, z) \
+    $signed((WX)'(($signed(((WY)+(WZ))'($signed((WY)'(y)))) * $signed(((WY)+(WZ))'($signed((WZ)'(z))))) >>> ((PY)+(PZ)-(PX)-(PS))))
+
+// SS with bias: (signed × signed + bias) → signed (bias at product width)
+`define FP_MUL_SS_BIAS(WX, PX, WY, PY, WZ, PZ, PS, y, z, bias) \
+    $signed((WX)'(($signed(((WY)+(WZ))'($signed((WY)'(y)))) * $signed(((WY)+(WZ))'($signed((WZ)'(z)))) + (bias)) >>> ((PY)+(PZ)-(PX)-(PS))))
+
+// SU: signed × unsigned → signed
+`define FP_MUL_SU(WX, PX, WY, PY, WZ, PZ, PS, y, z) \
+    $signed((WX)'(($signed(((WY)+(WZ))'($signed((WY)'(y)))) * $signed(((WY)+(WZ))'((WZ)'(z)))) >>> ((PY)+(PZ)-(PX)-(PS))))
+
+// US: unsigned × signed → signed
+`define FP_MUL_US(WX, PX, WY, PY, WZ, PZ, PS, y, z) \
+    $signed((WX)'(($signed(((WY)+(WZ))'((WY)'(y))) * $signed(((WY)+(WZ))'($signed((WZ)'(z))))) >>> ((PY)+(PZ)-(PX)-(PS))))
+
+// UU: unsigned × unsigned → unsigned
+`define FP_MUL_UU(WX, PX, WY, PY, WZ, PZ, PS, y, z) \
+    (WX)'((((WY)+(WZ))'((WY)'(y)) * ((WY)+(WZ))'((WZ)'(z))) >> ((PY)+(PZ)-(PX)-(PS)))
+
+// SS division: signed / signed → signed
+`define FP_DIV_SS(WX, PX, WY, PY, WZ, PZ, PS, y, z) \
+    $signed((WX)'(($signed({(WY)'(y), {(PZ){1'b0}}}) / $signed(((WY)+(PZ))'($signed((WZ)'(z))))) >>> ((PY)-(PX)-(PS))))
+
+// UU division: unsigned / unsigned → unsigned
+`define FP_DIV_UU(WX, PX, WY, PY, WZ, PZ, PS, y, z) \
+    (WX)'(({(WY)'(y), {(PZ){1'b0}}} / ((WY)+(PZ))'((WZ)'(z))) >> ((PY)-(PX)-(PS)))
+
+// ---- Specialized macros (pre-fill fixed parameters from type specializations) ----
+
+// Slide interpolation: S(INC_WID+1)F(INC_PRC) * NOFF → INC
+`define fp_slide_mul_su(y, z) \
+    `FP_MUL_SU(INC_WID, INC_PRC,\
+               INC_WID+1, INC_PRC, \
+               NOFF_WID, NOFF_PRC, \
+               0, \
+               y, z)
+
+// Vibrato: INC * VIB / 16 → S(INC_PRC-3)F(INC_PRC-4)
+`define fp_vibrato_mul_us(y, z) \
+    `FP_MUL_US(INC_PRC-3, INC_PRC-4,\
+               INC_WID, INC_PRC, \
+               VIB_WID, VIB_PRC, \
+               0, \
+               y, z)
+
+// Drop effect: INC * NOFF → INC
+`define fp_drop_mul_uu(y, z) \
+    `FP_MUL_UU(INC_WID, INC_PRC, \
+               INC_WID, INC_PRC, \
+               NOFF_WID, NOFF_PRC, \
+               0, \
+               y, z)
+
+// Phase multiplier: INC / PITCH → PMUL
+`define fp_phase_mult_div_uu(y, z) \
+    `FP_DIV_UU(PMUL_WID, PMUL_PRC, \
+               INC_WID, INC_PRC, \
+               PITCH_WID, INC_PRC, \
+               0, \
+               y, z)
+
+// Custom instrument phase: INC * PMUL → INC
+`define fp_custom_phase_mul_uu(y, z) \
+   `FP_MUL_UU(INC_WID, INC_PRC, \
+              INC_WID, INC_PRC, \
+              PMUL_WID, PMUL_PRC, \
+              0, \
+              y, z)
+
+// Volume envelope: U3F0 * NOFF → VOL_WID
+`define fp_vol_env_mul_uu(y, z) \
+    `FP_MUL_UU(VOL_WID, VOL_PRC, \
+               VOL_WID-VOL_PRC, 0, \
+               NOFF_WID, NOFF_PRC, \
+               0, \
+               y, z)
+
+// Waveform generation: WAVE * WAVE → WAVE
+`define fp_wave_mul_ss(y, z) \
+    `FP_MUL_SS(WAVE_WID, WAVE_PRC, \
+               WAVE_WID, WAVE_PRC, \
+               WAVE_WID, WAVE_PRC, \
+               0, \
+               y, z)
+`define fp_wave_div_ss(y, z) \
+    `FP_DIV_SS(WAVE_WID, WAVE_PRC, \
+               WAVE_WID, WAVE_PRC, \
+               WAVE_WID, WAVE_PRC, \
+               0, \
+               y, z)
+
+// Phase adjustment: PHASE * PHASE -→ PHASE
+`define fp_phase_mul_uu(y, z) \
+    `FP_MUL_UU(PHASE_WID, PHASE_PRC, \
+               PHASE_WID, PHASE_PRC, \
+               PHASE_WID, PHASE_PRC, \
+               0, \
+               y, z)
+
+// Waveform with 2x factor (organ buzz): POST_SHIFT=1
+`define fp_wave_x2_mul_ss_bias(y, z, bias) \
+    `FP_MUL_SS_BIAS(WAVE_WID, WAVE_PRC, \
+                    WAVE_WID, WAVE_PRC, \
+                    WAVE_WID, WAVE_PRC, \
+                    1, \
+                    y, z, bias)
+
+// Brown noise decay: BROWN * INC → BROWN (8x via POST_SHIFT=3)
+`define fp_brown_mul_su(y, z) \
+    `FP_MUL_SU(BROWN_WID, BROWN_PRC, \
+               BROWN_WID, BROWN_PRC, \
+               INC_WID, INC_PRC, \
+               3, \
+               y, z)
+
+// Brown noise output: BROWN * BROWN → SAMP
+// PX = SAMP_WID+7: the +7 compensates for the ÷128 folded into the second operand
+`define fp_brown_out_mul_ss(y, z) \
+    `FP_MUL_SS(SAMP_WID, SAMP_WID + 7, \
+               BROWN_WID, BROWN_PRC, \
+               BROWN_WID, BROWN_PRC, \
+               0, \
+               y, z)
+
+// Dampen filter: (SAMP+1) * DAMP → (SAMP+1)
+`define fp_damp_mul_su(y, z) \
+    `FP_MUL_SU(SAMP_WID+1, SAMP_PRC, \
+               SAMP_WID+1, SAMP_PRC, \
+               DAMP_WID, DAMP_PRC, \
+               0, \
+               y, z)
+
+// Attack/release envelope: SAMP * U5F4 → SAMP
+`define fp_ramp_mul_su(y, z) \
+    `FP_MUL_SU(SAMP_WID, SAMP_PRC, \
+               SAMP_WID, SAMP_PRC, \
+               5, 4, \
+               0, \
+               y, z)
 
 //==============================================================
 // Constants
@@ -83,10 +307,10 @@ localparam [9:0] REVERB_TAPS_LONG   = 10'd732;   // ~33.2ms @ 22.05KHz
 // localparam integer DAMP_FREQ_STRONG  = 700;
 
 // Pre-calculated dampen filter alpha constants (U8F8 format)
-// alpha = (2*pi*freq) / sample_rate, scaled to U8F8
-localparam [7:0] DAMP_ALPHA_LOW    = 8'd175;  // U8F8: 0.684
-localparam [7:0] DAMP_ALPHA_HIGH   = 8'd73;   // U8F8: 0.285
-localparam [7:0] DAMP_ALPHA_STRONG = 8'd51;   // U8F8: 0.199
+// alpha = (2*pi*freq) / sample_rate, scaled to DAMP format
+localparam [DAMP_WID-1:0] DAMP_ALPHA_LOW    = DAMP_WID'($rtoi(2*3.14159265358979*2400/22050 * (2.0 ** DAMP_PRC)));
+localparam [DAMP_WID-1:0] DAMP_ALPHA_HIGH   = DAMP_WID'($rtoi(2*3.14159265358979*1000/22050 * (2.0 ** DAMP_PRC)));
+localparam [DAMP_WID-1:0] DAMP_ALPHA_STRONG = DAMP_WID'($rtoi(2*3.14159265358979*700/22050 * (2.0 ** DAMP_PRC)));
 
 // Custom instrument pitch reference
 localparam [6:0] PITCH_REF_C2        = 7'd24;
@@ -174,23 +398,23 @@ wire [1:0] voice_idx = ctx_idx[2:1];  // Voice number (0-3) derived from context
 // Each entry contains 2 bytes: [15:8] = note_byte1, [7:0] = note_byte0
 
 // Per-context reverb delay lines
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_0 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_1 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_2 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_3 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_4 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_5 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_6 [0:REVERB_TAPS_SHORT-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_2_8x_7 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_0 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_1 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_2 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_3 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_4 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_5 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_6 [0:REVERB_TAPS_SHORT-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_2_8x_7 [0:REVERB_TAPS_SHORT-1];
 
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_0 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_1 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_2 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_3 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_4 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_5 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_6 [0:REVERB_TAPS_LONG-1];
-(* ram_style = "block" *) reg signed [7:0] reverb_4_8x_7 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_0 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_1 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_2 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_3 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_4 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_5 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_6 [0:REVERB_TAPS_LONG-1];
+(* ram_style = "block" *) reg signed [SAMP_WID-1:0] reverb_4_8x_7 [0:REVERB_TAPS_LONG-1];
 
 //==============================================================
 // Per-Context State Storage (8x replicated arrays)
@@ -215,7 +439,7 @@ reg [1:0] filt_reverb_8x [0:7]; // 0-2
 reg [1:0] filt_dampen_8x [0:7]; // 0-2
 
 // Internal PCM output storage for CUSTOM contexts
-reg signed [7:0] custom_pcm_out [0:3];  // S8F7 PCM output per CUSTOM context (contexts 0,2,4,6)
+reg signed [PCM_WID-1:0] custom_pcm_out [0:3];  // PCM output per CUSTOM context (contexts 0,2,4,6)
 
 //==============================================================
 // Explicit State Machine Registers
@@ -224,7 +448,6 @@ reg signed [7:0] custom_pcm_out [0:3];  // S8F7 PCM output per CUSTOM context (c
 localparam [1:0] PCM_IDLE     = 2'd0;  // Inactive, no SFX loaded
 localparam [1:0] PCM_WARM_UP  = 2'd1;  // Warming up - decode first note
 localparam [1:0] PCM_PLAYING  = 2'd2;  // Active playback
-localparam [1:0] PCM_STOPPING = 2'd3;  // Stopping
 
 reg [1:0] pcm_state [0:7];  // Per-context state in clk_pcm_8x domain
 
@@ -247,7 +470,7 @@ reg [5:0] prev_pitch_8x [0:7];  // 0-63
 reg [2:0] prev_vol_8x [0:7];    // 0-7
 
 // Note envelope
-reg [23:0] note_offset_8x [0:7];  // U24F24
+reg [NOFF_WID-1:0] note_offset_8x [0:7];
 reg [4:0] attack_ctr_8x [0:7];    // 0-16
 reg [4:0] release_ctr_8x [0:7];   // 0-16
 reg       releasing_8x [0:7];
@@ -264,23 +487,23 @@ reg [15:0] sfx_data_8x [0:7];        // 16-bit word read from RAM
 reg        sfx_byte_sel_8x [0:7];    // Byte select bit for waveform mode
 
 // DSP state
-reg [10:0] eff_vib_phase_8x [0:7];   // U11F11
-reg [21:0] phase_acc_8x [0:7];       // U22F18
-reg [21:0] detune_acc_8x [0:7];      // U22F18
-reg [17:0] eff_inc_8x [0:7];         // U18F18
-reg [7:0]  eff_vol_8x [0:7];         // U8F8
-reg [17:0] phase_mult_8x [0:7];      // U18F12 0.25-60.40795601
-reg [17:0] detune_inc_8x [0:7];      // U18F18
+reg [VIB_PRC-1:0] eff_vib_phase_8x [0:7];
+reg [PHASE_WID-1:0] phase_acc_8x [0:7];
+reg [WAVE_WID-1:0] detune_acc_8x [0:7];
+reg [INC_WID-1:0] eff_inc_8x [0:7];
+reg [VOL_WID-1:0] eff_vol_8x [0:7];
+reg [PMUL_WID-1:0] phase_mult_8x [0:7];  // 0.25-60.40795601
+reg [INC_WID-1:0] detune_inc_8x [0:7];
 
 // Noise generators
-reg [15:0]        lfsr_8x [0:7];         // U16F16
-reg signed [18:0] brown_state_8x [0:7];  // S19F18
+reg [LFSR_WID-1:0]        lfsr_8x [0:7];
+reg signed [BROWN_WID-1:0] brown_state_8x [0:7];
 reg [5:0]         lfsr_repeat_counter_8x [0:7];  // 0-63 sample-and-hold counter
-reg signed [7:0]  lfsr_sample_8x [0:7];  // S8F7 held LFSR sample
+reg signed [SAMP_WID-1:0]  lfsr_sample_8x [0:7];  // held LFSR sample
 
 // Filter state
-reg signed [7:0] damp_state_8x [0:7];  // S8F7
-reg [7:0]        damp_alpha_8x [0:7];  // U8F8
+reg signed [SAMP_WID-1:0] damp_state_8x [0:7];
+reg [DAMP_WID-1:0] damp_alpha_8x [0:7];
 
 // Reverb indices (per-context)
 reg [8:0] rev_idx2_8x [0:7];        // 0-(REVERB_TAPS_SHORT-1) - current write position
@@ -289,11 +512,11 @@ reg [8:0] rev_idx2_valid_8x [0:7];  // 0-(REVERB_TAPS_SHORT-1) - number of valid
 reg [9:0] rev_idx4_valid_8x [0:7];  // 0-(REVERB_TAPS_LONG-1) - number of valid delay line samples
 
 // Reverb read data registers
-reg signed [7:0] reverb_2_rdata_8x [0:7];  // Read data from reverb_2
-reg signed [7:0] reverb_4_rdata_8x [0:7];  // Read data from reverb_4
+reg signed [SAMP_WID-1:0] reverb_2_rdata_8x [0:7];  // Read data from reverb_2
+reg signed [SAMP_WID-1:0] reverb_4_rdata_8x [0:7];  // Read data from reverb_4
 
 // Pre-reverb sample (saved before reverb is mixed, for writing to delay line)
-reg [7:0] pre_reverb_sample;  // S8F7 sample before reverb mixing
+reg [SAMP_WID-1:0] pre_reverb_sample;
 
 // HWFX bytes (CDC'd from clk_sys)
 reg [7:0] hwfx_5f40_sys;
@@ -359,7 +582,7 @@ wire [5:0] prev_pitch = prev_pitch_8x[ctx_idx];
 wire [2:0] prev_vol = prev_vol_8x[ctx_idx];
 
 // Note envelope
-wire [23:0] note_offset = note_offset_8x[ctx_idx];
+wire [NOFF_WID-1:0] note_offset = note_offset_8x[ctx_idx];
 wire [4:0] attack_ctr = attack_ctr_8x[ctx_idx];
 wire [4:0] release_ctr = release_ctr_8x[ctx_idx];
 wire       releasing = releasing_8x[ctx_idx];
@@ -375,23 +598,23 @@ wire [15:0] sfx_data = sfx_data_8x[ctx_idx];
 wire        sfx_byte_sel = sfx_byte_sel_8x[ctx_idx];
 
 // DSP state
-wire [10:0]  eff_vib_phase = eff_vib_phase_8x[ctx_idx];
-wire [21:0] phase_acc = phase_acc_8x[ctx_idx];
-wire [21:0] detune_acc = detune_acc_8x[ctx_idx];
-wire [17:0] eff_inc = eff_inc_8x[ctx_idx];
-wire [7:0]  eff_vol = eff_vol_8x[ctx_idx];
-wire [15:0] phase_mult = phase_mult_8x[ctx_idx];
-wire [17:0] detune_inc = detune_inc_8x[ctx_idx];
+wire [VIB_PRC-1:0] eff_vib_phase = eff_vib_phase_8x[ctx_idx];
+wire [PHASE_WID-1:0] phase_acc = phase_acc_8x[ctx_idx];
+wire [WAVE_WID-1:0] detune_acc = detune_acc_8x[ctx_idx];
+wire [INC_WID-1:0] eff_inc = eff_inc_8x[ctx_idx];
+wire [VOL_WID-1:0] eff_vol = eff_vol_8x[ctx_idx];
+wire [PMUL_WID-1:0] phase_mult = phase_mult_8x[ctx_idx];
+wire [INC_WID-1:0] detune_inc = detune_inc_8x[ctx_idx];
 
 // Noise generators
-wire [15:0]        lfsr = lfsr_8x[ctx_idx];
-wire signed [18:0] brown_state = brown_state_8x[ctx_idx];  // S19F18
+wire [LFSR_WID-1:0]        lfsr = lfsr_8x[ctx_idx];
+wire signed [BROWN_WID-1:0] brown_state = brown_state_8x[ctx_idx];
 wire [5:0]         lfsr_repeat_counter = lfsr_repeat_counter_8x[ctx_idx]; // 0-63
-wire signed [7:0]  lfsr_sample = lfsr_sample_8x[ctx_idx];  // S8F7
+wire signed [SAMP_WID-1:0]  lfsr_sample = lfsr_sample_8x[ctx_idx];
 
 // Filter state
-wire signed [7:0] damp_state = damp_state_8x[ctx_idx];
-wire [7:0]        damp_alpha = damp_alpha_8x[ctx_idx];
+wire signed [SAMP_WID-1:0] damp_state = damp_state_8x[ctx_idx];
+wire [DAMP_WID-1:0] damp_alpha = damp_alpha_8x[ctx_idx];
 
 // Reverb indices
 wire [8:0] rev_idx2 = rev_idx2_8x[ctx_idx];
@@ -400,8 +623,8 @@ wire [8:0] rev_idx2_valid = rev_idx2_valid_8x[ctx_idx];
 wire [9:0] rev_idx4_valid = rev_idx4_valid_8x[ctx_idx];
 
 // Reverb read data
-wire signed [7:0] reverb_2_rdata = reverb_2_rdata_8x[ctx_idx];
-wire signed [7:0] reverb_4_rdata = reverb_4_rdata_8x[ctx_idx];
+wire signed [SAMP_WID-1:0] reverb_2_rdata = reverb_2_rdata_8x[ctx_idx];
+wire signed [SAMP_WID-1:0] reverb_4_rdata = reverb_4_rdata_8x[ctx_idx];
 
 // Hardware FX (CDC'd from clk_sys)
 wire [7:0] hwfx_5f40_val = hwfx_5f40_pcm_q;
@@ -414,7 +637,7 @@ wire [7:0] hwfx_5f43_val = hwfx_5f43_pcm_q;
 //==============================================================
 // 18-bits gives max frequency error of 0.10%. A 0.3%-0.5% error
 // is the typical threshold for sounding out of tune.
-reg [14:0] pitch_phase_inc [0:63]; // U15F18
+reg [PITCH_WID-1:0] pitch_phase_inc [0:63];
 initial begin
     pitch_phase_inc[ 0] = 15'h0309; pitch_phase_inc[ 1] = 15'h0337;
     pitch_phase_inc[ 2] = 15'h0368; pitch_phase_inc[ 3] = 15'h039c;
@@ -450,8 +673,8 @@ initial begin
     pitch_phase_inc[62] = 15'h6d1a; pitch_phase_inc[63] = 18'h7396;
 end
 
-reg [16:0] note_offset_lut [0:255];  // U17F24
-// 17-bits gives max frequency error of 0.26%
+reg [NOFF_LUT_WID-1:0] note_offset_lut [0:255];
+// NOFF_LUT_WID bits gives max frequency error of 0.26%
 initial begin
     note_offset_lut[  0] = 17'h1ffff;
     note_offset_lut[  1] = 17'h1661e;   note_offset_lut[  2] = 17'h0b30f;   note_offset_lut[  3] = 17'h0775f;   note_offset_lut[  4] = 17'h05987;
@@ -880,10 +1103,10 @@ task load_done;
         note_idx_8x[ctx_idx] <= (sfx_offset_req_8x[ctx_to_load] > 6'd31) ?
                                         6'd31 : sfx_offset_req_8x[ctx_to_load];
         notes_played_8x[ctx_idx] <= 8'd0;  // Reset monotonic note counter
-        phase_acc_8x[ctx_idx] <= 22'd0;
-        detune_acc_8x[ctx_idx] <= 22'd0;
+        phase_acc_8x[ctx_idx] <= 0;
+        detune_acc_8x[ctx_idx] <= 0;
         releasing_8x[ctx_idx] <= 1'b0;
-        note_offset_8x[ctx_idx] <= 24'd0;
+        note_offset_8x[ctx_idx] <= 0;
         attack_ctr_8x[ctx_idx] <= 5'd16;
         release_ctr_8x[ctx_idx] <= 5'd0;
         arp_active_8x[ctx_idx] <= 1'b0;
@@ -905,9 +1128,9 @@ task load_done;
             // Waveform instruments start immediately in PLAYING
             pcm_state[ctx_idx] <= PCM_PLAYING;
         end else begin
-            eff_inc_8x[ctx_idx] <= 18'd0;
-            detune_inc_8x[ctx_idx] <= 18'd0;
-            eff_vol_8x[ctx_idx] <= 8'd0;
+            eff_inc_8x[ctx_idx] <= 0;
+            detune_inc_8x[ctx_idx] <= 0;
+            eff_vol_8x[ctx_idx] <= 0;
 
             // Note instruments: Set counters to just before note tick so normal timing logic handles initial decode
             // Need to be 3 samples before tick to allow time for:
@@ -916,7 +1139,7 @@ task load_done;
             // - Sample -1: decode_current_note(), advance_note()
             // - Sample 0: First note tick, transition from PCM_WARM_UP to PCM_PLAYING
             sample_ctr_8x[ctx_idx] <= NOTE_TICK_DIV - 8'd3;
-            note_ctr_8x[ctx_idx] <= speed_byte - 8'd1;
+            note_ctr_8x[ctx_idx] <= speed_byte_sys_8x[ctx_idx] - 8'd1;
 
             pcm_state[ctx_idx] <= PCM_WARM_UP;
         end
@@ -927,14 +1150,14 @@ endtask
 // DSP Effects & Pitch Calculation (clk_pcm_8x domain)
 //==============================================================
 task calculate_eff_inc;
-    reg [17:0] base_inc;                // U18F18 base phase increment
-    reg [17:0] base_inc_prev;           // U18F18 previous phase increment
-    reg signed [11:0] vib_temp;         // U12F12
-    reg signed [18:0] slide_diff;       // S19F18 slide difference
-    reg signed [11:0] vibrato_alpha;    // S12F11 vibrato multiplier
+    reg [INC_WID-1:0] base_inc;                // Base phase increment
+    reg [INC_WID-1:0] base_inc_prev;           // Previous phase increment
+    reg signed [VIB_WID-1:0] vib_temp;         // Vibrato temp
+    reg signed [INC_WID:0] slide_diff;          // Slide difference (INC + sign bit)
+    reg signed [VIB_WID-1:0] vibrato_alpha;    // Vibrato multiplier
 
-    localparam S12F11_0_5 = 12'sd1024;  // S12F11 representation of 0.5
-    localparam S12F11_0_25 = 12'sd512;  // S12F11 representation of 0.25
+    localparam VIB_0_5  = VIB_WID'($rtoi(0.5 * (2.0 ** VIB_PRC)));
+    localparam VIB_0_25 = VIB_WID'($rtoi(0.25 * (2.0 ** VIB_PRC)));
     begin
         // Apply note effects to compute base phase increment
         case (cur_eff)
@@ -942,9 +1165,9 @@ task calculate_eff_inc;
                 if (prev_pitch != cur_pitch) begin
                     base_inc_prev = pitch_phase_inc[prev_pitch] >> (bass_flag ? 1 : 0);
                     base_inc = pitch_phase_inc[cur_pitch] >> (bass_flag ? 1 : 0);
-                    // Linear interpolation: U18F18 base_inc = U18F18 base_inc_prev + (((U18F18 base_inc - U18F18 base_inc_prev) * U24F24 note_offset) >>> 24)
+                    // Linear interpolation: U18F18 base_inc = U18F18 base_inc_prev + S19F18 * U24F24 → S18F18
                     slide_diff = $signed({1'b0, base_inc}) - $signed({1'b0, base_inc_prev});
-                    base_inc = base_inc_prev + (($signed({{24{slide_diff[18]}}, slide_diff}) * {{19{1'b0}}, note_offset}) >>> 24);
+                    base_inc = base_inc_prev + `fp_slide_mul_su(slide_diff, note_offset);
                 end else begin
                     base_inc = pitch_phase_inc[cur_pitch] >> (bass_flag ? 1 : 0);
                 end
@@ -953,17 +1176,16 @@ task calculate_eff_inc;
             3'd2: begin  // Vibrato: ~7.5 Hz (10.77Hz), +/-~0.5 (0.53) semitone
                 base_inc = (pitch_phase_inc[cur_pitch] >> (bass_flag ? 1 : 0));
                 // S1F11 vibrato_alpha = abs(U11F11 eff_vib_phase - S12F11 0.5) - S12F11 0.25
-                vib_temp = $signed({1'b0, eff_vib_phase}) - S12F11_0_5;
-                vibrato_alpha = $signed((vib_temp < 0 ? -vib_temp : vib_temp) - S12F11_0_25);
-                // U18F18 base_inc = U18F18 base_inc + ((U18F18 base_inc / S6F0 16) * S12F11 vibrato_alpha) >>> 11
-                //                 = U18F18 base_inc + (U18F18 base_inc * S12F11 vibrato_alpha) >>> 15
-                base_inc = $unsigned($signed({1'b0, base_inc}) + (($signed({12'd0, base_inc}) * vibrato_alpha) >>> 15));
+                vib_temp = $signed({1'b0, eff_vib_phase}) - VIB_0_5;
+                vibrato_alpha = $signed((vib_temp < 0 ? -vib_temp : vib_temp) - VIB_0_25);
+                // U18F18 base_inc += U18F18 base_inc * S12F11 vibrato_alpha / 16
+                base_inc = $unsigned($signed({1'b0, base_inc}) + `fp_vibrato_mul_us(base_inc, vibrato_alpha));
             end
 
             3'd3: begin  // Drop: freq *= (1.0 - note_offset)
                 base_inc = pitch_phase_inc[cur_pitch] >> (bass_flag ? 1 : 0);
-                // U18F18 base_inc = U18F18 base_inc * (U24F24 1 - U24F24 note_offset) >> 24
-                base_inc = ({{24'd0, base_inc}} * {{18'd0, ~note_offset}}) >> 24;
+                // U18F18 base_inc = U18F18 base_inc * U24F24 ~note_offset → U18F18
+                base_inc = `fp_drop_mul_uu(base_inc, ~note_offset);
             end
 
             default: begin  // No pitch effect (effects 0, 4, 5, 6, 7 affect volume only)
@@ -981,19 +1203,19 @@ task calculate_eff_inc;
         // CUSTOM contexts (ctx_idx[0]=0, even) will read from their paired MAIN (ctx_idx+1)
         if (is_main_context(ctx_idx) && cur_custom) begin
             // MAIN context (odd) with custom instrument: compute pitch ratio relative to C2
-            // U18F12 phase_mult = (U18F18 base_inc << 12) / U18F18 pitch_phase_inc[PITCH_REF_C2]
-            phase_mult_8x[ctx_idx] = ($signed({base_inc, {12{1'b0}}}) / $signed({1'b0, pitch_phase_inc[PITCH_REF_C2]}));
+            // U18F12 phase_mult = U18F18 base_inc / U15F18 pitch_phase_inc[PITCH_REF_C2]
+            phase_mult_8x[ctx_idx] = `fp_phase_mult_div_uu(base_inc, pitch_phase_inc[PITCH_REF_C2]);
         end else begin
-            phase_mult_8x[ctx_idx] = 18'd0;
+            phase_mult_8x[ctx_idx] = 0;
         end
 
         // CUSTOM instrument: apply phase multiplier from paired MAIN context
         // CUSTOM contexts (ctx_idx[0]=0, even) read phase_mult from their MAIN partner (ctx_idx+1)
         // MAIN contexts (ctx_idx[0]=1, odd) use base_inc directly
-        if (!is_main_context(ctx_idx) && phase_mult_8x[ctx_idx + 1] != 18'd0) begin
+        if (!is_main_context(ctx_idx) && phase_mult_8x[ctx_idx + 1] != 0) begin
             // CUSTOM context (even): multiply base_inc by phase multiplier from MAIN
-            // U18F18 eff_inc = U18F18 base_inc * U18F12 phase_mult >> 12
-            eff_inc_8x[ctx_idx] = ({{18'd0, base_inc}} * phase_mult_8x[ctx_idx + 1]) >> 12;
+            // U18F18 eff_inc = U18F18 base_inc * U18F12 phase_mult → U18F18
+            eff_inc_8x[ctx_idx] = `fp_custom_phase_mul_uu(base_inc, phase_mult_8x[ctx_idx + 1]);
         end else begin
             // MAIN context or CUSTOM without multiplier: use base_inc
             eff_inc_8x[ctx_idx] = base_inc;  // U18F18
@@ -1051,30 +1273,26 @@ task calculate_eff_vol;
         case (cur_eff)
             3'd1: begin  // Slide: interpolate volume
                 if (prev_vol > 3'd0) begin
-                    // U8F0 eff_vol = (U3F0 prev_vol << 5) + (((U3F0 cur_vol - U3F0 prev_vol) << 5) * U24F24 note_offset) >> 24
-                    // U8F0 eff_vol = (U3F0 prev_vol << 5) + ((U3F0 cur_vol - U3F0 prev_vol) * U24F24 note_offset) >> 19
-                    vol_diff = ($signed({1'b0, cur_vol}) - $signed({1'b0, prev_vol})) <<< 5;
-                    eff_vol_8x[ctx_idx] = (prev_vol << 5) + (({{24{vol_diff[3]}}, vol_diff} * $signed({{4'd0, note_offset}})) >> 19);
+                    // eff_vol = prev_vol + (cur_vol - prev_vol) * note_offset
+                    vol_diff = $signed({1'b0, cur_vol}) - $signed({1'b0, prev_vol});
+                    eff_vol_8x[ctx_idx] = (prev_vol << VOL_PRC) + VOL_WID'(({{NOFF_WID{vol_diff[3]}}, vol_diff} * $signed({{4'd0, note_offset}})) >>> (NOFF_WID - VOL_PRC));
                 end else begin
-                    eff_vol_8x[ctx_idx] = cur_vol << 5;
+                    eff_vol_8x[ctx_idx] = cur_vol << VOL_PRC;
                 end
             end
 
             3'd4: begin  // Fade in: volume * note_offset
-                // U8F0 eff_vol = (U3F0 cur_vol << 5) * U24F24 note_offset >> 24
-                //              = U3F0 cur_vol * U24F24 note_offset >> 19
-                eff_vol_8x[ctx_idx] = ({{24'd0, cur_vol}} * {{5'd0, note_offset}}) >> 19;
+                // U8F5 eff_vol = U3F0 cur_vol * U24F24 note_offset → U8F5
+                eff_vol_8x[ctx_idx] = `fp_vol_env_mul_uu(cur_vol, note_offset);
             end
 
             3'd5: begin  // Fade out: volume * (1.0 - note_offset)
-                // U8F0 eff_vol = (U3F0 cur_vol << 5) * (U24F24 1 - U24F24 note_offset) >> 24
-                //              = (U3F0 cur_vol * (U24F24 1 - U24F24 note_offset) >> 19
-                //              = (U3F0 cur_vol * U24F24 ~note_offset) >> 19
-                eff_vol_8x[ctx_idx] = ({{24'd0, cur_vol}} * {{5'd0, (~note_offset)}}) >> 19;
+                // U8F5 eff_vol = U3F0 cur_vol * U24F24 ~note_offset → U8F5
+                eff_vol_8x[ctx_idx] = `fp_vol_env_mul_uu(cur_vol, ~note_offset);
             end
 
             default: begin  // No volume effect
-                eff_vol_8x[ctx_idx] = cur_vol << 5;
+                eff_vol_8x[ctx_idx] = cur_vol << VOL_PRC;
             end
         endcase
     end
@@ -1094,9 +1312,6 @@ task decode_current_note;
     reg [5:0] pitch;
     reg       should_attack;
     begin
-        // Save the note index being decoded for stat(50..53).
-        cur_note_idx_8x[ctx_idx] <= note_idx;
-
         // Save previous note for slide effect
         prev_pitch_8x[ctx_idx] <= cur_pitch;
         prev_vol_8x[ctx_idx] <= cur_vol;
@@ -1132,7 +1347,7 @@ task decode_current_note;
             attack_ctr_8x[ctx_idx] <= 5'd0;
         end
         releasing_8x[ctx_idx] <= 1'b0;
-        note_offset_8x[ctx_idx] <= 24'd0;
+        note_offset_8x[ctx_idx] <= 0;
 
         // Handle custom instruments: when cur_custom is set, trigger SFX loading on paired CUSTOM context
         if (custom && is_main_context(ctx_idx)) begin
@@ -1250,6 +1465,9 @@ task advance_note_timing;
             if (note_ctr >= speed_byte - 1) begin
                 note_ctr_8x[ctx_idx] <= 8'd0;
 
+                // Save the current note index (note_idx is always the *next* note)
+                cur_note_idx_8x[ctx_idx] <= note_idx;
+
                 // Advance to next note
                 advance_note(should_stop, new_arpeggio_group);
 
@@ -1259,7 +1477,10 @@ task advance_note_timing;
 
                 // Handle state transitions after first note advance
                 if (should_stop) begin
-                    pcm_state[ctx_idx] <= PCM_STOPPING;
+                    pcm_state[ctx_idx] <= PCM_IDLE;
+                    if (is_main_context(ctx_idx)) begin
+                        sfx_done[voice_idx] <= 1'b1;
+                    end
                 end else begin
                     // Transition from warm-up to playing after first note decoded
                     pcm_state[ctx_idx] <= PCM_PLAYING;
@@ -1282,8 +1503,8 @@ task update_noise_state;
         if (filt_noiz) begin
             // Sample-and-hold LFSR update
             if (lfsr_repeat_counter == 6'd0) begin
-                // Capture new sample: lfsr[7:0] as S8F7
-                lfsr_sample_8x[ctx_idx] <= $signed(lfsr[7:0]);
+                // Capture SAMP_WID bits from LFSR as signed sample
+                lfsr_sample_8x[ctx_idx] <= $signed(lfsr[SAMP_WID-1:0]);
                 // Reset counter
                 lfsr_repeat_counter_8x[ctx_idx] <= ~cur_pitch;
             end else begin
@@ -1291,10 +1512,9 @@ task update_noise_state;
                 lfsr_repeat_counter_8x[ctx_idx] <= lfsr_repeat_counter - 6'd1;
             end
         end else begin
-            // S19F18 brown_state = S19F18 brown_state - (S19F18 brown_state * U18F18 eff_inc * 8) >>> 18
-            //                    = S19F18 brown_state - (S19F18 brown_state * U18F18 eff_inc) >>> (18-3)
-            // S19F18 brown_state = S19F18 brown_state + (lfsr < 0) ? S19F18 -1/32 : S19F18 1/32
-            brown_state_8x[ctx_idx] <= brown_state - (($signed({{18{brown_state[18]}}, brown_state}) * $signed({1'b0, eff_inc})) >>> 15) + (lfsr[7] ? -14'sd8192 : 14'sd8192);
+            // S19F18 brown_state -= S19F18 brown_state * U18F18 eff_inc * 8 (POST_SHIFT=3)
+            // S19F18 brown_state += (lfsr < 0) ? S19F18 -1/32 : S19F18 1/32
+            brown_state_8x[ctx_idx] <= brown_state - `fp_brown_mul_su(brown_state, eff_inc) + (lfsr[7] ? -14'sd8192 : 14'sd8192);
         end
     end
 endtask
@@ -1302,11 +1522,6 @@ endtask
 // Tick one sample
 task sample_tick;
     begin
-        // Update sample and note timing
-        if (!is_waveform_inst) begin
-            advance_note_timing();
-        end
-
         // Calculate effective phase increment
         calculate_eff_inc();
 
@@ -1317,18 +1532,24 @@ task sample_tick;
         calculate_eff_vol();
 
         // Phase accumulator updates
-        phase_acc_8x[ctx_idx] <= phase_acc + eff_inc;
+        if (phase_acc + eff_inc >= PHASE_ACC_MAX) begin
+            phase_acc_8x[ctx_idx] <= phase_acc + eff_inc - PHASE_ACC_MAX;
+        end else begin
+            phase_acc_8x[ctx_idx] <= phase_acc + eff_inc;
+        end
         detune_acc_8x[ctx_idx] <= detune_acc + detune_inc;
         // Vibrato phase accumulator (~7.5 Hz (10.77 Hz) modulation)
         eff_vib_phase_8x[ctx_idx] <= eff_vib_phase + 1;
 
         // Note offset ramp (for slide/drop effects)
-        note_offset_8x[ctx_idx] <= note_offset + {7'b0, note_offset_lut[speed_byte]};
+        note_offset_8x[ctx_idx] <= note_offset + {{(NOFF_WID - NOFF_LUT_WID){1'b0}}, note_offset_lut[speed_byte]};
 
         // Attack/release counters
         if (attack_ctr != 5'd0) begin
             attack_ctr_8x[ctx_idx] <= attack_ctr - 1;
         end
+
+        // Release counter decrement
         if (release_ctr != 5'd0) begin
             release_ctr_8x[ctx_idx] <= release_ctr - 1;
         end
@@ -1352,180 +1573,180 @@ wire hw_high_dmp = hwfx_5f43_val[{1'b1, voice_idx}];
 // Base waveform generation task
 // Waveform generation task (takes phase accumulator as input)
 task waveform_gen;
-    input [21:0] phase_in;      // U22F18 phase input
-    output [7:0] sample_out;    // S8F7 waveform sample output
+    input [PHASE_WID-1:0] phase_in;     // phase input (PHASE_WID bits)
+    output [SAMP_WID-1:0] sample_out;   // waveform sample output (SAMP_WID bits)
 
-    // S22F18 fixed-point constants for waveform generation
-    localparam signed [21:0] S22F18_ONE      = 22'sd262144;   // 1.0
-    localparam signed [21:0] S22F18_TWO      = 22'sd524288;   // 2.0
-    localparam signed [21:0] S22F18_THREE    = 22'sd786432;   // 3.0
-    localparam signed [21:0] S22F18_FOUR     = 22'sd1048576;  // 4.0
-    localparam signed [21:0] S22F18_SIX      = 22'sd1572864;  // 6.0
-    localparam signed [21:0] S22F18_TWELVE   = 22'sd3145728;  // 12.0
-    localparam signed [21:0] S22F18_HALF     = 22'sd131072;   // 0.5
-    localparam signed [21:0] S22F18_QUARTER  = 22'sd65536;    // 0.25
-    localparam signed [21:0] S22F18_EIGHTH   = 22'sd32768;    // 0.125
-    localparam signed [21:0] S22F18_0_875    = 22'sd229376;   // 0.875
-    localparam signed [21:0] S22F18_0_975    = 22'sd255590;   // 0.975
-    localparam signed [21:0] S22F18_0_653    = 22'sd171179;   // 0.653
-    localparam signed [21:0] S22F18_0_83     = 22'sd217579;   // 0.83
-    localparam signed [21:0] S22F18_0_085    = 22'sd22282;    // 0.085
-    localparam signed [21:0] S22F18_NEG_1_875= -22'sd491520;  // -1.875
-    localparam signed [21:0] S22F18_NEG_2_4375 = -22'sd638976; // -2.4375
-    localparam signed [21:0] S22F18_0_125    = 22'sd32768;    // 0.0125
-    localparam signed [21:0] S22F18_0_2      = 22'sd52429;    // 0.2
-    localparam signed [21:0] S22F18_1_5      = 22'sd393216;   // 1.5 (for NOISE scaling)
-    localparam signed [21:0] S22F18_0_3      = 22'sd78643;    // 0.3
-    localparam [21:0] U22F18_109_110         = 22'd259770;    // 109/110 ≈ 0.990909 (for PHASER)
+    // Fixed-point constants for waveform generation (WAVE_WID bits)
+    localparam signed [WAVE_WID-1:0] WAVE_ONE        = WAVE_WID'($rtoi(1.0 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_TWO        = WAVE_WID'($rtoi(2.0 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_THREE      = WAVE_WID'($rtoi(3.0 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_FOUR       = WAVE_WID'($rtoi(4.0 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_SIX        = WAVE_WID'($rtoi(6.0 * (2.0 ** WAVE_PRC)));
 
-    // S8F7 fixed-point constants for waveform output
-    localparam signed [7:0] S8F7_QUARTER    = 8'sd32;       // 0.25 in S8F7 (for SQUARE/PULSE)
+    localparam signed [WAVE_WID-1:0] WAVE_HALF       = WAVE_WID'($rtoi(0.5 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_QUARTER    = WAVE_WID'($rtoi(0.25 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_EIGHTH     = WAVE_WID'($rtoi(0.125 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_875      = WAVE_WID'($rtoi(0.875 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_975      = WAVE_WID'($rtoi(0.975 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_653      = WAVE_WID'($rtoi(0.653 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_83       = WAVE_WID'($rtoi(0.83 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_085      = WAVE_WID'($rtoi(0.085 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_NEG_1_875  = WAVE_WID'($rtoi(-1.875 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_NEG_2_4375 = WAVE_WID'($rtoi(-2.4375 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_125      = WAVE_WID'($rtoi(0.125 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_2        = WAVE_WID'($rtoi(0.2 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_1_5        = WAVE_WID'($rtoi(1.5 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_0_3        = WAVE_WID'($rtoi(0.3 * (2.0 ** WAVE_PRC)));
+    localparam [PHASE_WID-1:0] PHASE_109_110         = WAVE_WID'($rtoi(109.0/110.0 * (2.0 ** PHASE_PRC)));
+    // Reciprocal constants for output scaling
+    localparam signed [WAVE_WID-1:0] WAVE_DIV9 = WAVE_WID'($rtoi(1.0/9.0 * (2.0 ** WAVE_PRC)));
+    localparam signed [WAVE_WID-1:0] WAVE_DIV6 = WAVE_WID'($rtoi(1.0/6.0 * (2.0 ** WAVE_PRC)));
+    // Integer 3 at WAVE_WID width (for blend multiplication)
+    localparam signed [WAVE_WID-1:0] WAVE_INT_THREE = 3;
 
-    reg signed [21:0] t;           // S22F18 phase fraction (used by all waveforms)
+    // Fixed-point constants for waveform output (SAMP_WID bits)
+    localparam signed [SAMP_WID-1:0] SAMP_QUARTER = SAMP_WID'($rtoi(0.25 * (2.0 ** SAMP_PRC)));
+
+    reg signed [WAVE_WID-1:0] t;        // phase fraction (used by all waveforms)
     // General-purpose temporaries - shared across mutually-exclusive waveforms
-    reg signed [21:0] temp0;       // S22F18
-    reg signed [21:0] temp1;       // S22F18
-    reg signed [21:0] temp2;       // S22F18
-    reg signed [21:0] temp3;       // S22F18
-    reg signed [21:0] temp4;       // S22F18
-    reg [21:0] temp5;              // U22F18
-    // Specialized wide temporaries - different bit widths
-    reg signed [38:0] div6_temp;     // Temporary for divide-by-6 (phaser_temp * 43691)
-    reg [43:0] phaser_mult_temp;   // U44F36 temporary for phaser multiplication
-    reg signed [44:0] organ_temp;  // S45F36 temporary for organ calculations
-    reg signed [26:0] organ_abs;   // S27F18 after shift, for abs operation
+    reg signed [WAVE_WID-1:0] temp0;
+    reg signed [WAVE_WID-1:0] temp1;
+    reg signed [WAVE_WID-1:0] temp2;
+    reg signed [WAVE_WID-1:0] temp3;
+    reg signed [WAVE_WID-1:0] temp4;
+    reg [PHASE_WID-1:0] temp5;           // unsigned
+    // Specialized wide temporaries
+    reg signed [2*WAVE_WID:0] organ_temp;
+    reg signed [WAVE_WID+4:0] organ_abs;
     begin
         // Standard waveform generation using full phase precision
 
-        t = $signed({4'b0, phase_in[17:0]});
+        t = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, phase_in[WAVE_PRC-1:0]});
 
         case (cur_wave)
             3'd0: begin // TRIANGLE
                 // S22F18 temp1 = (4 * S22F18 t) - S22F18 2.0
-                temp1 = (t <<< 2) - S22F18_TWO;
-                // S22F18 temp1 = abs(S22F18 temp1)
-                temp1 = temp1[21] ? -temp1 : temp1;
+                temp1 = (t <<< 2) - WAVE_TWO;
+                // abs(temp1)
+                temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;
                 // S22F18 temp2 = S22F18 1.0 - S22F18 temp1
-                temp2 = S22F18_ONE - temp1;
+                temp2 = WAVE_ONE - temp1;
                 if (filt_buzz) begin
                     // Tilted saw component for blending
                     // Uses same formula as TILTED_SAW with a=0.875
-                    if (t < S22F18_0_875) begin
+                    if (t < WAVE_0_875) begin
                         // Rising segment: 2 * t / 0.875 - 1.0
                         // S22F18 temp4 = S22F18 t * 2
                         temp4 = t <<< 1;
-                        // S22F18 temp3 = (S22F18 temp4 / S22F18 0.875) - S22F18 1.0
-                        temp3 = ($signed({temp4, 18'b0}) / $signed({{18{S22F18_0_875[21]}}, S22F18_0_875})) - S22F18_ONE;
+                        // S22F18 temp3 = S22F18 temp4 / S22F18 0.875 - S22F18 1.0
+                        temp3 = `fp_wave_div_ss(temp4, WAVE_0_875) - WAVE_ONE;
                     end else begin
                         // Falling segment: 2 * ((1 - t) / (1 - 0.875)) - 1.0
                         // S22F18 temp4 = (S22F18 1.0 - S22F18 t) * 2
-                        temp4 = (S22F18_ONE - t) <<< 1;
-                        // S22F18 temp3 = (S22F18 temp4 / S22F18 0.125) - S22F18 1.0
-                        temp3 = ($signed({temp4, 18'b0}) / $signed({{18{S22F18_0_125[21]}}, S22F18_0_125})) - S22F18_ONE;
+                        temp4 = (WAVE_ONE - t) <<< 1;
+                        // S22F18 temp3 = S22F18 temp4 / S22F18 0.125 - S22F18 1.0
+                        temp3 = `fp_wave_div_ss(temp4, WAVE_0_125) - WAVE_ONE;
                     end
                     // Blend: 75% triangle + 25% tilted_saw
                     // S22F18 temp0 = (S22F18 temp2 * 3 + S22F18 temp3) >>> 2
-                    temp0 = (($signed({{22{temp2[21]}}, temp2}) * $signed(22'sd3)) +
-                                     ($signed({{22{temp3[21]}}, temp3}))) >>> 2;
+                    temp0 = (($signed({{WAVE_WID{temp2[WAVE_WID-1]}}, temp2}) * WAVE_INT_THREE) +
+                                     ($signed({{WAVE_WID{temp3[WAVE_WID-1]}}, temp3}))) >>> 2;
                 end else begin
                     temp0 = temp2;
                 end
                 // Scale by 0.5
                 // S22F18 temp0 = S22F18 temp0 >>> 1
                 temp0 = temp0 >>> 1;
-                // S8F7 sample_out = S22F18 temp0[18:11]
-                sample_out = temp0[18:11];
+                // Extract SAMP_WID bits from WAVE_PRC offset
+                sample_out = temp0[WAVE_PRC -: SAMP_WID];
             end
 
             3'd1: begin // TILTED SAW: asymmetric breakpoint
-                // S22F18 temp1 = filt_buzz ? S22F18_0_975 : S22F18_0_875
-                temp1 = filt_buzz ? S22F18_0_975 : S22F18_0_875;
+                // S22F18 temp1 = filt_buzz ? WAVE_0_975 : WAVE_0_875
+                temp1 = filt_buzz ? WAVE_0_975 : WAVE_0_875;
                 if (t < temp1) begin
                     // Rising segment: 2 * t / breakpoint - 1
                     // S22F18 temp2 = S22F18 t * 2 = S22F18 t << 1
                     temp2 = t <<< 1;
-                    // S22F18 temp0 = (S22F18 temp2 / S22F18 temp1) - S22F18 1
-                    // Division: extend temp2 by 18 bits, divide, result is S22F18
-                    temp0 = ($signed({temp2, 18'b0}) / $signed({{18{temp1[21]}}, temp1})) - S22F18_ONE;
+                    // S22F18 temp0 = S22F18 temp2 / S22F18 temp1 - S22F18 1
+                    temp0 = `fp_wave_div_ss(temp2, temp1) - WAVE_ONE;
                 end else begin
                     // Falling segment: 2 * ((1 - t) / (1 - breakpoint)) - 1
                     // S22F18 temp2 = S22F18 1 - S22F18 t
-                    temp2 = S22F18_ONE - t;
+                    temp2 = WAVE_ONE - t;
                     // S22F18 temp2 = S22F18 temp2 * 2
                     temp2 = temp2 <<< 1;
                     // S22F18 temp3 = S22F18 1 - S22F18 temp1
-                    temp3 = S22F18_ONE - temp1;
-                    // S22F18 temp0 = (S22F18 temp2 / S22F18 temp3) - S22F18 1
-                    temp0 = ($signed({temp2, 18'b0}) / $signed({{18{temp3[21]}}, temp3})) - S22F18_ONE;
+                    temp3 = WAVE_ONE - temp1;
+                    // S22F18 temp0 = S22F18 temp2 / S22F18 temp3 - S22F18 1
+                    temp0 = `fp_wave_div_ss(temp2, temp3) - WAVE_ONE;
                 end
                 // Scale by 0.5
                 // S22F18 temp0 = S22F18 temp0 >>> 1
                 temp0 = temp0 >>> 1;
-                // S8F7 sample_out = S22F18 temp0[18:11]
-                sample_out = temp0[18:11];
+                // Extract SAMP_WID bits from WAVE_PRC offset
+                sample_out = temp0[WAVE_PRC -: SAMP_WID];
             end
 
             3'd2: begin // SAW: linear ramp with buzz harmonic
-                if (t < S22F18_HALF) begin  // phase < 0.5
+                if (t < WAVE_HALF) begin  // phase < 0.5
                     temp1 = t;
                 end else begin
-                    temp1 = t - S22F18_ONE;
+                    temp1 = t - WAVE_ONE;
                 end
                 if (filt_buzz) begin
                     // Buzz harmonic: ret * 0.83 - (condition ? 0.085 : 0)
                     // Condition: abs(phase_in mod 2 - 1) < 0.5
-                    // phase_in mod 2 uses bits [19:0] of U22F18 phase_in
-                    // S22F18 temp4 = S22F18(U20F18 phase_in[19:0]) - S22F18 1
-                    temp4 = $signed({2'b0, phase_in[19:0]}) - S22F18_ONE;
-                    // S22F18 temp4 = abs(S22F18 temp4)
-                    temp4 = temp4[21] ? -temp4 : temp4;
-                    // S22F18 temp2 = (temp4 < S22F18 0.5) ? S22F18 0.085 : 0
-                    temp2 = (temp4 < S22F18_HALF) ? S22F18_0_085 : 22'sd0;
-                    // S22F18 temp1 = (S22F18 temp1 * S22F18 0.83) >>> 18 - S22F18 temp2
-                    temp1 = (($signed({{22{temp1[21]}}, temp1}) * $signed({{22{1'b0}}, S22F18_0_83})) >>> 18) - temp2;
+                    // phase_in mod 2 uses bits [WAVE_PRC+1:0] of phase_in
+                    // temp4 = signed(phase_in mod 2) - 1
+                    temp4 = $signed({{(WAVE_WID-WAVE_PRC-2){1'b0}}, phase_in[WAVE_PRC+1:0]}) - WAVE_ONE;
+                    // abs(temp4)
+                    temp4 = temp4[WAVE_WID-1] ? -temp4 : temp4;
+                    // temp2 = (temp4 < 0.5) ? 0.085 : 0
+                    temp2 = (temp4 < WAVE_HALF) ? WAVE_0_085 : 0;
+                    // temp1 = temp1 * 0.83 - temp2
+                    temp1 = `fp_wave_mul_ss(temp1, WAVE_0_83) - temp2;
                 end
-                // S22F18 temp0 = (S22F18 temp1 * S22F18 0.653) >>> 18
-                temp0 = (($signed({{22{temp1[21]}}, temp1}) * $signed({{22{1'b0}}, S22F18_0_653})) >>> 18);
-                // S8F7 sample_out = S22F18 temp0[18:11]
-                sample_out = temp0[18:11];
+                // S22F18 temp0 = S22F18 temp1 * S22F18 0.653
+                temp0 = `fp_wave_mul_ss(temp1, WAVE_0_653);
+                sample_out = temp0[WAVE_PRC -: SAMP_WID];
             end
 
             3'd3: begin // SQUARE: 50% duty (40% with buzz), amplitude ±0.25
                 if (filt_buzz) begin
-                    sample_out = (phase_in[17:12] < 6'd26) ? S8F7_QUARTER : -S8F7_QUARTER;
+                    sample_out = (phase_in[WAVE_PRC-1:WAVE_PRC-6] < 6'd26) ? SAMP_QUARTER : -SAMP_QUARTER;
                 end else begin
-                    sample_out = phase_in[17] ? -S8F7_QUARTER : S8F7_QUARTER;
+                    sample_out = phase_in[WAVE_PRC-1] ? -SAMP_QUARTER : SAMP_QUARTER;
                 end
             end
 
             3'd4: begin // PULSE: 31.6% duty (25.5% with buzz), amplitude ±0.25
                 if (filt_buzz) begin
-                    sample_out = (phase_in[17:13] < 5'd8) ? S8F7_QUARTER : -S8F7_QUARTER;
+                    sample_out = (phase_in[WAVE_PRC-1:WAVE_PRC-5] < 5'd8) ? SAMP_QUARTER : -SAMP_QUARTER;
                 end else begin
-                    sample_out = (phase_in[17:13] < 5'd10) ? S8F7_QUARTER : -S8F7_QUARTER;
+                    sample_out = (phase_in[WAVE_PRC-1:WAVE_PRC-5] < 5'd10) ? SAMP_QUARTER : -SAMP_QUARTER;
                 end
             end
 
             3'd5: begin // ORGAN: piecewise triangle
-                if (t < S22F18_HALF) begin  // First half (t < 0.5)
+                if (t < WAVE_HALF) begin  // First half (t < 0.5)
                     // Calculate 24 * t (treating 24 as integer, result is S22F18)
                     // This doesn't overflow S22F18 since t < 0.5
                     temp1 = t * 24;
                     // Subtract 6.0 (S22F18)
-                    temp1 = temp1 - S22F18_SIX;
+                    temp1 = temp1 - WAVE_SIX;
                     // Take absolute value
-                    temp1 = temp1[21] ? -temp1 : temp1;
+                    temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;
                     // Subtract from 3.0
-                    temp1 = S22F18_THREE - temp1;
+                    temp1 = WAVE_THREE - temp1;
                 end else begin  // Second half (t >= 0.5)
-                    // Calculate 16 * t (treating 16 as integer, result is S22F18)
-                    temp1 = t * 16;
-                    // Subtract 12.0 (S22F18)
-                    temp1 = temp1 - S22F18_TWELVE;
+                    // (t * 16 - 12) rewritten as (t * 8 - 6) * 2 to avoid overflow
+                    temp1 = t * 8 - WAVE_SIX;
+                    temp1 = temp1 <<< 1;
                     // Take absolute value
-                    temp1 = temp1[21] ? -temp1 : temp1;
+                    temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;
                     // Subtract from 1.0
-                    temp1 = S22F18_ONE - temp1;
+                    temp1 = WAVE_ONE - temp1;
                 end
 
                 // Buzz processing
@@ -1533,83 +1754,77 @@ task waveform_gen;
                     // temp1 * 2 + 3 > -1.875
                     // temp1 * 2 > -1.875 - 3 = -4.875
                     // temp1 > -4.875 / 2 = -2.4375
-                    if (t < S22F18_HALF && temp1 > S22F18_NEG_2_4375) begin
-                        // S22F18 temp1 = ((S22F18 temp1 * 2 + S22F18 3.0) * S22F18 0.2) >>> 18 - S22F18 1.0
-                        //              = (S22F18 temp1 * 2 * S22F18 0.2 + S22F18 0.6) >>> 18 - S22F18 1.0
-                        //              = (S22F18 temp1 * S22F18 0.2 + S22F18 0.3) >>> 17 - S22F18 1.0
-                        temp1 = ((($signed({{22{temp1[21]}}, temp1}) * $signed({{22{1'b0}}, S22F18_0_2})) + S22F18_0_3) >>> 17) - S22F18_ONE;
+                    if (t < WAVE_HALF && temp1 > WAVE_NEG_2_4375) begin
+                        // S22F18 temp1 = ((S22F18 temp1 * 2 + S22F18 3.0) * S22F18 0.2) - S22F18 1.0
+                        //              = (S22F18 temp1 * WAVE_0_2 + WAVE_0_3) * 2 - S22F18 1.0
+                        // WAVE_0_3 bias is added at product width before >>> 17 (POST_SHIFT=1)
+                        temp1 = `fp_wave_x2_mul_ss_bias(temp1, WAVE_0_2, WAVE_0_3) - WAVE_ONE;
                     end else begin
-                        if (t < S22F18_HALF) begin
+                        if (t < WAVE_HALF) begin
                             // S22F18 temp1 = (S22F18 temp1 * 2) + S22F18 3.0
-                            temp1 = (temp1 <<< 1) + S22F18_THREE;
+                            temp1 = (temp1 <<< 1) + WAVE_THREE;
                         end
                         // S22F18 temp1 = S22F18 temp1 + S22F18 0.5
-                        temp1 = temp1 + S22F18_HALF;
+                        temp1 = temp1 + WAVE_HALF;
                     end
                 end
 
                 // Divide by 9
-                // S22F18 temp0 = (S22F18 temp1 * 29127) >>> 18  // 29127/262144 ≈ 1/9
-                temp0 = (($signed({{22{temp1[21]}}, temp1}) * $signed(22'sd29127)) >>> 18);
-                // S8F7 sample_out = S22F18 temp0[18:11]
-                sample_out = temp0[18:11];
+                temp0 = `fp_wave_mul_ss(temp1, WAVE_DIV9);
+                sample_out = temp0[WAVE_PRC -: SAMP_WID];
             end
 
             3'd6: begin // NOISE
                 if (filt_noiz) begin
                     sample_out = lfsr_sample >>> 2;
                 end else begin
-                    // S9F8 sample_out = (S19F18 brown_state * (128 * U18F18 eff_inc + U18F18 0.7588)) >>> 28
-                    //                 = (S19F18 brown_state * (U18F18 eff_inc + U18F18 (0.7588/128))) >>> (28-7)
-                    sample_out = ($signed({{18{brown_state[18]}}, brown_state}) * ($signed({1'b0, eff_inc}) + 11'sd1554)) >>> 21;
+                    // S8 sample_out = S19F18 brown_state * S19F18 (eff_inc - 1554/2^18)
+                    sample_out = `fp_brown_out_mul_ss(brown_state, $signed({1'b0, eff_inc}) - 19'sd1554);
                 end
             end
 
             3'd7: begin // PHASER: sum of triangle waves at 1.0x and ~0.99x freq
                 // Primary triangle: 2 - abs(8*t - 4)
-                temp2 = t * 8;          // S22F18 = S22F18 * 8
-                temp2 = temp2 - S22F18_FOUR;
-                temp2 = temp2[21] ? -temp2 : temp2;  // abs
-                temp2 = S22F18_TWO - temp2;
+                temp2 = t * 8;
+                temp2 = temp2 - WAVE_FOUR;
+                temp2 = temp2[WAVE_WID-1] ? -temp2 : temp2;  // abs
+                temp2 = WAVE_TWO - temp2;
 
                 // Secondary triangle at 109/110 frequency
                 // Calculate phase * 109/110, take fractional part
-                phaser_mult_temp = phase_in * U22F18_109_110;  // U44F36
-                temp5 = phaser_mult_temp >>> 18;      // U22F18
+                temp5 = `fp_phase_mul_uu(phase_in, PHASE_109_110);
                 // Extract t_secondary (fractional part)
-                temp4 = $signed({4'b0, temp5[17:0]});
+                temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, temp5[WAVE_PRC-1:0]});
                 // Calculate: 1 - abs(4 * t_sec - 2)
                 temp1 = temp4 * 4;
-                temp1 = temp1 - S22F18_TWO;
-                temp1 = temp1[21] ? -temp1 : temp1;  // abs
-                temp2 = temp2 + S22F18_ONE - temp1;
+                temp1 = temp1 - WAVE_TWO;
+                temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;  // abs
+                temp2 = temp2 + WAVE_ONE - temp1;
 
                 // Buzz harmonics
                 if (filt_buzz) begin
                     // Harmonic at 2x: 0.25 - abs(1 * ((phase*2 + 0.5) mod 1) - 0.5)
                     // phase*2 + 0.5, take fractional part
-                    temp3 = (phase_in <<< 1) + S22F18_HALF;
-                    temp4 = $signed({4'b0, temp3[17:0]});  // fractional part
+                    temp5 = (phase_in <<< 1) + WAVE_HALF;
+                    temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, temp5[WAVE_PRC-1:0]});
                     // Calculate: 0.25 - abs(t - 0.5)
-                    temp1 = temp4 - S22F18_HALF;
-                    temp1 = temp1[21] ? -temp1 : temp1;  // abs
-                    temp2 = temp2 + S22F18_QUARTER - temp1;
+                    temp1 = temp4 - WAVE_HALF;
+                    temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;  // abs
+                    temp2 = temp2 + WAVE_QUARTER - temp1;
 
                     // Harmonic at 4x: 0.125 - abs(0.5 * ((phase*4) mod 1) - 0.25)
                     // phase*4, take fractional part
-                    temp4 = phase_in <<< 2;
-                    temp4 = $signed({4'b0, temp4[17:0]});  // fractional part
+                    temp5 = phase_in <<< 2;
+                    temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, temp5[WAVE_PRC-1:0]});
                     // Calculate: 0.125 - abs(0.5*t - 0.25)
-                    temp1 = (temp4 >>> 1) - S22F18_QUARTER;  // 0.5*t - 0.25
-                    temp1 = temp1[21] ? -temp1 : temp1;  // abs
-                    temp2 = temp2 + S22F18_EIGHTH - temp1;
+                    temp1 = (temp4 >>> 1) - WAVE_QUARTER;  // 0.5*t - 0.25
+                    temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;  // abs
+                    temp2 = temp2 + WAVE_EIGHTH - temp1;
                 end
 
                 // Divide by 6
-                // 1/6 ≈ 43691/262144 in U18F18
-                div6_temp = temp2 * 43691;
-                temp0 = div6_temp >>> 18;
-                sample_out = temp0[18:11];
+                temp0 = `fp_wave_mul_ss(temp2, WAVE_DIV6);
+                sample_out = temp0[WAVE_PRC -: SAMP_WID];
             end
         endcase
     end
@@ -1617,32 +1832,32 @@ endtask
 
 // Waveform sample generation task
 task generate_waveform_sample;
-    output [7:0] sample_out;        // S8F7 output sample
+    output [SAMP_WID-1:0] sample_out;
 
-    reg signed [7:0] base_sample;   // S8F7 base waveform output
-    reg signed [7:0] detune_sample; // S8F7 detune waveform output
-    reg signed [8:0] s9_temp;       // S9F8 temporary for additions
-    reg signed [8:0] s9_err;        // S9F8 dampen filter error
-    reg signed [7:0] s8_sample;     // S8F7 processed sample for PCM chain
+    reg signed [SAMP_WID-1:0] base_sample;
+    reg signed [SAMP_WID-1:0] detune_sample;
+    reg signed [SAMP_WID:0] sat_temp;
+    reg signed [SAMP_WID:0] damp_err;
+    reg signed [SAMP_WID-1:0] sample;
     begin
-        // Generate base waveform sample (S8F7)
+        // Generate base waveform sample
         if (is_waveform_inst) begin
             // Custom waveform: use pre-fetched 16-bit word from RAM, select byte
-            // sfx_byte_sel: 0=high byte, 1=low byte
-            sample_out = sfx_byte_sel ? $signed(sfx_data[7:0]) : $signed(sfx_data[15:8]);
+            // sfx_byte_sel: 0=high byte, 1=low byte; shift to fill SAMP_WID
+            sample_out = sfx_byte_sel ? $signed(sfx_data[7:0]) << (SAMP_WID-8) : $signed(sfx_data[15:8]) << (SAMP_WID-8);
         end else if (cur_custom && is_main_context(ctx_idx)) begin
             sample_out = custom_pcm_out[voice_idx];
         end else begin
             waveform_gen(phase_acc, base_sample);
 
-            // Generate detune waveform sample (S8F7) if needed
+            // Generate detune waveform sample if needed
             if (filt_detune != 2'd0 && cur_wave != 3'd6) begin
                 waveform_gen(detune_acc, detune_sample);
                 // Mix base + (detune>>1) with saturation
-                s9_temp = $signed({base_sample[7], base_sample}) + ($signed({detune_sample[7], detune_sample}) >>> 1);
-                if (s9_temp > 9'sd127) sample_out = 8'sd127;
-                else if (s9_temp < -9'sd128) sample_out = -8'sd128;
-                else sample_out = s9_temp[7:0];
+                sat_temp = $signed({base_sample[SAMP_WID-1], base_sample}) + ($signed({detune_sample[SAMP_WID-1], detune_sample}) >>> 1);
+                if (sat_temp > SAMP_MAX) sample_out = SAMP_MAX[SAMP_WID-1:0];
+                else if (sat_temp < SAMP_MIN) sample_out = SAMP_MIN[SAMP_WID-1:0];
+                else sample_out = sat_temp[SAMP_WID-1:0];
             end else begin
                 sample_out = base_sample;
             end
@@ -1656,9 +1871,9 @@ endtask
 // Reverb sample mixing (uses pre-read reverb data)
 // This task only does the arithmetic - RAM access happens in main always block
 task apply_reverb_mix;
-    inout [7:0] s8_sample;         // S8F7 input/output sample
+    inout [SAMP_WID-1:0] sample;
 
-    reg signed [8:0] s9_temp;      // S9F8 temporary for additions
+    reg signed [SAMP_WID:0] sat_temp;
     reg [1:0] eff_reverb;          // Effective reverb level after HWFX overrides
     begin
         // Calculate effective reverb with HWFX overrides
@@ -1673,17 +1888,17 @@ task apply_reverb_mix;
         // Mix reverb data (from previous cycle's read) with current sample
         if (eff_reverb == 2'd1) begin
             if (rev_idx2 < rev_idx2_valid) begin
-                s9_temp = $signed({s8_sample[7], s8_sample}) + ($signed({reverb_2_rdata[7], reverb_2_rdata}) >>> 1);
-                if (s9_temp > 9'sd127) s8_sample = 8'sd127;
-                else if (s9_temp < -9'sd128) s8_sample = -8'sd128;
-                else s8_sample = s9_temp[7:0];
+                sat_temp = $signed({sample[SAMP_WID-1], sample}) + ($signed({reverb_2_rdata[SAMP_WID-1], reverb_2_rdata}) >>> 1);
+                if (sat_temp > SAMP_MAX) sample = SAMP_MAX[SAMP_WID-1:0];
+                else if (sat_temp < SAMP_MIN) sample = SAMP_MIN[SAMP_WID-1:0];
+                else sample = sat_temp[SAMP_WID-1:0];
             end
         end else if (eff_reverb == 2'd2) begin
             if (rev_idx4 < rev_idx4_valid) begin
-                s9_temp = $signed({s8_sample[7], s8_sample}) + ($signed({reverb_4_rdata[7], reverb_4_rdata}) >>> 1);
-                if (s9_temp > 9'sd127) s8_sample = 8'sd127;
-                else if (s9_temp < -9'sd128) s8_sample = -8'sd128;
-                else s8_sample = s9_temp[7:0];
+                sat_temp = $signed({sample[SAMP_WID-1], sample}) + ($signed({reverb_4_rdata[SAMP_WID-1], reverb_4_rdata}) >>> 1);
+                if (sat_temp > SAMP_MAX) sample = SAMP_MAX[SAMP_WID-1:0];
+                else if (sat_temp < SAMP_MIN) sample = SAMP_MIN[SAMP_WID-1:0];
+                else sample = sat_temp[SAMP_WID-1:0];
             end
         end
     end
@@ -1691,9 +1906,9 @@ endtask
 
 // Dampen filter application task
 task apply_dampen;
-    inout [7:0] s8_sample;         // S8F7 input/output sample
+    inout [SAMP_WID-1:0] sample;
 
-    reg signed [8:0] s9_err;       // S9F8 dampen filter error
+    reg signed [SAMP_WID:0] damp_err;
     begin
         // Calculate dampen alpha with HWFX overrides
         if (hw_low_dmp && hw_high_dmp) begin
@@ -1704,7 +1919,7 @@ task apply_dampen;
             damp_alpha_8x[ctx_idx] <= DAMP_ALPHA_LOW;
         end else begin
             case (filt_dampen)
-                2'd0:    damp_alpha_8x[ctx_idx] <= 8'd0;
+                2'd0:    damp_alpha_8x[ctx_idx] <= 0;
                 2'd1:    damp_alpha_8x[ctx_idx] <= DAMP_ALPHA_LOW;
                 2'd2:    damp_alpha_8x[ctx_idx] <= DAMP_ALPHA_HIGH;
                 default: damp_alpha_8x[ctx_idx] <= DAMP_ALPHA_STRONG;
@@ -1712,27 +1927,27 @@ task apply_dampen;
         end
 
         // Apply dampen filter (IIR lowpass)
-        if (damp_alpha != 8'd0) begin
-            // Compute error: S9F7 s9_err = S8F7 s8_sample - S8F7 damp_state
-            s9_err = $signed({s8_sample[7], s8_sample}) - $signed({damp_state[7], damp_state});
-            // Update state: S8F7 damp_state = S8F7 damp_state + (S9F7 s9_err * U8F8 damp_alpha) >>> 8
-            damp_state_8x[ctx_idx] <= damp_state + ((($signed({{8{s9_err[8]}}, s9_err})) * {{9{1'b0}}, damp_alpha}) >>> 8);
-            s8_sample = damp_state;
+        if (damp_alpha != 0) begin
+            // damp_err = sample - damp_state (sign-extended)
+            damp_err = $signed({sample[SAMP_WID-1], sample}) - $signed({damp_state[SAMP_WID-1], damp_state});
+            // damp_state += damp_err * damp_alpha
+            damp_state_8x[ctx_idx] <= damp_state + `fp_damp_mul_su(damp_err, damp_alpha);
+            sample = damp_state;
         end
     end
 endtask
 
 // Bitcrush/distort application task
 task apply_bitcrush;
-    inout [7:0] s8_sample;         // S8F7 input/output sample
+    inout [SAMP_WID-1:0] sample;
     begin
         // Apply bitcrush/distort (HWFX 0x5F42)
         if (hw_low_bcr) begin
-            s8_sample = {s8_sample[7:2], 2'd0};
+            sample = {sample[SAMP_WID-1:2], 2'd0};
         end else if (hw_high_bcr) begin
-            if (s8_sample > 8'sd31) s8_sample = 8'sd31;
-            else if (s8_sample < -8'sd31) s8_sample = -8'sd31;
-            s8_sample = {s8_sample[7:2], 2'd0};
+            if (sample > SAMP_BCR_CLIP) sample = SAMP_BCR_CLIP;
+            else if (sample < -SAMP_BCR_CLIP) sample = -SAMP_BCR_CLIP;
+            sample = {sample[SAMP_WID-1:2], 2'd0};
         end
     end
 endtask
@@ -1741,45 +1956,44 @@ endtask
 // PCM processing chain
 //==============================================================
 task process_pcm_chain;
-    reg [7:0] s8_sample;         // S8F7 sample
+    reg [SAMP_WID-1:0] sample;
     begin
         // Generate waveform sample
-        generate_waveform_sample(s8_sample);
+        generate_waveform_sample(sample);
 
-        // Volume scaling
-        // S8F7 s8_sample = S8F7 s8_sample * U8F0 eff_vol / 224
-        s8_sample = (($signed({{8{s8_sample[7]}}, s8_sample}) * $signed({{8{1'b0}}, eff_vol}))) / 9'sd224;
+        // Volume scaling: sample * eff_vol / VOL_DIVISOR
+        sample = (($signed({{VOL_WID{sample[SAMP_WID-1]}}, sample}) * $signed({{SAMP_WID{1'b0}}, eff_vol}))) / VOL_DIVISOR;
 
         // Attack ramp
         if (attack_ctr != 5'd0) begin
-            // S8F7 s8_sample = S8F7 s8_sample * (U4F0 16 - U4F0 attack_ctr) / 16
-            s8_sample = ($signed({{4{s8_sample[7]}}, s8_sample}) * $signed({{8{1'b0}}, 5'd16 - attack_ctr})) >>> 4;
+            // S8F7 sample = S8F7 sample * U5F4 (16 - attack_ctr) → S8F7
+            sample = `fp_ramp_mul_su($signed(sample), 5'd16 - attack_ctr);
         end
 
         // Release ramp
         if (releasing) begin
-            // S8F7 s8_sample = S8F7 s8_sample * U4F0 release_ctr / 16
-            s8_sample = ($signed({{4{s8_sample[7]}}, s8_sample}) * $signed({{8{1'b0}}, release_ctr})) >>> 4;
+            // S8F7 sample = S8F7 sample * U5F4 release_ctr → S8F7
+            sample = `fp_ramp_mul_su($signed(sample), release_ctr);
         end
 
         // Save pre-reverb sample (for delay line write in main always block)
-        pre_reverb_sample = s8_sample;
+        pre_reverb_sample = sample;
 
         // Apply reverb (add delayed sample with saturation)
-        apply_reverb_mix(s8_sample);
+        apply_reverb_mix(sample);
 
         // Apply dampen filter
-        apply_dampen(s8_sample);
+        apply_dampen(sample);
 
         // Apply bitcrush/distort
-        apply_bitcrush(s8_sample);
+        apply_bitcrush(sample);
 
         // Final PCM output
         if (is_main_context(ctx_idx)) begin
-            pcm_out[voice_idx] <= s8_sample;
+            pcm_out[voice_idx] <= sample;
         end else begin
             // CUSTOM contexts (0,2,4,6) - store for use by paired MAIN contexts
-            custom_pcm_out[voice_idx] <= s8_sample;
+            custom_pcm_out[voice_idx] <= sample;
         end
     end
 endtask
@@ -1845,8 +2059,8 @@ always @(posedge clk_pcm_8x) begin
             sample_ctr_8x[i] <= 8'd0;
             note_ctr_8x[i] <= 8'd0;
             note_idx_8x[i] <= 6'd0;
-            phase_acc_8x[i] <= 22'd0;
-            detune_acc_8x[i] <= 22'd0;
+            phase_acc_8x[i] <= 0;
+            detune_acc_8x[i] <= 0;
             // Initialize all other per-context registers
             cur_note_idx_8x[i] <= 6'd0;
             cur_pitch_8x[i] <= 6'd0;
@@ -1856,7 +2070,7 @@ always @(posedge clk_pcm_8x) begin
             cur_custom_8x[i] <= 1'b0;
             prev_pitch_8x[i] <= 6'd0;
             prev_vol_8x[i] <= 3'd0;
-            note_offset_8x[i] <= 24'd0;
+            note_offset_8x[i] <= 0;
             attack_ctr_8x[i] <= 5'd0;
             release_ctr_8x[i] <= 5'd0;
             releasing_8x[i] <= 1'b0;
@@ -1864,13 +2078,13 @@ always @(posedge clk_pcm_8x) begin
             arp_accum_8x[i] <= 3'd0;
             next_group_pos_8x[i] <= 2'd0;
             arp_speed_8x[i] <= 8'd0;
-            eff_vib_phase_8x[i] <= 11'd0;
+            eff_vib_phase_8x[i] <= 0;
             lfsr_8x[i] <= 16'hACE1;  // Non-zero seed
-            brown_state_8x[i] <= 19'sd0;  // S19F18
+            brown_state_8x[i] <= 0;
             lfsr_repeat_counter_8x[i] <= 6'd0;
-            lfsr_sample_8x[i] <= 8'sd0;  // S8F7
-            damp_alpha_8x[i] <= 8'd0;
-            damp_state_8x[i] <= 8'sd0;
+            lfsr_sample_8x[i] <= 0;
+            damp_alpha_8x[i] <= 0;
+            damp_state_8x[i] <= 0;
             rev_idx2_8x[i] <= 9'd0;
             rev_idx4_8x[i] <= 10'd0;
             rev_idx2_valid_8x[i] <= 9'd0;
@@ -1879,14 +2093,21 @@ always @(posedge clk_pcm_8x) begin
         // Reset main voice output arrays
         for (i=0; i<4; i=i+1) begin
             looping[i] <= 1'b0;
-            pcm_out[i] <= 8'd0;
-            custom_pcm_out[i] <= 8'sd0;
+            sfx_pass_done[i] <= 1'b0;
+            pcm_out[i] <= 0;
+            custom_pcm_out[i] <= 0;
             custom_load_wave_pcm[i] <= 3'd0;
         end
         custom_load_toggle_pcm <= 4'd0;
     end else begin
         // Clear sfx_done pulses (will be set again if needed in FSM)
         sfx_done <= 4'd0;
+
+        // sfx_pass_done: high when voice has played through all 32 notes
+        if (is_main_context(ctx_idx)) begin
+            sfx_pass_done[voice_idx] <= (pcm_state[ctx_idx] == PCM_PLAYING) &&
+                                        (notes_played_8x[ctx_idx] >= 8'd32);
+        end
 
         // Set sticky flags on edge detection for ALL contexts
         force_stop_pcm_sticky <= force_stop_pcm_sticky | force_stop_strobe;
@@ -1895,9 +2116,9 @@ always @(posedge clk_pcm_8x) begin
 
         // Clear PCM outputs for current context
         if (is_main_context(ctx_idx)) begin
-            pcm_out[voice_idx] <= 8'd0;
+            pcm_out[voice_idx] <= 0;
         end else begin
-            custom_pcm_out[voice_idx] <= 8'sd0;
+            custom_pcm_out[voice_idx] <= 0;
         end
 
         if (run) begin
@@ -1923,8 +2144,11 @@ always @(posedge clk_pcm_8x) begin
 
                     // Handle force_stop (stop immediately)
                     if (force_stop_pcm_sticky[ctx_idx]) begin
-                        pcm_state[ctx_idx] <= PCM_STOPPING;
+                        pcm_state[ctx_idx] <= PCM_IDLE;
                         force_stop_pcm_sticky[ctx_idx] <= 1'b0;
+                        if (is_main_context(ctx_idx)) begin
+                            sfx_done[voice_idx] <= 1'b1;
+                        end
                     end
 
                     // Handle force_release (disable looping, continue playing)
@@ -1936,14 +2160,13 @@ always @(posedge clk_pcm_8x) begin
 
                     // HWFX processing: if voice_idx bit set in hwfx_5f40_val then skip every other clock cycle, otherwise process every clock cycle
                     if (hwfx_5f40_val[{1'b1, voice_idx}] ? clock_toggle : 1'b1) begin
-                        // Tick one sample - timing only during warm-up, full DSP during playing
-                        if (pcm_state[ctx_idx] == PCM_WARM_UP) begin
-                            // Warm-up: only advance timing, don't update phase/DSP state (note params not decoded yet)
-                            if (!is_waveform_inst) begin
-                                advance_note_timing();
-                            end
-                        end else begin
-                            // Playing: full sample tick including phase accumulator and DSP updates
+                        // Advance note timing
+                        if (!is_waveform_inst) begin
+                            advance_note_timing();
+                        end
+
+                        // Tick one sample - DSP updates only during playing
+                        if (pcm_state[ctx_idx] == PCM_PLAYING) begin
                             sample_tick();
                         end
 
@@ -1951,7 +2174,7 @@ always @(posedge clk_pcm_8x) begin
                         if (pcm_state[ctx_idx] == PCM_PLAYING) begin
                             process_pcm_chain();
                         end else begin
-                            pre_reverb_sample = 8'd0;
+                            pre_reverb_sample = 0;
                         end
 
                         // SFX RAM access logic
@@ -1961,8 +2184,8 @@ always @(posedge clk_pcm_8x) begin
                         //   - 2 samples before main note tick: check for arpeggio effect, read arpeggio note if needed
                         if (is_waveform_inst) begin
                             // Waveform/PCM instrument: read from phase accumulator
-                            sfx_read_addr = phase_acc[17:13];
-                            sfx_byte_sel_8x[ctx_idx] <= phase_acc[12];
+                            sfx_read_addr = phase_acc[WAVE_PRC-1:WAVE_PRC-5];
+                            sfx_byte_sel_8x[ctx_idx] <= phase_acc[WAVE_PRC-6];
                         end else begin
                             // Note instrument: default read next note (note_idx)
                             sfx_read_addr = (note_idx <= NOTE_MAX_INDEX) ? note_idx[4:0] : 5'd0;
@@ -1987,7 +2210,7 @@ always @(posedge clk_pcm_8x) begin
                                     end
                                 end else begin
                                     // No arpeggio effect
-                                    // TODO: If the end of the main note does not along with the end of the arpeggio note it's envelope won't be released properly.
+                                    // TODO: If the end of the main note does not end along with the end of the arpeggio note its envelope won't be released properly.
                                     arp_active_8x[ctx_idx] <= 1'b0;
                                 end
                             end
@@ -2074,14 +2297,6 @@ always @(posedge clk_pcm_8x) begin
                     end // sample tick
                 end
 
-                PCM_STOPPING: begin
-                    // Transition to idle (cleanup state before stopping)
-                    pcm_state[ctx_idx] <= PCM_IDLE;
-                    // Set sfx_done pulse for MAIN contexts
-                    if (is_main_context(ctx_idx)) begin
-                        sfx_done[voice_idx] <= 1'b1;
-                    end
-                end
 
                 default: begin
                     pcm_state[ctx_idx] <= PCM_IDLE;
