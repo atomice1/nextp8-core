@@ -382,7 +382,7 @@ wire [15:0] cpu_din =
     (pal_mem || da_mem || vid_mem) ? rdata :
     16'hffff;
 
-TG68KdotC_Kernel #(0,1,0,0,0,0,0,1)
+TG68KdotC_Kernel #(2,2,2,2,2,2,2,1)
 tg68k (
     .clk            ( mclk              ),
     .nReset         ( ~reset         ),
@@ -392,7 +392,7 @@ tg68k (
     .IPL_autovector ( 1'b1           ),
     .berr           ( 1'b0           ),
     .clr_berr       ( ),                  //1'b0           ),
-    .CPU            ( 2'b00          ),
+    .CPU            ( 2'b01          ), // 01-> 68010
     .addr_out       ( cpu_addr       ),
     .data_write     ( cpu_dout       ),
     .nUDS           ( cpu_ds[1]      ),
