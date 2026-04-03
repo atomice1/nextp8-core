@@ -118,7 +118,7 @@ unsigned	SDSPISIM::read_bitfield(int offset, int bits,
 
 unsigned	SDSPISIM::OCR(void) {
 	// {{{
-	unsigned	ocr = 0x00ff80;
+	unsigned	ocr = 0x00ff8000;
 
 	if (CCS)
 		ocr |= 0x40000000;
@@ -345,12 +345,10 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					m_rxloc = 0;
 				} else if ((m_dat_in&0x0ff) == 0x0fc) {
 					// Multi-block write token
-					if (m_debug) printf("SDSPI: MULTI-BLOCK WRITE TOKEN!!\n");
 					m_have_token = true;
 					m_rxloc = 0;
 				} else if ((m_dat_in&0x0ff) == 0x0fd) {
 					// Stop transmission token
-					if (m_debug) printf("SDSPI: STOP TRAN TOKEN!!\n");
 					m_reading_data = false;
 					m_multiblock_write = false;
 					m_have_token = false;
@@ -361,7 +359,15 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 			}
 			// }}}
 		} else if (m_cmdidx == 0 && m_dat_in == (char) 0xff) {
-			// sync
+			// Sync byte — also drain any pending response
+			// (CMD55 sets m_cmdidx=-1 so bootloader can pipeline
+			// ACMD41 without waiting; Linux polls with 0xff instead)
+			if (m_rspdly > 0) {
+				if (m_busy) m_dat_out = 0;
+				m_rspdly--;
+			} else if (m_rspidx < SDSPI_RSPLEN) {
+				m_dat_out = m_rspbuf[m_rspidx++];
+			}
 		} else if (m_cmdidx < 6) {
 			// {{{
 			// if (m_debug) printf("SDSPI: CMDIDX = %d\n",m_cmdidx);
@@ -416,16 +422,20 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 						SDSPI_RCVD_ACMD41
 						:/*SDSPI_RESET_COMPLETE */ SDSPI_IN_OPERATION;
 					break;
-				case 51: // ACMD51
+				case 51: // ACMD51 -- SEND_SCR
+					m_rspbuf[0] = 0x00;
+					memset(m_block_buf, 0x0ff, SDSPI_MAXBLKLEN);
 					m_block_buf[0] = 0x0fe;
-					for(int j=0; j<8; j++)
-						m_block_buf[j+1] = m_csd[j];
+					// SCR register (8 bytes, big-endian)
+					m_block_buf[1] = 0x02; // SCR_STRUCTURE=0, SD_SPEC=2
+					m_block_buf[2] = 0x05; // STAT_AFTER_ERASE=0, SECURITY=0, BUS_WIDTHS=0101
+					for(int j=3; j<9; j++)
+						m_block_buf[j] = 0x00;
 					m_blklen = 8;
 					add_block_crc(m_blklen, m_block_buf);
 
-					m_blkdly = 0;
+					m_blkdly = 60;
 					m_blkidx = 0;
-					m_dat_out = 0;
 					break;
 				case 23: // ACMD23 -- SET_WR_BLK_ERASE_COUNT
 					// Pre-erase notification for multi-block writes
@@ -434,7 +444,26 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					m_rspbuf[0] = 0x00;
 					m_rspdly = 2;
 					break;
-				case 13: // ACMD13
+				case 13: // ACMD13 -- SD_STATUS
+					// R1 response, then 512-bit (64 bytes) SD Status block
+					m_rspbuf[0] = 0x00;
+					memset(m_block_buf, 0x0ff, SDSPI_MAXBLKLEN);
+					m_block_buf[0] = 0x0fe; // Data start token
+					// Build SD Status (all zero for basic simulation):
+					//   byte 0 bits[7:6] = DAT_BUS_WIDTH  = 00 (1-bit default)
+					//   byte 0 bit[5]    = SECURED_MODE   = 0
+					//   bytes 2-3        = SD_CARD_TYPE   = 0x0000 (Regular SD RD/WR)
+					//   all other reserved / unset fields  = 0
+					memset(&m_block_buf[1], 0x00, 64);
+					m_blklen = 64;
+					add_block_crc(m_blklen, m_block_buf);
+					m_blkdly = 60;
+					m_blkidx = 0;
+					break;
+				case 55: // CMD55 after CMD55 -- acknowledged, re-arm alt flag
+					m_rspbuf[0] = 0x00;
+					m_rspdly = 2;
+					break;
 				case 22: // ACMD22
 				case 42: // ACMD42
 				default: // Unimplemented command!
@@ -442,7 +471,7 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					m_rspdly = 4;
 					fprintf(stderr, "SDSPI ERR: Alt command ACMD%d not implemented!\n", m_cmdbuf[0]&0x03f);
 					assert(0 && "Not Implemented");
-				} m_altcmd_flag = false;
+				} m_altcmd_flag = ((m_cmdbuf[0] & 0x3f) == 55);
 				// }}}
 			} else { // Regular command processing
 				// {{{
@@ -589,7 +618,6 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 					break;
 				case 25: // CMD25 -- WRITE_MULTIPLE_BLOCK
 					if (m_dev) {
-						if (m_debug) printf("Going to write multiple blocks starting at %08x of %08lx\n", arg, m_devblocks);
 						if (m_block_address) {
 							assert(arg < m_devblocks);
 							fseek(m_dev, arg<<LGSECTOR_SIZE, SEEK_SET);
@@ -652,6 +680,12 @@ int	SDSPISIM::operator()(const int csn, const int sck, const int mosi) {
 				case 27: // CMD27 -- PROGRAM_CSD
 				case 32: // CMD32 -- ERASE_WR_BLK_START_ADDR
 				case 33: // CMD33 -- ERASE_WR_BLK_END_ADDR
+				case 5:  // CMD5  -- SDIO IO_SEND_OP_COND (not supported by SD/eMMC)
+				case 52: // CMD52 -- SDIO IO_RW_DIRECT  (not supported by SD/eMMC)
+					// Return illegal command error; card is not SDIO
+					m_rspbuf[0] = 0x04; // R1: illegal command bit
+					m_rspdly = 1;
+					break;
 				case 38: // CMD38 -- ERASE
 				case 56: // CMD56 -- GEN_CMD
 				default: // Unimplemented command
