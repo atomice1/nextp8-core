@@ -111,7 +111,7 @@ initial begin
     // Check that initialization actually completed
     if (dut.init_state != 5'd16) begin  // 5'd16 = INIT_DONE
         $display("FAIL: Keyboard initialization not complete. init_state=%0d (expected 15)", dut.init_state);
-        $finish(1);
+        $fatal(1);
     end
     $display("Keyboard initialization verified: init_state=INIT_DONE");
 
@@ -185,7 +185,7 @@ initial begin
         $finish(0);
     end else begin
         $display("SOME TESTS FAILED (%0d passed, %0d failed)", pass_count, fail_count);
-        $finish(1);
+        $fatal(1);
     end
 end
 

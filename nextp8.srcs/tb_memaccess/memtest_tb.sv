@@ -339,49 +339,49 @@ always @(postcode_o) begin
                 $display("[$time=%t] POST=25: FAILURE - SRAM test failed", $time);
                 $display("=== FAILURE: SRAM read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd26: begin
                 $display("[$time=%t] POST=26: FAILURE - MMIO debug register test failed", $time);
                 $display("=== FAILURE: MMIO read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd27: begin
                 $display("[$time=%t] POST=27: FAILURE - VRAM back buffer test failed", $time);
                 $display("=== FAILURE: VRAM back buffer read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd28: begin
                 $display("[$time=%t] POST=28: FAILURE - VRAM front buffer test failed", $time);
                 $display("=== FAILURE: VRAM front buffer read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd29: begin
                 $display("[$time=%t] POST=29: FAILURE - VRAM overlay back test failed", $time);
                 $display("=== FAILURE: VRAM overlay back read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd30: begin
                 $display("[$time=%t] POST=30: FAILURE - VRAM overlay front test failed", $time);
                 $display("=== FAILURE: VRAM overlay front read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd31: begin
                 $display("[$time=%t] POST=31: FAILURE - Palette RAM test failed", $time);
                 $display("=== FAILURE: Palette RAM read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             6'd32: begin
                 $display("[$time=%t] POST=32: FAILURE - Digital audio RAM test failed", $time);
                 $display("=== FAILURE: Digital audio RAM read/write verification failed ===");
                 #1000;
-                $finish;
+                $fatal(1);
             end
             default: $display("[$time=%t] POST=%0d: Unknown state", $time, postcode_o);
         endcase
@@ -393,7 +393,7 @@ initial begin
     #50000000; // 50ms timeout
     $display("ERROR: Test timeout at POST=%0d", postcode_o);
     $display("=== FAILURE: Test did not complete ===");
-    $finish;
+    $fatal(1);
 end
 
 endmodule

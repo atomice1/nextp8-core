@@ -218,7 +218,7 @@ module tb_p8audio_music;
         fd = $fopen(filename, "r");
         if (fd == 0) begin
             $display("ERROR: could not open %0s", filename);
-            $finish;
+            $fatal(1);
         end else begin
             in_sfx = 0; sfx_idx = 0; lb_len = 0;
             // clear SFX region
@@ -329,7 +329,7 @@ module tb_p8audio_music;
         fd = $fopen(filename, "r");
         if (fd == 0) begin
             $display("ERROR: could not open %0s", filename);
-            $finish;
+            $fatal(1);
         end else begin
             in_music = 0; music_idx = 0; lb_len = 0;
             // Initialize MUSIC region with default pattern (all channels disabled)

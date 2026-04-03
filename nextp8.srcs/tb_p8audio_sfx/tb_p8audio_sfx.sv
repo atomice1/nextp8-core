@@ -214,7 +214,7 @@ module tb_p8audio_sfx;
         fd = $fopen(filename, "r");
         if (fd == 0) begin
             $display("ERROR: could not open %0s", filename);
-            $finish;
+            $fatal(1);
         end else begin
             in_sfx = 0; sfx_idx = 0; lb_len = 0;
             // clear SFX region

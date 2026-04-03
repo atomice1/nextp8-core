@@ -323,7 +323,7 @@ always @(posedge clk_video) begin
             end
             $display("  Expected RGB: %02h %02h %02h", expected_colour[23:16], expected_colour[15:8], expected_colour[7:0]);
             $display("  Got RGB:      %02h %02h %02h", video_r, video_g, video_b);
-            $stop(1);
+            $fatal(1);
          end else begin
             if ((px % 32 == 0) && (py % 32 == 0)) begin
                 $display("OK at time %t: x=%0d, y=%0d, px=%0d, py=%0d, index=%0d",
