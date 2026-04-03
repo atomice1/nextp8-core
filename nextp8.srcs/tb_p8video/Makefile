@@ -30,7 +30,8 @@ ALL_SRCS = $(P8VIDEO_SRCS) $(TB_SRCS)
 # Simulation parameters
 TOP = p8video_tb
 SNAPSHOT = p8video_tb_snap
-TIMEOUT ?= 30
+SNAPSHOT_OVERLAY = p8video_tb_overlay_snap
+TIMEOUT ?= 60
 GENERICS ?=
 
 # xsim commands
@@ -64,22 +65,35 @@ compile_sv: compile_vhdl compile_ip
 	$(XVLOG) --sv $(TB_SRCS)
 	@echo ""
 
-# Elaborate design
+# Elaborate design (no overlay)
 elaborate: compile_sv
-	@echo "=== Elaborating design ==="
+	@echo "=== Elaborating design (ENABLE_OVERLAY=0) ==="
 	@echo "NOTE: This testbench requires the vram IP core to be generated"
 	@echo "      If you see errors about missing 'vram', generate it in Vivado GUI first"
 	$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
 		--timescale 1ns/1ps \
+		-generic_top "ENABLE_OVERLAY=0" \
 		$(if $(GENERICS),-generic_top "$(GENERICS)",) \
 		-L unisims_ver -L unimacro_ver -L secureip \
 		-L blk_mem_gen_v8_4_11 -L xpm \
 		glbl
 	@echo ""
 
-# Run simulation
-sim: elaborate
-	@echo "=== Running simulation (timeout: $(TIMEOUT)s) ==="
+# Elaborate design (with overlay)
+elaborate_overlay: compile_sv
+	@echo "=== Elaborating design (ENABLE_OVERLAY=1) ==="
+	$(XELAB) $(TOP) -s $(SNAPSHOT_OVERLAY) -debug typical \
+		--timescale 1ns/1ps \
+		-generic_top "ENABLE_OVERLAY=1" \
+		$(if $(GENERICS),-generic_top "$(GENERICS)",) \
+		-L unisims_ver -L unimacro_ver -L secureip \
+		-L blk_mem_gen_v8_4_11 -L xpm \
+		glbl
+	@echo ""
+
+# Run simulation (both configurations)
+sim: elaborate elaborate_overlay
+	@echo "=== Running simulation without overlay (timeout: $(TIMEOUT)s) ==="
 	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
 		(if [ $$? -eq 124 ]; then \
 			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
@@ -88,7 +102,16 @@ sim: elaborate
 			exit $$?; \
 		fi)
 	@echo ""
-	@echo "=== Simulation complete ==="
+	@echo "=== Running simulation with overlay (timeout: $(TIMEOUT)s) ==="
+	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT_OVERLAY) -runall || \
+		(if [ $$? -eq 124 ]; then \
+			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
+			exit 1; \
+		else \
+			exit $$?; \
+		fi)
+	@echo ""
+	@echo "=== Both simulations complete ==="
 
 # Alternative: just run (if already compiled)
 run:

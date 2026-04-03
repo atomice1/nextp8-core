@@ -43,6 +43,9 @@ use IEEE.std_logic_textio.all;
 use std.textio.all;
 
 entity p8video is
+generic (
+    VRAM_PIPELINE_LATENCY_PIXELS : natural := 6
+);
 port (
     -- Clock and reset
     mclk:         IN Std_logic;  -- CPU clock domain (~30MHz)
@@ -97,8 +100,6 @@ constant p2:natural:=p1+pno;
 constant l2:natural:=l1+lno;  --
 constant xdim:natural:=1343; --pixels-1
 constant ydim:natural:=805; --lines
-
-constant VRAM_PIPELINE_LATENCY_PIXELS : natural := 6;
 
 type PaletteArray is array(0 to 31) of Std_logic_vector(23 downto 0);
 CONSTANT SystemPalette : PaletteArray := (

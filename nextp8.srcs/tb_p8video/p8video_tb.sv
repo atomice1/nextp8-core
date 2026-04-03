@@ -106,7 +106,7 @@ reg [4:0] screen_palette [0:15] = {
     0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30
 };
 
-p8video p8video (
+p8video #(.VRAM_PIPELINE_LATENCY_PIXELS(2)) p8video (
 	.mclk(mclk),
 	.clk_video(clk_video),
 	.reset_sys(reset_mclk_q),
@@ -139,6 +139,10 @@ integer x, y;
 reg init_done = 0;
 
 initial begin
+    if (ENABLE_OVERLAY)
+        $display("=== p8video_tb: ENABLE_OVERLAY=1 ===");
+    else
+        $display("=== p8video_tb: ENABLE_OVERLAY=0 ===");
     // Reset
     reset = 1;
     repeat(10) begin
@@ -282,7 +286,7 @@ always @(posedge clk_video) begin
         if (!video_hs)
              x <= 0;
         else if (!iblank)
-             x <= x + 6;
+             x <= x + 2;
     end
 
     if (!iblank && init_done) begin

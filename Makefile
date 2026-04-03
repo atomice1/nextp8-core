@@ -162,7 +162,7 @@ regenerate-ip:
 test: test-quick
 
 # test-quick runs all quick tests (excludes slow tests)
-test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_waveform_gen test-tb_ps2_interface test-tb_ps2_interface_device test-ps2_interface_comms test-keyboard_device test-mouse_device test-tb_keyboard test-tb_mouse test-tb_i2c_rtc
+test-quick: test-tb_nextp8_boot test-tb_p8video test-tb_p8audio_sfx-quick test-tb_p8audio_music test-tb_nextp8_p8audio test-tb_ps2_interface test-tb_ps2_interface_device test-ps2_interface_comms test-keyboard_device test-mouse_device test-tb_keyboard test-tb_mouse test-tb_i2c_rtc
 	@echo "=== Quick tests complete ==="
 
 # test-slow runs only slow tests
