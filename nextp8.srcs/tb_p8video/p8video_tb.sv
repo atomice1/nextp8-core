@@ -37,7 +37,7 @@ reg overlay_enable = 1'b0;
 reg [3:0] overlay_key_colour = 4'd0;
 
 
-vram vram_main (
+vram_main vram_main (
   .clka(mclk),
   .wea(vw1_main),
   .addra(vaddr1_main),
@@ -50,7 +50,7 @@ vram vram_main (
   .doutb(vdout2_main)
 );
 
-vram vram_overlay (
+vram_overlay vram_overlay (
   .clka(mclk),
   .wea(vw1_overlay),
   .addra(vaddr1_overlay),

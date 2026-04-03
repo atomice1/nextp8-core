@@ -816,7 +816,7 @@ reg [7:0] overlay_ctrl_sys = 8'h00;  // [6]=enable, [3:0]=key_colour
 (* ASYNC_REG = "TRUE" *) reg [7:0] overlay_ctrl_video_d, overlay_ctrl_video_q; // (clk_video)
 
 
-vram vram_main (
+vram_main vram_main (
   .clka(mclk),
   .wea(vw1_main),
   .addra(vaddr1_main),
@@ -829,7 +829,7 @@ vram vram_main (
   .doutb(vdout2_main)
 );
 
-vram vram_overlay (
+vram_overlay vram_overlay (
   .clka(mclk),
   .wea(vw1_overlay),
   .addra(vaddr1_overlay),
