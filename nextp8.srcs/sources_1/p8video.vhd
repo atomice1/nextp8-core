@@ -94,9 +94,12 @@ architecture Behavioral of p8video is
 -- Visible region starts at: pixel 264 (136+128), line 35 (6+29)
 constant l1:natural:=35;     -- vsync + vback porch
 constant lno:natural:=768;   -- visible lines
-constant p1:natural:=136+160+128;-- hsync + hback porch + left border
-constant pno:natural:=768;   -- visible pixels
-constant p2:natural:=p1+pno;
+constant p1_main:natural:=136+160+128;-- hsync + hback porch + left border
+constant pno_main:natural:=768;   -- visible pixels
+constant p2_main:natural:=p1_main+pno_main;
+constant p1_overlay:natural:=136+160+128;-- hsync + hback porch + left border
+constant pno_overlay:natural:=768;   -- visible pixels
+constant p2_overlay:natural:=p1_overlay+pno_overlay;
 constant l2:natural:=l1+lno;  --
 constant xdim:natural:=1343; --pixels-1
 constant ydim:natural:=805; --lines
@@ -260,7 +263,8 @@ process (clk_video)
     variable overlay_pixel_index: integer range 0 to 15;
     variable system_index: integer range 0 to 31;
     variable vdata: Std_logic_vector(23 downto 0);
-    variable px, px_next: natural range 0 to 2047:=0;
+    variable px_main, px_next_main: natural range 0 to 2047:=0;
+    variable px_overlay, px_next_overlay: natural range 0 to 2047:=0;
     variable pixel: natural range 0 to 2047:=0;
     variable ln, lin: natural range 0 to 1023:=0;
 begin
@@ -269,7 +273,8 @@ begin
             pixel := 0;
             lin := 0;
             ln := 0;
-            px := 0;
+            px_main := 0;
+            px_overlay := 0;
             VSB <= '1';
             HS <= '1';
             iblank <= '1';
@@ -324,65 +329,88 @@ begin
                 HS <= '1';
             end if;
 
-            if pixel >= p1 - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2 and lin >= l1 and lin < l2 then
-                px := (pixel - p1) / 6;
+            if lin >= l1 and lin < l2 then
                 ln := (lin - l1) / 6;
-                if pixel + VRAM_PIPELINE_LATENCY_PIXELS < p2 then
-                    px_next := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1) / 6;
-                    vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
-                    vaddress_overlay <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next / 4, 12));
+            else
+                ln := 300;
+            end if;
+
+            if pixel >= p1_main - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2_main and lin >= l1 and lin < l2 then
+                px_main := (pixel - p1_main) / 6;
+                if pixel + VRAM_PIPELINE_LATENCY_PIXELS < p2_main then
+                    px_next_main := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1_main) / 6;
+                    vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next_main / 4, 12));
                 else
                     vaddress_main <= (others => '0');
+                end if;
+            else
+                px_main := 800;
+                vaddress_main <= (others => '0');
+            end if;
+
+            if pixel >= p1_overlay - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2_overlay and lin >= l1 and lin < l2 then
+                px_overlay := (pixel - p1_overlay) / 6;
+                ln := (lin - l1) / 6;
+                if pixel + VRAM_PIPELINE_LATENCY_PIXELS < p2_overlay then
+                    px_next_overlay := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1_overlay) / 4;
+                    vaddress_overlay <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next_overlay / 4, 12));
+                else
                     vaddress_overlay <= (others => '0');
                 end if;
             else
-                px := 800;
-                ln := 300;
-                vaddress_main <= (others => '0');
+                px_overlay := 800;
                 vaddress_overlay <= (others => '0');
             end if;
 
             -- Pixel output logic
-            if pixel >= p1 and pixel < p2 and lin >= l1 and lin < l2 then
-                iblank <= '0';
-
-                case px mod 4 is
+            if pixel >= p1_main and pixel < p2_main and lin >= l1 and lin < l2 then
+                case px_main mod 4 is
                     when 0 =>
                         screen_index := to_integer(unsigned(vdin_main(11 downto 8)));
-                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(11 downto 8)));
                     when 1 =>
                         screen_index := to_integer(unsigned(vdin_main(15 downto 12)));
-                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(15 downto 12)));
                     when 2 =>
                         screen_index := to_integer(unsigned(vdin_main(3 downto 0)));
-                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(3 downto 0)));
                     when 3 =>
                         screen_index := to_integer(unsigned(vdin_main(7 downto 4)));
-                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(7 downto 4)));
                     when others =>
                         screen_index := 0;
+                end case;
+            else
+                screen_index := 0;
+            end if;
+            if pixel >= p1_overlay and pixel < p2_overlay and lin >= l1 and lin < l2 then
+                iblank <= '0';
+                case px_overlay mod 4 is
+                    when 0 =>
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(11 downto 8)));
+                    when 1 =>
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(15 downto 12)));
+                    when 2 =>
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(3 downto 0)));
+                    when 3 =>
+                        overlay_pixel_index := to_integer(unsigned(vdin_overlay(7 downto 4)));
+                    when others =>
                         overlay_pixel_index := 0;
                 end case;
-                if overlay_enable = '1' and overlay_pixel_index /= to_integer(unsigned(overlay_key_colour)) then
-                    system_index := overlay_pixel_index;
-                else
-                    if vfront = '1' then
-                        system_index := to_integer(unsigned(palette1_video_d(screen_index*5+4 downto screen_index*5)));
-                    else
-                        system_index := to_integer(unsigned(palette0_video_d(screen_index*5+4 downto screen_index*5)));
-                    end if;
-                end if;
-
-                vdata := SystemPalette(system_index);
-                VR <= vdata(23 downto 16);
-                VG <= vdata(15 downto 8);
-                VB <= vdata(7 downto 0);
             else
                 iblank <= '1';
-                VR <= (others => '0');
-                VG <= (others => '0');
-                VB <= (others => '0');
+                overlay_pixel_index := 0;
             end if;
+            if overlay_enable = '1' and overlay_pixel_index /= to_integer(unsigned(overlay_key_colour)) then
+                system_index := overlay_pixel_index;
+            else
+                if vfront = '1' then
+                    system_index := to_integer(unsigned(palette1_video_d(screen_index*5+4 downto screen_index*5)));
+                else
+                    system_index := to_integer(unsigned(palette0_video_d(screen_index*5+4 downto screen_index*5)));
+                end if;
+            end if;
+
+            vdata := SystemPalette(system_index);
+            VR <= vdata(23 downto 16);
+            VG <= vdata(15 downto 8);
+            VB <= vdata(7 downto 0);
         end if;
     end if;
 end process;
