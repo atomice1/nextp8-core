@@ -29,7 +29,7 @@ ALL_SRCS = $(P8VIDEO_SRCS) $(TB_SRCS)
 # Simulation parameters
 TOP = p8video_tb
 SNAPSHOT = p8video_tb_snap
-TIMEOUT ?= 60
+TIMEOUT ?= 120
 
 # Screen transform modes to test
 XFORM_MODES = 0 1 2 3 5 6 7 129 130 131 133 134 135
@@ -48,11 +48,17 @@ ELAB_FLAGS = -debug typical --timescale 1ns/1ps \
 # Build directory
 WORK_DIR = xsim.dir
 
+# High-color modes to test: mode[,screen_transform]
+HC_MODES = 10 20 30 35
+
 XFORM_ELAB_TARGETS = $(foreach m,$(XFORM_MODES),elaborate_xform_$(m))
 XFORM_SIM_TARGETS  = $(foreach m,$(XFORM_MODES),sim_xform_$(m))
+HC_ELAB_TARGETS    = $(foreach m,$(HC_MODES),elaborate_hc_$(m))
+HC_SIM_TARGETS     = $(foreach m,$(HC_MODES),sim_hc_$(m))
 
 .PHONY: all sim run clean wave help compile_vhdl compile_ip compile_sv \
 	$(XFORM_ELAB_TARGETS) $(XFORM_SIM_TARGETS) \
+	$(HC_ELAB_TARGETS) $(HC_SIM_TARGETS) \
 	elaborate_overlay sim_overlay
 
 all: sim
@@ -99,6 +105,32 @@ endef
 $(foreach mode,$(XFORM_MODES),$(eval $(call XFORM_RULES,$(mode))))
 
 # ---------------------------------------------------------------------------
+# Per-high-color-mode elaborate and simulate targets (generated)
+# ---------------------------------------------------------------------------
+# hc_screen_transform: mode 0x20 requires SCREEN_TRANSFORM=1, others use 0
+hc_screen_transform = $(if $(filter 20,$(1)),1,0)
+
+define HC_RULES
+
+elaborate_hc_$(1): compile_sv
+	@echo "=== Elaborating (HIGH_COLOR_MODE=0x$(1), SCREEN_TRANSFORM=$(call hc_screen_transform,$(1))) ==="
+	$$(XELAB) $$(TOP) -s $$(SNAPSHOT)_hc_$(1) $$(ELAB_FLAGS) \
+		-generic_top "ENABLE_OVERLAY=0" \
+		-generic_top "SCREEN_TRANSFORM=$(call hc_screen_transform,$(1))" \
+		-generic_top "HIGH_COLOR_MODE=$$(shell printf '%d' 0x$(1))" \
+		glbl
+	@echo ""
+
+sim_hc_$(1): elaborate_hc_$(1)
+	@echo "=== Sim HIGH_COLOR_MODE=0x$(1) (timeout: $$(TIMEOUT)s) ==="
+	timeout $$(TIMEOUT) $$(XSIM) $$(SNAPSHOT)_hc_$(1) -runall
+	@echo ""
+
+endef
+
+$(foreach mode,$(HC_MODES),$(eval $(call HC_RULES,$(mode))))
+
+# ---------------------------------------------------------------------------
 # Overlay target (ENABLE_OVERLAY=1, SCREEN_TRANSFORM=0)
 # ---------------------------------------------------------------------------
 elaborate_overlay: compile_sv
@@ -116,7 +148,7 @@ sim_overlay: elaborate_overlay
 # ---------------------------------------------------------------------------
 # Run all simulations
 # ---------------------------------------------------------------------------
-sim: $(XFORM_SIM_TARGETS) sim_overlay
+sim: $(XFORM_SIM_TARGETS) sim_overlay $(HC_SIM_TARGETS)
 	@echo "=== All simulations complete ==="
 
 # Run default transform only (quick check)

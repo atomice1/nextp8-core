@@ -179,6 +179,7 @@ localparam [7:0] ADDR_MOUSE_BUTTONS_LATCHED    = 8'h59;
 localparam [7:0] ADDR_KEYBOARD_MATRIX          = 8'h60;
 localparam [7:0] ADDR_KEYBOARD_MATRIX_LATCHED  = 8'h80;
 localparam [7:0] ADDR_SCREEN_TRANSFORM         = 8'hA1;
+localparam [7:0] ADDR_HIGH_COLOR_MODE          = 8'hA3;
 
 reg [15:0] params = 16'd0;
 reg [5:0] post_code_cpu = 6'd3;
@@ -345,6 +346,8 @@ wire front_mem = cpu_addr[23:13] == 11'b11000000001;                     // $c02
 wire overlay_back_mem  = cpu_addr[23:13] == 11'b11000000010;             // $c04000 - $c05fff
 wire overlay_front_mem = cpu_addr[23:13] == 11'b11000000011;             // $c06000 - $c07fff
 wire pal_mem = cpu_act && (cpu_addr[23:5]  == 19'b1100000010000000000);  // $c08000 - $c0801f
+wire sec_pal_mem = cpu_act && (cpu_addr[23:4] == 20'b11000000100000000010); // $c08020 - $c0802f
+wire hc_bf_mem   = cpu_act && (cpu_addr[23:4] == 20'b11000000100000000011); // $c08030 - $c0803f
 wire da_mem  = cpu_act && (cpu_addr[23:14] == 10'b1100000011);           // $c0c000 - $c0ffff
 
 reg [15:0] rdata;
@@ -363,6 +366,12 @@ wire pal_sel;
 assign pal_write_en = pal_mem && cpu_wr;
 assign pal_read_en  = pal_mem && cpu_rd && (estate == 3'b000);
 assign pal_sel = cpu_addr[4] ? vfront : ~vfront;
+
+// Secondary palette and bitfield control signals
+wire sec_pal_write_en = sec_pal_mem && cpu_wr;
+wire sec_pal_sel = ~vfront;  // Always write to back buffer
+wire hc_bf_write_en = hc_bf_mem && cpu_wr;
+wire hc_bf_sel = ~vfront;    // Always write to back buffer
 
 // demultiplex the various data sources
 // For SRAM (cpu_mem) in state 000: use sram_rdata latched on falling edge (1-cycle access)
@@ -820,6 +829,10 @@ reg [7:0] overlay_ctrl_sys = 8'h00;  // [6]=enable, [3:0]=key_colour
 reg [7:0] screen_transform_sys = 8'h00;
 (* ASYNC_REG = "TRUE" *) reg [7:0] screen_transform_video_d, screen_transform_video_q; // (clk_video)
 
+// high-color mode register (clk_sys)
+reg [7:0] high_color_mode_sys = 8'h00;
+(* ASYNC_REG = "TRUE" *) reg [7:0] high_color_mode_video_d, high_color_mode_video_q; // (clk_video)
+
 
 vram_main vram_main (
   .clka(mclk),
@@ -888,6 +901,8 @@ always @(posedge clk_video) begin
         overlay_ctrl_video_q <= 8'd0;
         screen_transform_video_d <= 8'd0;
         screen_transform_video_q <= 8'd0;
+        high_color_mode_video_d <= 8'd0;
+        high_color_mode_video_q <= 8'd0;
     end else begin
         vdout2_main_d <= vdout2_main;
         vdout2_main_q <= vdout2_main_d;
@@ -897,6 +912,8 @@ always @(posedge clk_video) begin
         overlay_ctrl_video_q <= overlay_ctrl_video_d;
         screen_transform_video_d <= screen_transform_sys;
         screen_transform_video_q <= screen_transform_video_d;
+        high_color_mode_video_d <= high_color_mode_sys;
+        high_color_mode_video_q <= high_color_mode_video_d;
     end
 end
 
@@ -921,8 +938,19 @@ p8video p8video (
     .overlay_enable(overlay_ctrl_video_q[6]),
     .overlay_key_colour(overlay_ctrl_video_q[3:0]),
 
-    // Screen transform (clk_video domain, already CDC'd)
+    // Screen transform (quasi-static, CDC'd internally)
     .screen_transform(screen_transform_video_q),
+
+    // High-color mode (quasi-static, CDC'd internally)
+    .high_color_mode(high_color_mode_video_q),
+
+    // Secondary palette write interface (mclk domain)
+    .sec_pal_write_en(sec_pal_write_en),
+    .sec_pal_sel(sec_pal_sel),
+
+    // High-color bitfield write interface (mclk domain)
+    .hc_bf_write_en(hc_bf_write_en),
+    .hc_bf_sel(hc_bf_sel),
 
     // VRAM interface (clk_video domain)
     .vaddress_main(vaddr2_main),
@@ -1658,9 +1686,10 @@ begin
             if (cpu_addr[7:1]==ADDR_RESET_REQ[7:1] && cpu_rd) memio_out <= {6'd0, reset_type_mclk_q, 6'd0, reset_type_mclk_q};
             // ------------ video ----------------------------------------------------
             if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_rd) memio_out <= {7'b0, vfront, 7'b0, vfront};
+            if (cpu_addr[7:1]==ADDR_SCREEN_TRANSFORM[7:1] && cpu_rd) memio_out <= {screen_transform_sys, screen_transform_sys};
+            if (cpu_addr[7:1]==ADDR_HIGH_COLOR_MODE[7:1] && cpu_rd) memio_out <= {high_color_mode_sys, high_color_mode_sys};
             //--------------- overlay ----------------------------------
             if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_rd) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys};
-            if (cpu_addr[7:1]==ADDR_SCREEN_TRANSFORM[7:1] && cpu_rd) memio_out <= {screen_transform_sys, screen_transform_sys};
             //-------------- Build Info --------------------------------------------------
             if (cpu_addr[7:1]==ADDR_BUILD_TIMESTAMP_HI[7:1] && cpu_rd) memio_out <= build_timestamp[31:16];
             if (cpu_addr[7:1]==ADDR_BUILD_TIMESTAMP_LO[7:1] && cpu_rd) memio_out <= build_timestamp[15:0];
@@ -1785,9 +1814,11 @@ begin
                 vsync_ack <= 1'b1;
                 vsync_irq_enable <= cpu_dout[0];
             end
+
+            if (cpu_addr[7:1]==ADDR_SCREEN_TRANSFORM[7:1] && cpu_wr) screen_transform_sys <= cpu_dout[7:0];
+            if (cpu_addr[7:1]==ADDR_HIGH_COLOR_MODE[7:1] && cpu_wr) high_color_mode_sys <= cpu_dout[7:0];
             //--------------- overlay ----------------------------------
             if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_wr) overlay_ctrl_sys <= cpu_dout[7:0];
-            if (cpu_addr[7:1]==ADDR_SCREEN_TRANSFORM[7:1] && cpu_wr) screen_transform_sys <= cpu_dout[7:0];
             // ------------ parameters -------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_PARAMS[7:1] && cpu_wr) params <= cpu_dout;
             //-------------- RTC -------------------------------------------------------

@@ -77,8 +77,19 @@ port (
     vfronto:      OUT Std_logic;
     vfrontreq:    IN Std_logic;
 
-    -- Screen transform (clk_video domain, quasi-static after CDC)
+    -- Screen transform (quasi-static, CDC'd internally)
     screen_transform : IN Std_logic_vector(7 downto 0);
+
+    -- High-color mode (quasi-static, CDC'd internally)
+    high_color_mode : IN Std_logic_vector(7 downto 0);
+
+    -- Secondary palette write interface (mclk domain)
+    sec_pal_write_en : IN Std_logic;
+    sec_pal_sel      : IN Std_logic;
+
+    -- High-color bitfield write interface (mclk domain)
+    hc_bf_write_en   : IN Std_logic;
+    hc_bf_sel        : IN Std_logic;
 
     -- Video output signals (clk_video domain)
     VSB,HS:       buffer Std_logic;
@@ -169,6 +180,69 @@ signal vfront : Std_logic := '0';
 attribute ASYNC_REG of vfronto_q : signal is "TRUE";
 attribute ASYNC_REG of vfronto_d : signal is "TRUE";
 
+-- CDC for screen_transform crossing mclk -> clk_video (quasi-static)
+signal screen_transform_video : Std_logic_vector(7 downto 0) := (others => '0');
+signal screen_transform_video_d : Std_logic_vector(7 downto 0) := (others => '0');
+signal screen_transform_active : Std_logic_vector(7 downto 0) := (others => '0');
+attribute ASYNC_REG of screen_transform_video : signal is "TRUE";
+
+-- ============================================================================
+-- High-color mode support
+-- ============================================================================
+
+-- Secondary palette storage (mclk domain), same format as main palette
+signal sec_palette0_sys : ScreenPalette := (
+    "00000", "00001", "00010", "00011",
+    "00100", "00101", "00110", "00111",
+    "01000", "01001", "01010", "01011",
+    "01100", "01101", "01110", "01111"
+);
+signal sec_palette1_sys : ScreenPalette := (
+    "00000", "00001", "00010", "00011",
+    "00100", "00101", "00110", "00111",
+    "01000", "01001", "01010", "01011",
+    "01100", "01101", "01110", "01111"
+);
+
+-- Pack secondary palettes for CDC transfer
+signal sec_palette0_sys_packed : Std_logic_vector(79 downto 0);
+signal sec_palette1_sys_packed : Std_logic_vector(79 downto 0);
+
+-- CDC for secondary palette
+signal sec_palette0_video : Std_logic_vector(79 downto 0);
+signal sec_palette1_video : Std_logic_vector(79 downto 0);
+signal sec_palette0_video_d : Std_logic_vector(79 downto 0);
+signal sec_palette1_video_d : Std_logic_vector(79 downto 0);
+attribute ASYNC_REG of sec_palette0_video : signal is "TRUE";
+attribute ASYNC_REG of sec_palette1_video : signal is "TRUE";
+
+-- High-color bitfield storage (mclk domain), 16 bytes = 128 bits
+type BitfieldArray is array(0 to 15) of Std_logic_vector(7 downto 0);
+signal hc_bitfield0_sys : BitfieldArray := (others => (others => '0'));
+signal hc_bitfield1_sys : BitfieldArray := (others => (others => '0'));
+
+-- Pack bitfields for CDC transfer
+signal hc_bf0_sys_packed : Std_logic_vector(127 downto 0);
+signal hc_bf1_sys_packed : Std_logic_vector(127 downto 0);
+
+-- CDC for bitfield
+signal hc_bf0_video : Std_logic_vector(127 downto 0);
+signal hc_bf1_video : Std_logic_vector(127 downto 0);
+signal hc_bf0_video_d : Std_logic_vector(127 downto 0);
+signal hc_bf1_video_d : Std_logic_vector(127 downto 0);
+attribute ASYNC_REG of hc_bf0_video : signal is "TRUE";
+attribute ASYNC_REG of hc_bf1_video : signal is "TRUE";
+
+-- CDC for high_color_mode crossing mclk -> clk_video (quasi-static)
+signal hc_mode_video : Std_logic_vector(7 downto 0) := (others => '0');
+signal hc_mode_video_d : Std_logic_vector(7 downto 0) := (others => '0');
+signal hc_mode_active : Std_logic_vector(7 downto 0) := (others => '0');
+attribute ASYNC_REG of hc_mode_video : signal is "TRUE";
+
+-- Mode 0x20 hidden pixel line buffer (16 words = 64 pixels)
+type HiddenPixelBuf is array(0 to 15) of Std_logic_vector(15 downto 0);
+signal hidden_buf : HiddenPixelBuf := (others => (others => '0'));
+
 -- Overlay support (clk_video domain)
 signal overlay_vdin : Std_logic_vector(15 downto 0) := (others => '0');
 signal reading_overlay : Std_logic := '0';
@@ -251,6 +325,46 @@ begin
                 end if;
             end if;
 
+            -- Secondary palette writes
+            if sec_pal_write_en = '1' then
+                addr_idx := to_integer(unsigned(address(2 downto 0)));
+                if sec_pal_sel = '1' then
+                    if nLDS = '0' then
+                        sec_palette1_sys(addr_idx*2 + 1) <= din(7) & din(3 downto 0);
+                    end if;
+                    if nUDS = '0' then
+                        sec_palette1_sys(addr_idx*2) <= din(15) & din(11 downto 8);
+                    end if;
+                else
+                    if nLDS = '0' then
+                        sec_palette0_sys(addr_idx*2 + 1) <= din(7) & din(3 downto 0);
+                    end if;
+                    if nUDS = '0' then
+                        sec_palette0_sys(addr_idx*2) <= din(15) & din(11 downto 8);
+                    end if;
+                end if;
+            end if;
+
+            -- High-color bitfield writes (raw byte storage)
+            if hc_bf_write_en = '1' then
+                addr_idx := to_integer(unsigned(address(2 downto 0)));
+                if hc_bf_sel = '1' then
+                    if nLDS = '0' then
+                        hc_bitfield1_sys(addr_idx*2 + 1) <= din(7 downto 0);
+                    end if;
+                    if nUDS = '0' then
+                        hc_bitfield1_sys(addr_idx*2) <= din(15 downto 8);
+                    end if;
+                else
+                    if nLDS = '0' then
+                        hc_bitfield0_sys(addr_idx*2 + 1) <= din(7 downto 0);
+                    end if;
+                    if nUDS = '0' then
+                        hc_bitfield0_sys(addr_idx*2) <= din(15 downto 8);
+                    end if;
+                end if;
+            end if;
+
             vfronto_q <= vfront;
             vfronto_d <= vfronto_q;
             vfronto_sys <= vfronto_d;
@@ -300,6 +414,42 @@ palette1_sys_packed <= screen_palette1_sys(15) & screen_palette1_sys(14) &
                        screen_palette1_sys(3) & screen_palette1_sys(2) &
                        screen_palette1_sys(1) & screen_palette1_sys(0);
 
+sec_palette0_sys_packed <= sec_palette0_sys(15) & sec_palette0_sys(14) &
+                           sec_palette0_sys(13) & sec_palette0_sys(12) &
+                           sec_palette0_sys(11) & sec_palette0_sys(10) &
+                           sec_palette0_sys(9) & sec_palette0_sys(8) &
+                           sec_palette0_sys(7) & sec_palette0_sys(6) &
+                           sec_palette0_sys(5) & sec_palette0_sys(4) &
+                           sec_palette0_sys(3) & sec_palette0_sys(2) &
+                           sec_palette0_sys(1) & sec_palette0_sys(0);
+
+sec_palette1_sys_packed <= sec_palette1_sys(15) & sec_palette1_sys(14) &
+                           sec_palette1_sys(13) & sec_palette1_sys(12) &
+                           sec_palette1_sys(11) & sec_palette1_sys(10) &
+                           sec_palette1_sys(9) & sec_palette1_sys(8) &
+                           sec_palette1_sys(7) & sec_palette1_sys(6) &
+                           sec_palette1_sys(5) & sec_palette1_sys(4) &
+                           sec_palette1_sys(3) & sec_palette1_sys(2) &
+                           sec_palette1_sys(1) & sec_palette1_sys(0);
+
+hc_bf0_sys_packed <= hc_bitfield0_sys(15) & hc_bitfield0_sys(14) &
+                     hc_bitfield0_sys(13) & hc_bitfield0_sys(12) &
+                     hc_bitfield0_sys(11) & hc_bitfield0_sys(10) &
+                     hc_bitfield0_sys(9) & hc_bitfield0_sys(8) &
+                     hc_bitfield0_sys(7) & hc_bitfield0_sys(6) &
+                     hc_bitfield0_sys(5) & hc_bitfield0_sys(4) &
+                     hc_bitfield0_sys(3) & hc_bitfield0_sys(2) &
+                     hc_bitfield0_sys(1) & hc_bitfield0_sys(0);
+
+hc_bf1_sys_packed <= hc_bitfield1_sys(15) & hc_bitfield1_sys(14) &
+                     hc_bitfield1_sys(13) & hc_bitfield1_sys(12) &
+                     hc_bitfield1_sys(11) & hc_bitfield1_sys(10) &
+                     hc_bitfield1_sys(9) & hc_bitfield1_sys(8) &
+                     hc_bitfield1_sys(7) & hc_bitfield1_sys(6) &
+                     hc_bitfield1_sys(5) & hc_bitfield1_sys(4) &
+                     hc_bitfield1_sys(3) & hc_bitfield1_sys(2) &
+                     hc_bitfield1_sys(1) & hc_bitfield1_sys(0);
+
 -- ============================================================================
 -- Video Rendering Process (clk_video domain)
 -- ============================================================================
@@ -316,6 +466,16 @@ process (clk_video)
     variable src_x, src_y: natural range 0 to 127:=0;
     variable src_x_next, src_y_next: natural range 0 to 127:=0;
     variable xform_mode: natural range 0 to 255:=0;
+    -- High-color mode variables
+    variable hc_mode_val: natural range 0 to 255:=0;
+    variable bf_byte: Std_logic_vector(7 downto 0);
+    variable section: integer range 0 to 15;
+    variable replace_color: integer range 0 to 15;
+    variable hidden_word: Std_logic_vector(15 downto 0);
+    variable hidden_pix: integer range 0 to 15;
+    variable use_secondary: boolean;
+    variable hpb_word_idx: natural range 0 to 15;
+    variable ln_current: natural range 0 to 127;
 begin
     if rising_edge(clk_video) then
         if reset_video='1' then
@@ -345,6 +505,21 @@ begin
             vfrontreq_q <= '0';
             vfrontreq_d <= '0';
             vfrontreq_video <= '0';
+            screen_transform_video <= (others => '0');
+            screen_transform_video_d <= (others => '0');
+            screen_transform_active <= (others => '0');
+            sec_palette0_video <= (others => '0');
+            sec_palette1_video <= (others => '0');
+            sec_palette0_video_d <= (others => '0');
+            sec_palette1_video_d <= (others => '0');
+            hc_bf0_video <= (others => '0');
+            hc_bf1_video <= (others => '0');
+            hc_bf0_video_d <= (others => '0');
+            hc_bf1_video_d <= (others => '0');
+            hc_mode_video <= (others => '0');
+            hc_mode_video_d <= (others => '0');
+            hc_mode_active <= (others => '0');
+            hidden_buf <= (others => (others => '0'));
         else
             palette0_video <= palette0_sys_packed;
             palette1_video <= palette1_sys_packed;
@@ -354,6 +529,25 @@ begin
             vfrontreq_q <= vfrontreq;
             vfrontreq_d <= vfrontreq_q;
             vfrontreq_video <= vfrontreq_d;
+
+            screen_transform_video <= screen_transform;
+            screen_transform_video_d <= screen_transform_video;
+
+            -- CDC for secondary palette
+            sec_palette0_video <= sec_palette0_sys_packed;
+            sec_palette1_video <= sec_palette1_sys_packed;
+            sec_palette0_video_d <= sec_palette0_video;
+            sec_palette1_video_d <= sec_palette1_video;
+
+            -- CDC for bitfield
+            hc_bf0_video <= hc_bf0_sys_packed;
+            hc_bf1_video <= hc_bf1_sys_packed;
+            hc_bf0_video_d <= hc_bf0_video;
+            hc_bf1_video_d <= hc_bf1_video;
+
+            -- CDC for high-color mode
+            hc_mode_video <= high_color_mode;
+            hc_mode_video_d <= hc_mode_video;
 
             if lin < 6 then
                 VSB <= '0';
@@ -367,6 +561,10 @@ begin
                     lin := lin + 1;
                 else
                     lin := 0;
+                    if vfront /= vfrontreq_video then
+                        screen_transform_active <= screen_transform_video_d;
+                        hc_mode_active <= hc_mode_video_d;
+                    end if;
                     vfront <= vfrontreq_video;
                 end if;
             else
@@ -379,7 +577,8 @@ begin
                 HS <= '1';
             end if;
 
-            xform_mode := to_integer(unsigned(screen_transform));
+            xform_mode := to_integer(unsigned(screen_transform_active));
+            hc_mode_val := to_integer(unsigned(hc_mode_active));
 
             if pixel >= p1_main - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2_main and lin >= l1 and lin < l2 then
                 ln_main := (lin - l1) / 6;
@@ -394,7 +593,27 @@ begin
             else
                 ln_main := 300;
                 px_main := 800;
-                vaddress_main <= (others => '0');
+                -- Mode 0x20 prefetch: read hidden pixels during left border
+                if hc_mode_val / 16 = 2 and
+                   lin >= l1 and lin < l2 and
+                   (lin - l1) mod 6 = 0 and
+                   pixel >= 300 and pixel < 332 then
+                    ln_current := (lin - l1) / 6;
+                    hpb_word_idx := (pixel - 300) / 2;
+                    vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln_current + 16 + hpb_word_idx, 12));
+                else
+                    vaddress_main <= (others => '0');
+                end if;
+            end if;
+
+            -- Mode 0x20 prefetch data capture (with VRAM pipeline latency)
+            if hc_mode_val / 16 = 2 and
+               lin >= l1 and lin < l2 and
+               (lin - l1) mod 6 = 0 and
+               pixel >= 300 + VRAM_PIPELINE_LATENCY_PIXELS and
+               pixel < 332 + VRAM_PIPELINE_LATENCY_PIXELS then
+                hpb_word_idx := (pixel - 300 - VRAM_PIPELINE_LATENCY_PIXELS) / 2;
+                hidden_buf(hpb_word_idx) <= vdin_main;
             end if;
 
             if pixel >= p1_overlay - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2_overlay and lin >= l1 and lin < l2 then
@@ -451,10 +670,70 @@ begin
             if overlay_enable = '1' and overlay_pixel_index /= to_integer(unsigned(overlay_key_colour)) then
                 system_index := overlay_pixel_index;
             else
+                -- Primary palette lookup
                 if vfront = '1' then
                     system_index := to_integer(unsigned(palette1_video_d(screen_index*5+4 downto screen_index*5)));
                 else
                     system_index := to_integer(unsigned(palette0_video_d(screen_index*5+4 downto screen_index*5)));
+                end if;
+
+                -- High-color mode processing
+                if hc_mode_val = 16#10# then
+                    -- Mode 0x10: per-line palette swap using bitfield
+                    if vfront = '1' then
+                        bf_byte := hc_bf1_video_d((src_y/8)*8+7 downto (src_y/8)*8);
+                    else
+                        bf_byte := hc_bf0_video_d((src_y/8)*8+7 downto (src_y/8)*8);
+                    end if;
+                    if bf_byte(src_y mod 8) = '1' then
+                        -- Use secondary palette
+                        if vfront = '1' then
+                            system_index := to_integer(unsigned(sec_palette1_video_d(screen_index*5+4 downto screen_index*5)));
+                        else
+                            system_index := to_integer(unsigned(sec_palette0_video_d(screen_index*5+4 downto screen_index*5)));
+                        end if;
+                    end if;
+
+                elsif hc_mode_val = 16#20# then
+                    -- Mode 0x20: 5-bitplane mode using hidden pixel from line buffer
+                    hidden_pix := 0;
+                    if src_x < 64 then
+                        hidden_word := hidden_buf(src_x / 4);
+                        case src_x mod 4 is
+                            when 0 => hidden_pix := to_integer(unsigned(hidden_word(11 downto 8)));
+                            when 1 => hidden_pix := to_integer(unsigned(hidden_word(15 downto 12)));
+                            when 2 => hidden_pix := to_integer(unsigned(hidden_word(3 downto 0)));
+                            when 3 => hidden_pix := to_integer(unsigned(hidden_word(7 downto 4)));
+                            when others => hidden_pix := 0;
+                        end case;
+                    end if;
+                    if hidden_pix /= 0 then
+                        if vfront = '1' then
+                            system_index := to_integer(unsigned(sec_palette1_video_d(screen_index*5+4 downto screen_index*5)));
+                        else
+                            system_index := to_integer(unsigned(sec_palette0_video_d(screen_index*5+4 downto screen_index*5)));
+                        end if;
+                    end if;
+
+                elsif hc_mode_val / 16 = 3 then
+                    -- Mode 0x30-0x3F: gradient fill replacing specific color
+                    replace_color := hc_mode_val mod 16;
+                    if (system_index mod 16) = replace_color then
+                        section := src_y / 8;
+                        if vfront = '1' then
+                            bf_byte := hc_bf1_video_d((src_y/8)*8+7 downto (src_y/8)*8);
+                        else
+                            bf_byte := hc_bf0_video_d((src_y/8)*8+7 downto (src_y/8)*8);
+                        end if;
+                        if bf_byte(src_y mod 8) = '1' then
+                            section := (section + 1) mod 16;
+                        end if;
+                        if vfront = '1' then
+                            system_index := to_integer(unsigned(sec_palette1_video_d(section*5+4 downto section*5)));
+                        else
+                            system_index := to_integer(unsigned(sec_palette0_video_d(section*5+4 downto section*5)));
+                        end if;
+                    end if;
                 end if;
             end if;
 
