@@ -100,6 +100,9 @@ module tb_vga_display;
         .overlay_enable(overlay_ctrl_sys[6]),
         .overlay_key_colour(overlay_ctrl_sys[3:0]),
 
+        // Screen transform (normal mode)
+        .screen_transform(8'd0),
+
         // VRAM interface
         .vaddress_main(vaddr2_main),
         .vdin_main(vdout2_main),

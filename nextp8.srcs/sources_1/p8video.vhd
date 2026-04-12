@@ -77,6 +77,9 @@ port (
     vfronto:      OUT Std_logic;
     vfrontreq:    IN Std_logic;
 
+    -- Screen transform (clk_video domain, quasi-static after CDC)
+    screen_transform : IN Std_logic_vector(7 downto 0);
+
     -- Video output signals (clk_video domain)
     VSB,HS:       buffer Std_logic;
     iblank:       OUT Std_logic;
@@ -169,6 +172,48 @@ attribute ASYNC_REG of vfronto_d : signal is "TRUE";
 -- Overlay support (clk_video domain)
 signal overlay_vdin : Std_logic_vector(15 downto 0) := (others => '0');
 signal reading_overlay : Std_logic := '0';
+
+-- Screen transform: maps output coordinates (ox, oy) to source coordinates (sx, sy)
+procedure screen_xform(
+    mode_val : in natural;
+    ox       : in natural;
+    oy       : in natural;
+    sx       : out natural;
+    sy       : out natural
+) is
+begin
+    case mode_val is
+        when 1 =>      -- horizontal stretch: 64x128
+            sx := ox / 2; sy := oy;
+        when 2 =>      -- vertical stretch: 128x64
+            sx := ox; sy := oy / 2;
+        when 3 =>      -- both stretch: 64x64
+            sx := ox / 2; sy := oy / 2;
+        when 5 =>      -- horizontal mirror
+            if ox < 64 then sx := ox; else sx := 127 - ox; end if;
+            sy := oy;
+        when 6 =>      -- vertical mirror
+            sx := ox;
+            if oy < 64 then sy := oy; else sy := 127 - oy; end if;
+        when 7 =>      -- both mirror
+            if ox < 64 then sx := ox; else sx := 127 - ox; end if;
+            if oy < 64 then sy := oy; else sy := 127 - oy; end if;
+        when 129 =>    -- horizontal flip
+            sx := 127 - ox; sy := oy;
+        when 130 =>    -- vertical flip
+            sx := ox; sy := 127 - oy;
+        when 131 =>    -- both flip (180 degree rotation)
+            sx := 127 - ox; sy := 127 - oy;
+        when 133 =>    -- clockwise 90 degree rotation
+            sx := 127 - oy; sy := ox;
+        when 134 =>    -- 180 degree rotation
+            sx := 127 - ox; sy := 127 - oy;
+        when 135 =>    -- counterclockwise 90 degree rotation
+            sx := oy; sy := 127 - ox;
+        when others => -- normal (mode 0 and unrecognized)
+            sx := ox; sy := oy;
+    end case;
+end procedure;
 
 begin
 
@@ -266,13 +311,18 @@ process (clk_video)
     variable px_main, px_next_main: natural range 0 to 2047:=0;
     variable px_overlay, px_next_overlay: natural range 0 to 2047:=0;
     variable pixel: natural range 0 to 2047:=0;
-    variable ln, lin: natural range 0 to 1023:=0;
+    variable lin: natural range 0 to 1023:=0;
+    variable ln_main, ln_overlay: natural range 0 to 1023:=0;
+    variable src_x, src_y: natural range 0 to 127:=0;
+    variable src_x_next, src_y_next: natural range 0 to 127:=0;
+    variable xform_mode: natural range 0 to 255:=0;
 begin
     if rising_edge(clk_video) then
         if reset_video='1' then
             pixel := 0;
             lin := 0;
-            ln := 0;
+            ln_main := 0;
+            ln_overlay := 0;
             px_main := 0;
             px_overlay := 0;
             VSB <= '1';
@@ -329,42 +379,43 @@ begin
                 HS <= '1';
             end if;
 
-            if lin >= l1 and lin < l2 then
-                ln := (lin - l1) / 6;
-            else
-                ln := 300;
-            end if;
+            xform_mode := to_integer(unsigned(screen_transform));
 
             if pixel >= p1_main - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2_main and lin >= l1 and lin < l2 then
+                ln_main := (lin - l1) / 6;
                 px_main := (pixel - p1_main) / 6;
                 if pixel + VRAM_PIPELINE_LATENCY_PIXELS < p2_main then
                     px_next_main := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1_main) / 6;
-                    vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next_main / 4, 12));
+                    screen_xform(xform_mode, px_next_main, ln_main, src_x_next, src_y_next);
+                    vaddress_main <= vfront & std_logic_vector(to_unsigned(32 * src_y_next + src_x_next / 4, 12));
                 else
                     vaddress_main <= (others => '0');
                 end if;
             else
+                ln_main := 300;
                 px_main := 800;
                 vaddress_main <= (others => '0');
             end if;
 
             if pixel >= p1_overlay - VRAM_PIPELINE_LATENCY_PIXELS and pixel < p2_overlay and lin >= l1 and lin < l2 then
                 px_overlay := (pixel - p1_overlay) / 6;
-                ln := (lin - l1) / 6;
+                ln_overlay := (lin - l1) / 6;
                 if pixel + VRAM_PIPELINE_LATENCY_PIXELS < p2_overlay then
-                    px_next_overlay := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1_overlay) / 4;
-                    vaddress_overlay <= vfront & std_logic_vector(to_unsigned(32 * ln + px_next_overlay / 4, 12));
+                    px_next_overlay := (pixel + VRAM_PIPELINE_LATENCY_PIXELS - p1_overlay) / 6;
+                    vaddress_overlay <= vfront & std_logic_vector(to_unsigned(32 * ln_overlay + px_next_overlay / 4, 12));
                 else
                     vaddress_overlay <= (others => '0');
                 end if;
             else
                 px_overlay := 800;
+                ln_overlay := 300;
                 vaddress_overlay <= (others => '0');
             end if;
 
             -- Pixel output logic
             if pixel >= p1_main and pixel < p2_main and lin >= l1 and lin < l2 then
-                case px_main mod 4 is
+                screen_xform(xform_mode, px_main, ln_main, src_x, src_y);
+                case src_x mod 4 is
                     when 0 =>
                         screen_index := to_integer(unsigned(vdin_main(11 downto 8)));
                     when 1 =>

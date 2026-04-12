@@ -1,9 +1,11 @@
 # Makefile for p8video_tb - P8 video module testbench
-# 
+#
 # Usage:
-#   make          - Compile and run simulation
-#   make clean    - Remove generated files
-#   make wave     - Open waveform viewer (after simulation)
+#   make              - Compile and run all simulations
+#   make sim_xform_0  - Run only SCREEN_TRANSFORM=0 test
+#   make sim_overlay  - Run only ENABLE_OVERLAY=1 test
+#   make clean        - Remove generated files
+#   make wave         - Open waveform viewer (after simulation)
 
 # Paths
 SRC_DIR = ../sources_1
@@ -12,11 +14,8 @@ IP_DIR = $(SRC_DIR)/ip
 TB_DIR = .
 
 # IP Core simulation files
-IP_VRAM = $(IP_GEN_DIR)/vram_1/vram_sim_netlist.v
-
-# IP Core (vram - video RAM)
-# Note: vram is an IP core that needs to be generated first
-IP_CORES = $(IP_DIR)/vram_2/vram.xci
+IP_VRAM_MAIN = $(IP_GEN_DIR)/vram_main_1/vram_main_sim_netlist.v
+IP_VRAM_OVERLAY = $(IP_GEN_DIR)/vram_overlay_1/vram_overlay_sim_netlist.v
 
 # P8 video module (VHDL)
 P8VIDEO_SRCS = $(SRC_DIR)/p8video.vhd
@@ -30,9 +29,10 @@ ALL_SRCS = $(P8VIDEO_SRCS) $(TB_SRCS)
 # Simulation parameters
 TOP = p8video_tb
 SNAPSHOT = p8video_tb_snap
-SNAPSHOT_OVERLAY = p8video_tb_overlay_snap
 TIMEOUT ?= 60
-GENERICS ?=
+
+# Screen transform modes to test
+XFORM_MODES = 0 1 2 3 5 6 7 129 130 131 133 134 135
 
 # xsim commands
 XVLOG = xvlog
@@ -40,10 +40,20 @@ XVHDL = xvhdl
 XELAB = xelab
 XSIM = xsim
 
+# Elaboration flags common to all targets
+ELAB_FLAGS = -debug typical --timescale 1ns/1ps \
+	-L unisims_ver -L unimacro_ver -L secureip \
+	-L blk_mem_gen_v8_4_11 -L xpm
+
 # Build directory
 WORK_DIR = xsim.dir
 
-.PHONY: all sim run clean wave help
+XFORM_ELAB_TARGETS = $(foreach m,$(XFORM_MODES),elaborate_xform_$(m))
+XFORM_SIM_TARGETS  = $(foreach m,$(XFORM_MODES),sim_xform_$(m))
+
+.PHONY: all sim run clean wave help compile_vhdl compile_ip compile_sv \
+	$(XFORM_ELAB_TARGETS) $(XFORM_SIM_TARGETS) \
+	elaborate_overlay sim_overlay
 
 all: sim
 
@@ -56,7 +66,8 @@ compile_vhdl:
 # Compile IP cores (Verilog)
 compile_ip:
 	@echo "=== Compiling IP cores ==="
-	$(XVLOG) $(IP_VRAM)
+	$(XVLOG) $(IP_VRAM_MAIN)
+	$(XVLOG) $(IP_VRAM_OVERLAY)
 	@echo ""
 
 # Compile SystemVerilog testbench
@@ -65,70 +76,59 @@ compile_sv: compile_vhdl compile_ip
 	$(XVLOG) --sv $(TB_SRCS)
 	@echo ""
 
-# Elaborate design (no overlay)
-elaborate: compile_sv
-	@echo "=== Elaborating design (ENABLE_OVERLAY=0) ==="
-	@echo "NOTE: This testbench requires the vram IP core to be generated"
-	@echo "      If you see errors about missing 'vram', generate it in Vivado GUI first"
-	$(XELAB) $(TOP) -s $(SNAPSHOT) -debug typical \
-		--timescale 1ns/1ps \
+# ---------------------------------------------------------------------------
+# Per-transform elaborate and simulate targets (generated)
+# ---------------------------------------------------------------------------
+define XFORM_RULES
+
+elaborate_xform_$(1): compile_sv
+	@echo "=== Elaborating (SCREEN_TRANSFORM=$(1)) ==="
+	$$(XELAB) $$(TOP) -s $$(SNAPSHOT)_xform_$(1) $$(ELAB_FLAGS) \
 		-generic_top "ENABLE_OVERLAY=0" \
-		$(if $(GENERICS),-generic_top "$(GENERICS)",) \
-		-L unisims_ver -L unimacro_ver -L secureip \
-		-L blk_mem_gen_v8_4_11 -L xpm \
+		-generic_top "SCREEN_TRANSFORM=$(1)" \
 		glbl
 	@echo ""
 
-# Elaborate design (with overlay)
+sim_xform_$(1): elaborate_xform_$(1)
+	@echo "=== Sim SCREEN_TRANSFORM=$(1) (timeout: $$(TIMEOUT)s) ==="
+	timeout $$(TIMEOUT) $$(XSIM) $$(SNAPSHOT)_xform_$(1) -runall
+	@echo ""
+
+endef
+
+$(foreach mode,$(XFORM_MODES),$(eval $(call XFORM_RULES,$(mode))))
+
+# ---------------------------------------------------------------------------
+# Overlay target (ENABLE_OVERLAY=1, SCREEN_TRANSFORM=0)
+# ---------------------------------------------------------------------------
 elaborate_overlay: compile_sv
-	@echo "=== Elaborating design (ENABLE_OVERLAY=1) ==="
-	$(XELAB) $(TOP) -s $(SNAPSHOT_OVERLAY) -debug typical \
-		--timescale 1ns/1ps \
+	@echo "=== Elaborating (ENABLE_OVERLAY=1) ==="
+	$(XELAB) $(TOP) -s $(SNAPSHOT)_overlay $(ELAB_FLAGS) \
 		-generic_top "ENABLE_OVERLAY=1" \
-		$(if $(GENERICS),-generic_top "$(GENERICS)",) \
-		-L unisims_ver -L unimacro_ver -L secureip \
-		-L blk_mem_gen_v8_4_11 -L xpm \
 		glbl
 	@echo ""
 
-# Run simulation (both configurations)
-sim: elaborate elaborate_overlay
-	@echo "=== Running simulation without overlay (timeout: $(TIMEOUT)s) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
-		(if [ $$? -eq 124 ]; then \
-			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
-			exit 1; \
-		else \
-			exit $$?; \
-		fi)
+sim_overlay: elaborate_overlay
+	@echo "=== Sim ENABLE_OVERLAY=1 (timeout: $(TIMEOUT)s) ==="
+	timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT)_overlay -runall
 	@echo ""
-	@echo "=== Running simulation with overlay (timeout: $(TIMEOUT)s) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT_OVERLAY) -runall || \
-		(if [ $$? -eq 124 ]; then \
-			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
-			exit 1; \
-		else \
-			exit $$?; \
-		fi)
-	@echo ""
-	@echo "=== Both simulations complete ==="
 
-# Alternative: just run (if already compiled)
+# ---------------------------------------------------------------------------
+# Run all simulations
+# ---------------------------------------------------------------------------
+sim: $(XFORM_SIM_TARGETS) sim_overlay
+	@echo "=== All simulations complete ==="
+
+# Run default transform only (quick check)
 run:
-	@echo "=== Running simulation (assuming already compiled) ==="
-	@timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT) -runall || \
-		(if [ $$? -eq 124 ]; then \
-			echo "ERROR: Simulation timed out after $(TIMEOUT) seconds"; \
-			exit 1; \
-		else \
-			exit $$?; \
-		fi)
+	@echo "=== Running SCREEN_TRANSFORM=0 (assuming already compiled) ==="
+	timeout $(TIMEOUT) $(XSIM) $(SNAPSHOT)_xform_0 -runall
 
 # Open waveform viewer
 wave:
-	@if [ -f $(SNAPSHOT).wdb ]; then \
+	@if [ -f $(SNAPSHOT)_xform_0.wdb ]; then \
 		echo "=== Opening waveform viewer ==="; \
-		$(XSIM) --gui $(SNAPSHOT).wdb & \
+		$(XSIM) --gui $(SNAPSHOT)_xform_0.wdb & \
 	else \
 		echo "ERROR: No waveform database found. Run simulation first."; \
 	fi
@@ -148,12 +148,13 @@ help:
 	@echo "Makefile for p8video_tb - P8 Video Module Testbench"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make          - Compile and run simulation"
-	@echo "  make sim      - Same as 'make'"
-	@echo "  make run      - Run simulation (skip recompile)"
-	@echo "  make wave     - Open waveform viewer"
-	@echo "  make clean    - Remove all generated files"
-	@echo "  make help     - Show this help message"
+	@echo "  make              - Compile and run all simulations"
+	@echo "  make sim          - Same as 'make'"
+	@echo "  make sim_xform_N  - Run SCREEN_TRANSFORM=N test only"
+	@echo "  make sim_overlay  - Run ENABLE_OVERLAY=1 test only"
+	@echo "  make run          - Run xform_0 simulation (skip recompile)"
+	@echo "  make wave         - Open waveform viewer"
+	@echo "  make clean        - Remove all generated files"
+	@echo "  make help         - Show this help message"
 	@echo ""
-	@echo "This testbench tests the p8video module with a simulated vram"
-	@echo "It fills the video memory with a test pattern and checks the output"
+	@echo "Screen transform modes: $(XFORM_MODES)"

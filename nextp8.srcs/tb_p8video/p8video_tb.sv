@@ -5,7 +5,8 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 module p8video_tb #(
-    parameter ENABLE_OVERLAY = 0
+    parameter ENABLE_OVERLAY = 0,
+    parameter SCREEN_TRANSFORM = 0
 )();
 
 //Clock
@@ -127,6 +128,7 @@ p8video #(.VRAM_PIPELINE_LATENCY_PIXELS(2)) p8video (
     .vfrontreq(vfrontreq),
     .overlay_enable(overlay_enable),
     .overlay_key_colour(overlay_key_colour),
+    .screen_transform(SCREEN_TRANSFORM[7:0]),
 	.VSB(video_vs),
 	.HS(video_hs),
 	.iblank (iblank),
@@ -139,10 +141,7 @@ integer x, y;
 reg init_done = 0;
 
 initial begin
-    if (ENABLE_OVERLAY)
-        $display("=== p8video_tb: ENABLE_OVERLAY=1 ===");
-    else
-        $display("=== p8video_tb: ENABLE_OVERLAY=0 ===");
+    $display("=== p8video_tb: ENABLE_OVERLAY=%0d, SCREEN_TRANSFORM=%0d ===", ENABLE_OVERLAY,SCREEN_TRANSFORM);
     // Reset
     reset = 1;
     repeat(10) begin
@@ -212,7 +211,8 @@ initial begin
     init_done <= 1;
 end
 
-vidout_check #(.ENABLE_OVERLAY(ENABLE_OVERLAY)) check(
+vidout_check #(.ENABLE_OVERLAY(ENABLE_OVERLAY),
+               .SCREEN_TRANSFORM(SCREEN_TRANSFORM)) check(
                    .clk_video(clk_video),
                    .video_vs(video_vs),
                    .video_hs(video_hs),
@@ -225,7 +225,8 @@ vidout_check #(.ENABLE_OVERLAY(ENABLE_OVERLAY)) check(
 endmodule
 
 module vidout_check #(
-    parameter ENABLE_OVERLAY = 0
+    parameter ENABLE_OVERLAY = 0,
+    parameter SCREEN_TRANSFORM = 0
 )(
     input wire clk_video,
     input wire video_vs,
@@ -262,9 +263,30 @@ integer expected_screen_index;
 integer expected_overlay_index;
 integer is_overlay_transparent;
 integer pixel_has_overlay;
+integer src_x, src_y;
 reg iblank_prev;
 reg video_vs_prev;
 integer frame_count = 0;
+
+// Screen transform: maps output (ox, oy) to source (sx, sy)
+function automatic void screen_xform(input integer mode, input integer ox, input integer oy,
+                                     output integer sx, output integer sy);
+    case (mode)
+        1:   begin sx = ox / 2; sy = oy; end
+        2:   begin sx = ox; sy = oy / 2; end
+        3:   begin sx = ox / 2; sy = oy / 2; end
+        5:   begin sx = (ox < 64) ? ox : (127 - ox); sy = oy; end
+        6:   begin sx = ox; sy = (oy < 64) ? oy : (127 - oy); end
+        7:   begin sx = (ox < 64) ? ox : (127 - ox); sy = (oy < 64) ? oy : (127 - oy); end
+        129: begin sx = 127 - ox; sy = oy; end
+        130: begin sx = ox; sy = 127 - oy; end
+        131: begin sx = 127 - ox; sy = 127 - oy; end
+        133: begin sx = 127 - oy; sy = ox; end
+        134: begin sx = 127 - ox; sy = 127 - oy; end
+        135: begin sx = oy; sy = 127 - ox; end
+        default: begin sx = ox; sy = oy; end
+    endcase
+endfunction
 
 always @(posedge clk_video) begin
     // Detect vsync falling edge (end of frame)
@@ -293,7 +315,8 @@ always @(posedge clk_video) begin
          px = x / 6;
          py = y / 6;
 
-         expected_screen_index = (py + px) & 4'hf;
+         screen_xform(SCREEN_TRANSFORM, px, py, src_x, src_y);
+         expected_screen_index = (src_y + src_x) & 4'hf;
 
          if (ENABLE_OVERLAY && overlay_enable) begin
              pixel_has_overlay = ((px / 8) + (py / 8)) & 1;

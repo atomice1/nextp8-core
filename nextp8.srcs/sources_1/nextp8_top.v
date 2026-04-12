@@ -178,6 +178,7 @@ localparam [7:0] ADDR_MOUSE_BUTTONS            = 8'h57;
 localparam [7:0] ADDR_MOUSE_BUTTONS_LATCHED    = 8'h59;
 localparam [7:0] ADDR_KEYBOARD_MATRIX          = 8'h60;
 localparam [7:0] ADDR_KEYBOARD_MATRIX_LATCHED  = 8'h80;
+localparam [7:0] ADDR_SCREEN_TRANSFORM         = 8'hA1;
 
 reg [15:0] params = 16'd0;
 reg [5:0] post_code_cpu = 6'd3;
@@ -815,6 +816,10 @@ assign vdin1_overlay = cpu_dout;
 reg [7:0] overlay_ctrl_sys = 8'h00;  // [6]=enable, [3:0]=key_colour
 (* ASYNC_REG = "TRUE" *) reg [7:0] overlay_ctrl_video_d, overlay_ctrl_video_q; // (clk_video)
 
+// screen transform register (clk_sys)
+reg [7:0] screen_transform_sys = 8'h00;
+(* ASYNC_REG = "TRUE" *) reg [7:0] screen_transform_video_d, screen_transform_video_q; // (clk_video)
+
 
 vram_main vram_main (
   .clka(mclk),
@@ -881,6 +886,8 @@ always @(posedge clk_video) begin
         vdout2_overlay_q <= 16'd0;
         overlay_ctrl_video_d <= 8'd0;
         overlay_ctrl_video_q <= 8'd0;
+        screen_transform_video_d <= 8'd0;
+        screen_transform_video_q <= 8'd0;
     end else begin
         vdout2_main_d <= vdout2_main;
         vdout2_main_q <= vdout2_main_d;
@@ -888,6 +895,8 @@ always @(posedge clk_video) begin
         vdout2_overlay_q <= vdout2_overlay_d;
         overlay_ctrl_video_d <= overlay_ctrl_sys;
         overlay_ctrl_video_q <= overlay_ctrl_video_d;
+        screen_transform_video_d <= screen_transform_sys;
+        screen_transform_video_q <= screen_transform_video_d;
     end
 end
 
@@ -911,6 +920,9 @@ p8video p8video (
     // Overlay control (clk_video domain, already CDC'd)
     .overlay_enable(overlay_ctrl_video_q[6]),
     .overlay_key_colour(overlay_ctrl_video_q[3:0]),
+
+    // Screen transform (clk_video domain, already CDC'd)
+    .screen_transform(screen_transform_video_q),
 
     // VRAM interface (clk_video domain)
     .vaddress_main(vaddr2_main),
@@ -1648,6 +1660,7 @@ begin
             if (cpu_addr[7:1]==ADDR_VFRONTREQ[7:1] && cpu_rd) memio_out <= {7'b0, vfront, 7'b0, vfront};
             //--------------- overlay ----------------------------------
             if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_rd) memio_out <= {overlay_ctrl_sys, overlay_ctrl_sys};
+            if (cpu_addr[7:1]==ADDR_SCREEN_TRANSFORM[7:1] && cpu_rd) memio_out <= {screen_transform_sys, screen_transform_sys};
             //-------------- Build Info --------------------------------------------------
             if (cpu_addr[7:1]==ADDR_BUILD_TIMESTAMP_HI[7:1] && cpu_rd) memio_out <= build_timestamp[31:16];
             if (cpu_addr[7:1]==ADDR_BUILD_TIMESTAMP_LO[7:1] && cpu_rd) memio_out <= build_timestamp[15:0];
@@ -1774,6 +1787,7 @@ begin
             end
             //--------------- overlay ----------------------------------
             if (cpu_addr[7:1]==ADDR_OVERLAY_CONTROL[7:1] && cpu_wr) overlay_ctrl_sys <= cpu_dout[7:0];
+            if (cpu_addr[7:1]==ADDR_SCREEN_TRANSFORM[7:1] && cpu_wr) screen_transform_sys <= cpu_dout[7:0];
             // ------------ parameters -------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_PARAMS[7:1] && cpu_wr) params <= cpu_dout;
             //-------------- RTC -------------------------------------------------------
