@@ -292,7 +292,7 @@ always @(posedge clock_50_i) begin
         $display("Time %t: POST CODE = %d (ps2_clk_io=%b ps2_data_io=%b)", $time, postcode_o, ps2_clk_io, ps2_data_io);
 
         // Test success
-        if (postcode_o == 6'd25) begin
+        if (postcode_o == 6'd40) begin
             $display("*************************************");
             $display("*** KEYBOARD TEST PASSED! ***");
             $display("*************************************");
@@ -452,10 +452,10 @@ initial begin
 
     // Wait for POST code 7 (waiting for first key)
     wait(postcode_o == 6'd7);
-    $display("Time %t: ROM waiting for TEST_KEY_1 (0x1C = A key)", $time);
+    $display("Time %t: ROM waiting for TEST_KEY_1 (USB HID 0x04 = A key, PS/2 0x1C)", $time);
     #10000; // 10us delay
 
-    // Press TEST_KEY_1 (scancode 0x1C = A key)
+    // Press TEST_KEY_1 (USB HID 0x04 = A key, PS/2 scancode 0x1C)
     ps2_press_key(8'h1C);
 
     // Wait for POST code 10 (waiting for key release)
@@ -468,10 +468,10 @@ initial begin
 
     // Wait for POST code 13 (waiting for second key)
     wait(postcode_o == 6'd13);
-    $display("Time %t: ROM waiting for TEST_KEY_2 (0x23 = D key)", $time);
+    $display("Time %t: ROM waiting for TEST_KEY_2 (USB HID 0x07 = D key, PS/2 0x23)", $time);
     #10000;
 
-    // Press TEST_KEY_2 (scancode 0x23 = D key) via membrane keyboard
+    // Press TEST_KEY_2 (USB HID 0x07 = D key, PS/2 scancode 0x23) via membrane keyboard
     // Map scancode to membrane position (example: row 1, col 2)
     membrane_press_key(3'd1, 3'd2);
 
@@ -483,8 +483,64 @@ initial begin
     // Release TEST_KEY_2
     membrane_release_key(3'd1, 3'd2);
 
-    // Now wait for test completion
-    wait(postcode_o == 6'd25 || postcode_o >= 6'd50);
+    // Wait for POST code 22 (new: queue cleared by ROM)
+    wait(postcode_o == 6'd22);
+    $display("Time %t: ROM cleared event queue", $time);
+
+    // Wait for POST code 23 (new: empty queue returns 0)
+    wait(postcode_o == 6'd23);
+    $display("Time %t: ROM verified empty queue returns 0", $time);
+
+    // Press TEST_KEY_1 to trigger press event
+    ps2_press_key(8'h1C);
+    #1000;
+
+    // Wait for POST code 24 (new: key detected in regular matrix for queue test)
+    wait(postcode_o == 6'd24);
+    $display("Time %t: ROM detected key for queue test", $time);
+
+    // Wait for POST code 25 (new: key press event received)
+    wait(postcode_o == 6'd25);
+    $display("Time %t: ROM received key press event", $time);
+
+    // Release TEST_KEY_1 to trigger release event
+    ps2_release_key(8'h1C);
+    #1000;
+
+    // Wait for POST code 27 (new: key released from regular matrix)
+    wait(postcode_o == 6'd27);
+    $display("Time %t: ROM waiting for key release event", $time);
+
+    // Wait for POST code 28 (new: key release event received)
+    wait(postcode_o == 6'd28);
+    $display("Time %t: ROM received key release event", $time);
+
+    // Wait for POST code 30 (new: waiting for key press to add to queue)
+    wait(postcode_o == 6'd30);
+    $display("Time %t: ROM waiting for key press to add to queue", $time);
+
+    // Press a key to add to queue
+    membrane_press_key(3'd3, 3'd1);
+    #1000;
+
+    // Wait for POST code 31 (new: key press detected)
+    wait(postcode_o == 6'd31);
+    $display("Time %t: ROM detected key press", $time);
+
+    // Wait for POST code 32 (new: event in queue verified)
+    wait(postcode_o == 6'd32);
+    $display("Time %t: ROM verified event in queue", $time);
+
+    // Wait for POST code 34 (new: queue clear verified)
+    wait(postcode_o == 6'd34);
+    $display("Time %t: ROM verified queue cleared", $time);
+
+    // Wait for POST code 35 (new: latched key cleared)
+    wait(postcode_o == 6'd35);
+    $display("Time %t: ROM latched key cleared", $time);
+
+    // Wait for test completion (POST 40 = success with new event queue tests)
+    wait(postcode_o == 6'd40 || postcode_o >= 6'd50);
 end
 
 // Timeout

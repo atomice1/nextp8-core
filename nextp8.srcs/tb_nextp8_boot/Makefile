@@ -13,11 +13,11 @@ TB_DIR = .
 # Verilog source files
 VERILOG_SOURCES = \
 	$(SRC_DIR)/nextp8_top.v \
+	$(SRC_DIR)/kbd_queue.v \
 	$(SRC_DIR)/dma_arbiter.v \
 	$(SRC_DIR)/hdmi/encoder.v \
 	$(SRC_DIR)/hdmi/hdmidataencoder.v \
 	$(SRC_DIR)/hdmi/hdmi.v \
-	$(SRC_DIR)/keyboard.sv \
 	$(SRC_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)

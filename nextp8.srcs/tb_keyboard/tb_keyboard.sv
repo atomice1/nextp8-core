@@ -116,64 +116,68 @@ initial begin
     $display("Keyboard initialization verified: init_state=INIT_DONE");
 
     // Test 1: Send make code and verify matrix bit is set
-    $display("Test 1: Send make code 0x1C (A key) and verify matrix[0x1C] is set");
+    // PS/2 scancode 0x1C (A key) -> USB HID 0x04
+    $display("Test 1: Send make code 0x1C (A key) and verify matrix[0x04] is set");
     kbd_model.send_scancode(8'h1C);
     repeat(50000) @(posedge clk);
 
-    if (matrix[8'h1C] == 1'b1) begin
-        $display("  PASS: Matrix bit [0x1C] set correctly");
+    if (matrix[8'h04] == 1'b1) begin
+        $display("  PASS: Matrix bit [0x04] set correctly (USB HID for A)");
         pass_count = pass_count + 1;
     end else begin
-        $display("  FAIL: Matrix bit [0x1C] = %b (expected 1)", matrix[8'h1C]);
+        $display("  FAIL: Matrix bit [0x04] = %b (expected 1)", matrix[8'h04]);
         display_matrix_bits(matrix);
         fail_count = fail_count + 1;
     end
     #10000;
 
     // Test 2: Send break code and verify matrix bit is cleared
-    $display("Test 2: Send break code 0xF0 0x1C and verify matrix[0x1C] is cleared");
+    // PS/2 scancode 0xF0 0x1C (A key break) -> USB HID 0x04
+    $display("Test 2: Send break code 0xF0 0x1C and verify matrix[0x04] is cleared");
     kbd_model.send_scancode(8'hF0);
     kbd_model.send_scancode(8'h1C);
     repeat(50000) @(posedge clk);
 
-    if (matrix[8'h1C] == 1'b0) begin
-        $display("  PASS: Matrix bit [0x1C] cleared correctly");
+    if (matrix[8'h04] == 1'b0) begin
+        $display("  PASS: Matrix bit [0x04] cleared correctly (USB HID for A)");
         pass_count = pass_count + 1;
     end else begin
-        $display("  FAIL: Matrix bit [0x1C] = %b (expected 0)", matrix[8'h1C]);
+        $display("  FAIL: Matrix bit [0x04] = %b (expected 0)", matrix[8'h04]);
         display_matrix_bits(matrix);
         fail_count = fail_count + 1;
     end
     #10000;
 
-    // Test 3: Send extended make code and verify matrix bit at 0x80|scancode
-    $display("Test 3: Send extended code 0xE0 0x74 (Right Arrow) and verify matrix[0xF4] is set");
+    // Test 3: Send extended make code and verify matrix bit at USB HID
+    // PS/2 scancode 0xE0 0x74 (Right Arrow) -> USB HID 0x4F
+    $display("Test 3: Send extended code 0xE0 0x74 (Right Arrow) and verify matrix[0x4F] is set");
     kbd_model.send_scancode(8'hE0);
     kbd_model.send_scancode(8'h74);
     repeat(50000) @(posedge clk);
 
-    if (matrix[8'h80 | 8'h74] == 1'b1) begin
-        $display("  PASS: Matrix bit [0xF4] set correctly for extended code");
+    if (matrix[8'h4F] == 1'b1) begin
+        $display("  PASS: Matrix bit [0x4F] set correctly (USB HID for Right Arrow)");
         pass_count = pass_count + 1;
     end else begin
-        $display("  FAIL: Matrix bit [0xF4] = %b (expected 1)", matrix[8'h80 | 8'h74]);
+        $display("  FAIL: Matrix bit [0x4F] = %b (expected 1)", matrix[8'h4F]);
         display_matrix_bits(matrix);
         fail_count = fail_count + 1;
     end
     #10000;
 
     // Test 4: Send extended break code and verify matrix bit is cleared
-    $display("Test 4: Send extended break 0xE0 0xF0 0x74 and verify matrix[0xF4] is cleared");
+    // PS/2 scancode 0xE0 0xF0 0x74 (Right Arrow break) -> USB HID 0x4F
+    $display("Test 4: Send extended break 0xE0 0xF0 0x74 and verify matrix[0x4F] is cleared");
     kbd_model.send_scancode(8'hE0);
     kbd_model.send_scancode(8'hF0);
     kbd_model.send_scancode(8'h74);
     repeat(50000) @(posedge clk);
 
-    if (matrix[8'h80 | 8'h74] == 1'b0) begin
-        $display("  PASS: Matrix bit [0xF4] cleared correctly for extended break");
+    if (matrix[8'h4F] == 1'b0) begin
+        $display("  PASS: Matrix bit [0x4F] cleared correctly (USB HID for Right Arrow)");
         pass_count = pass_count + 1;
     end else begin
-        $display("  FAIL: Matrix bit [0xF4] = %b (expected 0)", matrix[8'h80 | 8'h74]);
+        $display("  FAIL: Matrix bit [0x4F] = %b (expected 0)", matrix[8'h4F]);
         display_matrix_bits(matrix);
         fail_count = fail_count + 1;
     end

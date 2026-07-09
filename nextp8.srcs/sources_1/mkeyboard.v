@@ -73,90 +73,89 @@ else
             3198: matrix[63:56]<= {1'b0,ncols};
             3600: rows<=8'b????????;
             4000: begin
-                // indexes in p8matrix are the PS/2 scan code
-                // extended scan codes are OR'ed with 'h80
+                // indexes in p8matrix are USB HID san codes
 
                 // ---------- Row 0 ----------
                 // bit6=UP, bit5=EXTEND, bit4=V, bit3=C, bit2=X, bit1=Z, bit0=CapsShift
-                p8matrix['h12] <= matrix[0];   // Caps Shift (Left Shift)
-                p8matrix['h1A] <= matrix[1];   // Z
-                p8matrix['h22] <= matrix[2];   // X
-                p8matrix['h21] <= matrix[3];   // C
-                p8matrix['h2A] <= matrix[4];   // V
+                p8matrix['he1] <= matrix[0];   // Caps Shift (Left Shift)
+                p8matrix['h1d] <= matrix[1];   // Z
+                p8matrix['h1b] <= matrix[2];   // X
+                p8matrix['h06] <= matrix[3];   // C
+                p8matrix['h19] <= matrix[4];   // V
                 p8matrix['h59] <= matrix[5] | matrix[38];   // Extended Mode (Right Shift)
-                p8matrix['h94] <= matrix[5];   // Extended Mode (Right Ctrl)
-                p8matrix['hF5] <= matrix[6];   // Up arrow
+                p8matrix['he4] <= matrix[5];   // Extended Mode (Right Ctrl)
+                p8matrix['h52] <= matrix[6];   // Up arrow
 
                 // ---------- Row 1 ----------
                 // bit6=GRAPH, bit5=CAPS LOCK, bit4=G, bit3=F, bit2=D, bit1=S, bit0=A
-                p8matrix['h1C] <= matrix[8];   // A
-                p8matrix['h1B] <= matrix[9];   // S
-                p8matrix['h23] <= matrix[10];  // D
-                p8matrix['h2B] <= matrix[11];  // F
-                p8matrix['h34] <= matrix[12];  // G
-                p8matrix['h58] <= matrix[13];  // Caps Lock
-                p8matrix['h7E] <= matrix[14];  // Graph (Scroll Lock)
+                p8matrix['h04] <= matrix[8];   // A
+                p8matrix['h16] <= matrix[9];   // S
+                p8matrix['h07] <= matrix[10];   // D
+                p8matrix['h09] <= matrix[11];   // F
+                p8matrix['h0a] <= matrix[12];   // G
+                p8matrix['h39] <= matrix[13];   // Caps Lock
+                p8matrix['h47] <= matrix[14];   // Graph (Scroll Lock)
 
                 // ---------- Row 2 ----------
                 // bit6=INV VIDEO, bit5=TRUE VIDEO, bit4=T, bit3=R, bit2=E, bit1=W, bit0=Q
-                p8matrix['h15] <= matrix[16];  // Q
-                p8matrix['h1D] <= matrix[17];  // W
-                p8matrix['h24] <= matrix[18];  // E
-                p8matrix['h2D] <= matrix[19];  // R
-                p8matrix['h2C] <= matrix[20];  // T
-                p8matrix['hFD] <= matrix[21]; // True Video (Page Up)
-                p8matrix['hFA] <= matrix[22]; // Inv Video (Page Down)
+                p8matrix['h14] <= matrix[16];   // Q
+                p8matrix['h1a] <= matrix[17];   // W
+                p8matrix['h08] <= matrix[18];   // E
+                p8matrix['h15] <= matrix[19];   // R
+                p8matrix['h17] <= matrix[20];   // T
+                p8matrix['h4b] <= matrix[21];   // True Video (Page Up)
+                p8matrix['h4e] <= matrix[22];   // Inv Video (Page Down)
 
                 // ---------- Row 3 ----------
                 // bit6=EDIT, bit5=BREAK, bit4=5, bit3=4, bit2=3, bit1=2, bit0=1
-                p8matrix['h16] <= matrix[24];  // 1
-                p8matrix['h1E] <= matrix[25];  // 2
-                p8matrix['h26] <= matrix[26];  // 3
-                p8matrix['h25] <= matrix[27];  // 4
-                p8matrix['h2E] <= matrix[28];  // 5
-                p8matrix['h76] <= matrix[29];  // Break (ESC)
-                p8matrix['h58] <= matrix[30];  // Edit (Caps Lock)
+                p8matrix['h1e] <= matrix[24];   // 1
+                p8matrix['h1f] <= matrix[25];   // 2
+                p8matrix['h20] <= matrix[26];   // 3
+                p8matrix['h21] <= matrix[27];   // 4
+                p8matrix['h22] <= matrix[28];   // 5
+                p8matrix['h29] <= matrix[29];   // Break (ESC)
+                p8matrix['h39] <= matrix[30];   // Edit (Caps Lock)
 
                 // ---------- Row 4 ----------
                 // bit6=" , bit5=; , bit4=6, bit3=7, bit2=8, bit1=9, bit0=0
-                p8matrix['h45] <= matrix[32];  // 0
-                p8matrix['h46] <= matrix[33];  // 9
-                p8matrix['h3E] <= matrix[34];  // 8
-                p8matrix['h3D] <= matrix[35];  // 7
-                p8matrix['h36] <= matrix[36];  // 6
-                p8matrix['h4C] <= matrix[37];  // ;
-                p8matrix['h52] <= matrix[38];  // " (' and
-                //p8matrix['h59] <= matrix[38];  //    Right Shift)
+                p8matrix['h27] <= matrix[32];   // 0
+                p8matrix['h26] <= matrix[33];   // 9
+                p8matrix['h25] <= matrix[34];   // 8
+                p8matrix['h24] <= matrix[35];   // 7
+                p8matrix['h23] <= matrix[36];   // 6
+                p8matrix['h33] <= matrix[37];   // ;
+                p8matrix['h34] <= matrix[38];   // " (' and
+                //                p8matrix['he5] <= matrix[38];   //    Right Shift)
 
                 // ---------- Row 5 ----------
                 // bit6=., bit5=,, bit4=Y, bit3=U, bit2=I, bit1=O, bit0=P
-                p8matrix['h4D] <= matrix[40];  // P
-                p8matrix['h44] <= matrix[41];  // O
-                p8matrix['h43] <= matrix[42];  // I
-                p8matrix['h3C] <= matrix[43];  // U
-                p8matrix['h35] <= matrix[44];  // Y
-                p8matrix['h41] <= matrix[45];  // ,
-                p8matrix['h49] <= matrix[46];  // .
+                p8matrix['h13] <= matrix[40];   // P
+                p8matrix['h12] <= matrix[41];   // O
+                p8matrix['h0c] <= matrix[42];   // I
+                p8matrix['h18] <= matrix[43];   // U
+                p8matrix['h1c] <= matrix[44];   // Y
+                p8matrix['h36] <= matrix[45];   // ,
+                p8matrix['h37] <= matrix[46];   // .
 
                 // ---------- Row 6 ----------
                 // bit6=RIGHT, bit5=DELETE, bit4=H, bit3=J, bit2=K, bit1=L, bit0=Enter
-                p8matrix['h5A] <= matrix[48];  // Enter
-                p8matrix['h4B] <= matrix[49];  // L
-                p8matrix['h42] <= matrix[50];  // K
-                p8matrix['h3B] <= matrix[51];  // J
-                p8matrix['h33] <= matrix[52];  // H
-                p8matrix['h66] <= matrix[53];  // Delete (Backspace)
-                p8matrix['hF4] <= matrix[54];  // Right arrow
+                p8matrix['h28] <= matrix[48];   // Enter
+                p8matrix['h0f] <= matrix[49];   // L
+                p8matrix['h0e] <= matrix[50];   // K
+                p8matrix['h0d] <= matrix[51];   // J
+                p8matrix['h0b] <= matrix[52];   // H
+                p8matrix['h2a] <= matrix[53];   // Delete (Backspace)
+                p8matrix['h4f] <= matrix[54];   // Right arrow
 
                 // ---------- Row 7 ----------
                 // bit6=DOWN, bit5=LEFT, bit4=B, bit3=N, bit2=M, bit1=SymShift, bit0=Space
-                p8matrix['h29] <= matrix[56];  // Space
-                p8matrix['h11] <= matrix[57];  // Symbol Shift (Left Alt)
-                p8matrix['h3A] <= matrix[58];  // M
-                p8matrix['h31] <= matrix[59];  // N
-                p8matrix['h32] <= matrix[60];  // B
-                p8matrix['hEB] <= matrix[61];  // Left arrow
-                p8matrix['hF2] <= matrix[62];  // Down arrow
+                p8matrix['h2c] <= matrix[56];   // Space
+                p8matrix['he2] <= matrix[57];   // Symbol Shift (Left Alt)
+                p8matrix['h10] <= matrix[58];   // M
+                p8matrix['h11] <= matrix[59];   // N
+                p8matrix['h05] <= matrix[60];   // B
+                p8matrix['h50] <= matrix[61];   // Left arrow
+                p8matrix['h51] <= matrix[62];   // Down arrow
 			end
 		endcase
 	end

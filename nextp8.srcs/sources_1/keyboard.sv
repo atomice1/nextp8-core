@@ -248,6 +248,126 @@ always @(posedge clk) begin
     end
 end
 
+// PS/2 scancode to USB HID scancode lookup table (ROM)
+wire [7:0] nextp8_scancode;
+assign nextp8_scancode = rx_byte | (key_extended ? 8'h80 : 8'd0);
+
+// ROM: mapping from nextp8 scancode to USB HID scancode
+// Default value 0 for unmapped scancodes
+localparam int ROM_SIZE = 256;
+logic [7:0] usb_hid_scancode_rom [ROM_SIZE];
+
+// Initialize ROM with mappings
+initial begin
+    // Fill with zeros (unmapped)
+    for (int i = 0; i < ROM_SIZE; i++) begin
+        usb_hid_scancode_rom[i] = 8'h00;
+    end
+
+    // Add mappings: nextp8_scancode -> usb_hid_scancode
+    usb_hid_scancode_rom[8'h01] = 8'h42; // F9
+    usb_hid_scancode_rom[8'h03] = 8'h3e; // F5
+    usb_hid_scancode_rom[8'h04] = 8'h3c; // F3
+    usb_hid_scancode_rom[8'h05] = 8'h3a; // F1
+    usb_hid_scancode_rom[8'h06] = 8'h3b; // F2
+    usb_hid_scancode_rom[8'h07] = 8'h45; // F12
+    usb_hid_scancode_rom[8'h09] = 8'h43; // F10
+    usb_hid_scancode_rom[8'h0a] = 8'h41; // F8
+    usb_hid_scancode_rom[8'h0b] = 8'h3f; // F6
+    usb_hid_scancode_rom[8'h0c] = 8'h3d; // F4
+    usb_hid_scancode_rom[8'h0d] = 8'h2b; // tab
+    usb_hid_scancode_rom[8'h0e] = 8'h35; // ` (back tick)
+    usb_hid_scancode_rom[8'h11] = 8'he2; // left alt
+    usb_hid_scancode_rom[8'h12] = 8'he1; // left shift
+    usb_hid_scancode_rom[8'h14] = 8'he0; // left control
+    usb_hid_scancode_rom[8'h15] = 8'h14; // Q
+    usb_hid_scancode_rom[8'h16] = 8'h1e; // 1
+    usb_hid_scancode_rom[8'h1a] = 8'h1d; // Z
+    usb_hid_scancode_rom[8'h1b] = 8'h16; // S
+    usb_hid_scancode_rom[8'h1c] = 8'h04; // A
+    usb_hid_scancode_rom[8'h1d] = 8'h1a; // W
+    usb_hid_scancode_rom[8'h1e] = 8'h1f; // 2
+    usb_hid_scancode_rom[8'h21] = 8'h06; // C
+    usb_hid_scancode_rom[8'h22] = 8'h1b; // X
+    usb_hid_scancode_rom[8'h23] = 8'h07; // D
+    usb_hid_scancode_rom[8'h24] = 8'h08; // E
+    usb_hid_scancode_rom[8'h25] = 8'h21; // 4
+    usb_hid_scancode_rom[8'h26] = 8'h20; // 3
+    usb_hid_scancode_rom[8'h29] = 8'h2c; // space
+    usb_hid_scancode_rom[8'h2a] = 8'h19; // V
+    usb_hid_scancode_rom[8'h2b] = 8'h09; // F
+    usb_hid_scancode_rom[8'h2c] = 8'h17; // T
+    usb_hid_scancode_rom[8'h2d] = 8'h15; // R
+    usb_hid_scancode_rom[8'h2e] = 8'h22; // 5
+    usb_hid_scancode_rom[8'h31] = 8'h11; // N
+    usb_hid_scancode_rom[8'h32] = 8'h05; // B
+    usb_hid_scancode_rom[8'h33] = 8'h0b; // H
+    usb_hid_scancode_rom[8'h34] = 8'h0a; // G
+    usb_hid_scancode_rom[8'h35] = 8'h1c; // Y
+    usb_hid_scancode_rom[8'h36] = 8'h23; // 6
+    usb_hid_scancode_rom[8'h3a] = 8'h10; // M
+    usb_hid_scancode_rom[8'h3b] = 8'h0d; // J
+    usb_hid_scancode_rom[8'h3c] = 8'h18; // U
+    usb_hid_scancode_rom[8'h3d] = 8'h24; // 7
+    usb_hid_scancode_rom[8'h3e] = 8'h25; // 8
+    usb_hid_scancode_rom[8'h41] = 8'h36; // ,
+    usb_hid_scancode_rom[8'h42] = 8'h0e; // K
+    usb_hid_scancode_rom[8'h43] = 8'h0c; // I
+    usb_hid_scancode_rom[8'h44] = 8'h12; // O
+    usb_hid_scancode_rom[8'h45] = 8'h27; // 0 (zero)
+    usb_hid_scancode_rom[8'h46] = 8'h26; // 9
+    usb_hid_scancode_rom[8'h49] = 8'h37; // .
+    usb_hid_scancode_rom[8'h4a] = 8'h38; // /
+    usb_hid_scancode_rom[8'h4b] = 8'h0f; // L
+    usb_hid_scancode_rom[8'h4c] = 8'h33; // ;
+    usb_hid_scancode_rom[8'h4d] = 8'h13; // P
+    usb_hid_scancode_rom[8'h4e] = 8'h2d; // -
+    usb_hid_scancode_rom[8'h52] = 8'h34; // '
+    usb_hid_scancode_rom[8'h54] = 8'h2f; // [
+    usb_hid_scancode_rom[8'h55] = 8'h2e; // =
+    usb_hid_scancode_rom[8'h58] = 8'h39; // CapsLock
+    usb_hid_scancode_rom[8'h59] = 8'he5; // right shift
+    usb_hid_scancode_rom[8'h5a] = 8'h28; // enter
+    usb_hid_scancode_rom[8'h5b] = 8'h30; // ]
+    usb_hid_scancode_rom[8'h5d] = 8'h31; // \
+    usb_hid_scancode_rom[8'h66] = 8'h2a; // backspace
+    usb_hid_scancode_rom[8'h71] = 8'h63; // (keypad) .
+    usb_hid_scancode_rom[8'h73] = 8'h5d; // (keypad) 5
+    usb_hid_scancode_rom[8'h76] = 8'h29; // escape
+    usb_hid_scancode_rom[8'h77] = 8'h83; // NumberLock
+    usb_hid_scancode_rom[8'h78] = 8'h44; // F11
+    usb_hid_scancode_rom[8'h79] = 8'h57; // (keypad) +
+    usb_hid_scancode_rom[8'h7b] = 8'h56; // (keypad) -
+    usb_hid_scancode_rom[8'h7c] = 8'h55; // (keypad) *
+    usb_hid_scancode_rom[8'h7e] = 8'h47; // ScrollLock
+    usb_hid_scancode_rom[8'h91] = 8'he6; // right alt
+    usb_hid_scancode_rom[8'h94] = 8'he4; // right control
+    usb_hid_scancode_rom[8'h9f] = 8'he3; // left GUI
+    usb_hid_scancode_rom[8'ha7] = 8'he7; // right GUI
+    usb_hid_scancode_rom[8'hca] = 8'h54; // (keypad) /
+    usb_hid_scancode_rom[8'hda] = 8'h58; // (keypad) enter
+    usb_hid_scancode_rom[8'he9] = 8'h4d; // end
+    usb_hid_scancode_rom[8'heb] = 8'h50; // cursor left
+    usb_hid_scancode_rom[8'hec] = 8'h4a; // home
+    usb_hid_scancode_rom[8'hf0] = 8'h49; // insert
+    usb_hid_scancode_rom[8'hf1] = 8'h4c; // delete
+    usb_hid_scancode_rom[8'hf2] = 8'h51; // cursor down
+    usb_hid_scancode_rom[8'hf4] = 8'h4f; // cursor right
+    usb_hid_scancode_rom[8'hf5] = 8'h52; // cursor up
+    usb_hid_scancode_rom[8'hfa] = 8'h4e; // page down
+    usb_hid_scancode_rom[8'hfd] = 8'h4b; // page up
+end
+
+// Read ROM on clock edge
+reg [7:0] usb_hid_scancode;
+always @(posedge clk) begin
+    if (reset) begin
+        usb_hid_scancode <= 8'h00;
+    end else begin
+        usb_hid_scancode <= usb_hid_scancode_rom[nextp8_scancode];
+    end
+end
+
 // Scan code decoder
 always @(posedge clk) begin
     if (reset) begin
@@ -269,7 +389,8 @@ always @(posedge clk) begin
                     key_extended <= 1'b0;
                     key_released <= 1'b0;
 
-                    p8matrix[rx_byte | (key_extended ? 8'h80 : 8'd0)] <= key_released ? 1'b0 : 1'b1;
+                    // Use lookup table to convert PS/2 scancode to USB HID
+                    p8matrix[usb_hid_scancode] <= key_released ? 1'b0 : 1'b1;
                 end
             end else begin
                 // Still initializing, ignore incoming bytes

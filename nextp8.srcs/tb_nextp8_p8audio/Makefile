@@ -18,11 +18,11 @@ SIM_DIR = .
 # Verilog source files
 VERILOG_SOURCES = \
 	$(SOURCES_DIR)/nextp8_top.v \
+	$(SOURCES_DIR)/kbd_queue.v \
 	$(SOURCES_DIR)/dma_arbiter.v \
 	$(SOURCES_DIR)/hdmi/encoder.v \
 	$(SOURCES_DIR)/hdmi/hdmidataencoder.v \
 	$(SOURCES_DIR)/hdmi/hdmi.v \
-	$(SOURCES_DIR)/keyboard.sv \
 	$(SOURCES_DIR)/mkeyboard.v
 
 # IP core simulation files (generated)

@@ -37,6 +37,7 @@ endif
 # Verilog source files
 VERILOG_SOURCES = \
 	$(SRC_DIR)/nextp8_top.v \
+	$(SRC_DIR)/kbd_queue.v \
 	$(SRC_DIR)/dma_arbiter.v \
 	$(SRC_DIR)/hdmi/encoder.v \
 	$(SRC_DIR)/hdmi/hdmidataencoder.v \

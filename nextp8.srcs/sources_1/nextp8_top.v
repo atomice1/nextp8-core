@@ -180,6 +180,8 @@ localparam [7:0] ADDR_KEYBOARD_MATRIX          = 8'h60;
 localparam [7:0] ADDR_KEYBOARD_MATRIX_LATCHED  = 8'h80;
 localparam [7:0] ADDR_SCREEN_TRANSFORM         = 8'hA1;
 localparam [7:0] ADDR_HIGH_COLOR_MODE          = 8'hA3;
+localparam [7:0] ADDR_KEY_EVENT_QUEUE_HI       = 8'hA8;
+localparam [7:0] ADDR_KEY_EVENT_QUEUE_LO       = 8'hAa;
 
 reg [15:0] params = 16'd0;
 reg [5:0] post_code_cpu = 6'd3;
@@ -700,7 +702,28 @@ reg [255:0] kbd_matrix_q_prev;
 // Latching keyboard matrix for btnp() support
 reg [255:0] kbd_matrix_latched;
 
-// ----------- Mouse ---------------
+// ----------- Keyboard Event Queue -----------
+// Keyboard event queue - stores key press/release events
+// Operates in mclk domain (same as kbd_matrix_q)
+wire [31:0] kbd_queue_data;
+
+// Pop request signal (set by MMIO read)
+reg kbd_queue_pop_req;
+
+// Clear queue signal (set by MMIO write to event register)
+reg kbd_queue_clear_req;
+
+// ----------- Keyboard Event Queue Instance -----------
+kbd_queue kbd_queue_inst (
+    .clk          (mclk),
+    .reset        (reset_mclk_q),
+    .queue_data   (kbd_queue_data),
+    .push_data    (kbd_push_data_reg),
+    .push_req     (kbd_push_req_reg),
+    .pop_req      (kbd_queue_pop_req),
+    .clear_req    (kbd_queue_clear_req)
+);
+
 wire signed [15:0] mouse_x_raw, mouse_y_raw, mouse_z_raw;
 wire [7:0] mouse_buttons_raw;
 
@@ -1241,7 +1264,6 @@ always @(posedge mclk) begin
     if (!pll_locked || reset_mclk_q) begin
         p8audio_dma_req_latched <= 1'b0;
         p8audio_dma_addr_latched <= 31'd0;
-        cpu_shutdown <= 1'b0;  // Clear shutdown flag on reset
     end else begin
         // Latch request when it goes high
         if (p8audio_dma_req) begin
@@ -1460,6 +1482,78 @@ spi qlsdspi(
     .data_out (qlsd_data),
     .divider  (qlsd_div_q)
 );
+
+//------------- Keyboard events ----------------------------
+
+// Keyboard event push signals - mclk domain registers
+reg [31:0] kbd_push_data_reg;
+reg kbd_push_req_reg;
+
+// Keyboard event (32-bit)
+//   [31]   0: press, 1: release
+//   [30]   membrane mode
+//   [29:16] reserved (0)
+//   [27:24] num lock, caps lock, scroll lock, mode
+//   [23:16] lshift, rshift, lctrl, rctrl, lalt, ralt, lgui, rgui
+//   [15:0]  scancode
+reg kbd_event_found;
+integer kbd_event_i;
+
+// Modifier keys
+wire kbd_lshift     = kbd_matrix_q['he1];
+wire kbd_rshift     = kbd_matrix_q['he5];
+wire kbd_lctrl      = kbd_matrix_q['he0];
+wire kbd_rctrl      = kbd_matrix_q['he4];
+wire kbd_lalt       = kbd_matrix_q['he2];
+wire kbd_ralt       = kbd_matrix_q['he6];
+wire kbd_lgui       = kbd_matrix_q['he3];
+wire kbd_rgui       = kbd_matrix_q['he7];
+
+wire [7:0] modifiers = {kbd_rgui, kbd_lgui, kbd_ralt, kbd_lalt, kbd_rctrl, kbd_lctrl, kbd_rshift, kbd_lshift};
+wire [3:0] lock_keys = 4'd0;
+
+// Keyboard event (32-bit):
+//   [31]   0: press, 1: release
+//   [30]   membrane mode
+//   [29:28] reserved
+//   [27:24] lock keys (mode, scroll, caps, num)
+//   [23:16] modifiers (rgui, lgui, ralt, lalt, rctrl, lctrl, rshift, lshift)
+//   [15:0]  scancode
+
+always @(posedge mclk)
+begin
+    if (reset_mclk_q) begin
+        kbd_push_req_reg <= 1'b0;
+        kbd_push_data_reg <= 32'd0;
+    end else begin
+        kbd_push_req_reg <= 1'b0;  // Clear push request
+        kbd_push_data_reg <= 32'd0;
+
+        // Detect key press (bit went from 0 to 1)
+        // Detect key release (bit went from 1 to 0)
+        // Push events for each key that changed
+        // Process bits [255:1] (bit 0 is mem_kbd_active)
+        // Note: Only one event per cycle due to kbd_event_found logic
+
+        kbd_event_found = 1'b0;
+
+        for (kbd_event_i = 1; kbd_event_i < 256; kbd_event_i = kbd_event_i + 1) begin
+            if (!kbd_event_found) begin
+                if (kbd_matrix_q[kbd_event_i] && !kbd_matrix_q_prev[kbd_event_i]) begin
+                    // Press event (bit 31=0)
+                    kbd_push_data_reg <= {1'b0, kbd_matrix_q[0], 2'b00, lock_keys, modifiers, 8'd0, kbd_event_i[7:0]};
+                    kbd_push_req_reg <= 1'b1;
+                    kbd_event_found = 1'b1;
+                end else if (!kbd_matrix_q[kbd_event_i] && kbd_matrix_q_prev[kbd_event_i]) begin
+                    // Release event (bit 31=1)
+                    kbd_push_data_reg <= {1'b1, kbd_matrix_q[0], 2'b00, lock_keys, modifiers, 8'd0, kbd_event_i[7:0]};
+                    kbd_push_req_reg <= 1'b1;
+                    kbd_event_found = 1'b1;
+                end
+            end
+        end
+    end
+end
 
 // -------------------------------------------------------------------------
 // ---------------- CDC synchronizers for mclk -> clk_sys crossings --------
@@ -1682,6 +1776,8 @@ reg [31:0] debug_reg;
 
 always @(posedge mclk)
 begin
+    kbd_queue_pop_req <= 1'b0;
+
     if (!reset_mclk_q && memio_go && memio_rd && cpu_rd) begin  // read memory mapped ports
         if (cpu_addr[8] == 1'b0) begin
             //--------------- QLSD --------------------------------------------------
@@ -1751,6 +1847,12 @@ begin
             if (cpu_addr[7:1]==ADDR_DEBUG_REG_LO[7:1] && cpu_rd) memio_out <= debug_reg[15:0];
             //------------- keyboard -----------------------------
             if (cpu_addr[7:5]==ADDR_KEYBOARD_MATRIX[7:5] && cpu_rd) memio_out <= {kbd_matrix_q[{cpu_addr[4:1], 4'b0} +: 8], kbd_matrix_q[{cpu_addr[4:1], 4'b1000} +: 8]};
+            //------------- keyboard event queue -----------------
+            if (cpu_addr[7:1]==ADDR_KEY_EVENT_QUEUE_HI[7:1] && cpu_rd) memio_out <= kbd_queue_data[31:16];
+            if (cpu_addr[7:1]==ADDR_KEY_EVENT_QUEUE_LO[7:1] && cpu_rd) begin
+                memio_out <= kbd_queue_data[15:0];
+                kbd_queue_pop_req <= 1'b1;
+            end
             //------------- latching keyboard (btnp) ----------------
             if (cpu_addr[7:5]==ADDR_KEYBOARD_MATRIX_LATCHED[7:5] && cpu_rd) memio_out <= {kbd_matrix_latched[{cpu_addr[4:1], 4'b0} +: 8], kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8]};
             //------------- joystick -----------------------------
@@ -1780,6 +1882,8 @@ begin
         js1_latched <= 8'd0;
         mouse_buttons_latched <= 8'd0;
         vsync_irq_enable <= 1'b0;
+        kbd_queue_clear_req <= 1'b0;
+        cpu_shutdown <= 1'b0;  // Clear shutdown flag on reset
     end else begin
         // Latching input: only latch newly pressed keys/buttons (rising edge detection)
         // Only set bits that are high in current state but were low in previous state
@@ -1788,6 +1892,7 @@ begin
         js1_latched <= js1_latched | (js1_q & ~js1_q_prev);
         mouse_buttons_latched <= mouse_buttons_latched | (mouse_buttons_q & ~mouse_buttons_q_prev);
     end
+    kbd_queue_clear_req <= 1'b0;
     vsync_ack <= 1'b0;
 
     if (!reset_mclk_q && memio_go && memio_rd && cpu_wr && !cpu_shutdown) begin
@@ -1842,6 +1947,8 @@ begin
             // --------------- digital audio -----------------------------------------------------------
             if (cpu_addr[7:1]==ADDR_DA_CONTROL[7:1] && cpu_wr ) begin da_start <= cpu_dout[0]; da_mono<= cpu_dout[8]; end
             if (cpu_addr[7:1]==ADDR_DA_PERIOD[7:1] && cpu_wr ) begin da_period <= cpu_dout; end
+            //------------- keyboard event queue clear ----------------
+            if (cpu_addr[7:1]==ADDR_KEY_EVENT_QUEUE_LO[7:1] && cpu_wr) begin kbd_queue_clear_req <= 1'b1; end
             //------------- latching keyboard clear (btnp)
             if (cpu_addr[7:5]==ADDR_KEYBOARD_MATRIX_LATCHED[7:5] && cpu_wr && !cpu_ds[0]) begin
                 kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8] <= kbd_matrix_latched[{cpu_addr[4:1], 4'b1000} +: 8] & ~cpu_dout[7:0];
