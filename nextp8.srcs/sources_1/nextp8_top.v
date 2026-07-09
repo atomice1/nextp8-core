@@ -658,6 +658,7 @@ assign ps2_pin2_io = (ps2_alt_data_out  == 1'b0) ? 1'b0 : 1'bz;
 
 wire [255:0] ps2_kbd_matrix;
 wire [255:0] meb_kbd_matrix;
+wire mem_kbd_active;
 
 keyboard #(
     .SIM        ( SIM          )
@@ -686,7 +687,11 @@ mkeyboard mkeyb (
 
 wire [255:0] kbd_matrix;
 
-assign kbd_matrix = ps2_kbd_matrix | meb_kbd_matrix;
+// '1' when any membrane keyboard matrix bit is active
+assign mem_kbd_active = |meb_kbd_matrix;
+
+// bit 0 is set if any membraned key is pressed; bits [255:1] from the OR'd matrices
+assign kbd_matrix = { ps2_kbd_matrix[255:1] | meb_kbd_matrix[255:1], mem_kbd_active };
 
 // CDC synchronizers for kbd_matrix
 (* ASYNC_REG = "TRUE" *) reg [255:0] kbd_matrix_d, kbd_matrix_q;

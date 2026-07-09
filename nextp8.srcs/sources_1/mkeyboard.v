@@ -83,7 +83,8 @@ else
                 p8matrix['h22] <= matrix[2];   // X
                 p8matrix['h21] <= matrix[3];   // C
                 p8matrix['h2A] <= matrix[4];   // V
-                // No mapping for Extended Mode
+                p8matrix['h59] <= matrix[5] | matrix[38];   // Extended Mode (Right Shift)
+                p8matrix['h94] <= matrix[5];   // Extended Mode (Right Ctrl)
                 p8matrix['hF5] <= matrix[6];   // Up arrow
 
                 // ---------- Row 1 ----------
@@ -94,6 +95,7 @@ else
                 p8matrix['h2B] <= matrix[11];  // F
                 p8matrix['h34] <= matrix[12];  // G
                 p8matrix['h58] <= matrix[13];  // Caps Lock
+                p8matrix['h7E] <= matrix[14];  // Graph (Scroll Lock)
 
                 // ---------- Row 2 ----------
                 // bit6=INV VIDEO, bit5=TRUE VIDEO, bit4=T, bit3=R, bit2=E, bit1=W, bit0=Q
@@ -102,6 +104,8 @@ else
                 p8matrix['h24] <= matrix[18];  // E
                 p8matrix['h2D] <= matrix[19];  // R
                 p8matrix['h2C] <= matrix[20];  // T
+                p8matrix['hFD] <= matrix[21]; // True Video (Page Up)
+                p8matrix['hFA] <= matrix[22]; // Inv Video (Page Down)
 
                 // ---------- Row 3 ----------
                 // bit6=EDIT, bit5=BREAK, bit4=5, bit3=4, bit2=3, bit1=2, bit0=1
@@ -111,6 +115,7 @@ else
                 p8matrix['h25] <= matrix[27];  // 4
                 p8matrix['h2E] <= matrix[28];  // 5
                 p8matrix['h76] <= matrix[29];  // Break (ESC)
+                p8matrix['h58] <= matrix[30];  // Edit (Caps Lock)
 
                 // ---------- Row 4 ----------
                 // bit6=" , bit5=; , bit4=6, bit3=7, bit2=8, bit1=9, bit0=0
@@ -121,7 +126,7 @@ else
                 p8matrix['h36] <= matrix[36];  // 6
                 p8matrix['h4C] <= matrix[37];  // ;
                 p8matrix['h52] <= matrix[38];  // " (' and
-                p8matrix['h59] <= matrix[38];  //    Right Shift)
+                //p8matrix['h59] <= matrix[38];  //    Right Shift)
 
                 // ---------- Row 5 ----------
                 // bit6=., bit5=,, bit4=Y, bit3=U, bit2=I, bit1=O, bit0=P
@@ -140,7 +145,7 @@ else
                 p8matrix['h42] <= matrix[50];  // K
                 p8matrix['h3B] <= matrix[51];  // J
                 p8matrix['h33] <= matrix[52];  // H
-                p8matrix['h71] <= matrix[53];  // Delete
+                p8matrix['h66] <= matrix[53];  // Delete (Backspace)
                 p8matrix['hF4] <= matrix[54];  // Right arrow
 
                 // ---------- Row 7 ----------
