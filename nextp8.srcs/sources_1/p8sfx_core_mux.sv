@@ -394,7 +394,7 @@ wire [1:0] voice_idx = ctx_idx[2:1];  // Voice number (0-3) derived from context
 // Per-context SFX note cache (32 notes × 16-bit per context)
 // Merged into single distributed RAM: 256 entries (8 contexts × 32 notes) = 4096 bits
 // Address format: {ctx_idx[2:0], note_addr[4:0]} = 8 bits total
-(* ram_style = "distributed" *) reg [15:0] sfx_notes [0:255];  // clk_sys(W)/clk_pcm_8x(R)
+(* ram_style = "block" *) reg [15:0] sfx_notes [0:255];  // clk_sys(W)/clk_pcm_8x(R)
 // Each entry contains 2 bytes: [15:8] = note_byte1, [7:0] = note_byte0
 
 // Per-context reverb delay lines
