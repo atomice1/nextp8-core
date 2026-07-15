@@ -96,8 +96,8 @@ localparam VOL_PRC = 5;    // U8F5: fractional bits (shift from 3-bit cur_vol)
 localparam signed [VOL_WID:0] VOL_DIVISOR = ((1 << (VOL_WID - VOL_PRC)) - 1) << VOL_PRC;
 
 // Phase increment (eff_inc, base_inc, detune_inc)
-localparam INC_WID  = WAVE_PRC;  // U18F18: phase increment total width
-localparam INC_PRC  = WAVE_PRC;  // Phase increment precision (= waveform phase precision)
+localparam INC_WID  = PHASE_PRC;  // U18F18: phase increment total width
+localparam INC_PRC  = PHASE_PRC;  // Phase increment precision (= waveform phase precision)
 
 // Phase multiplier (phase_mult, for custom instrument pitch scaling)
 localparam PMUL_WID = 18;        // U18F12: phase multiplier total width
@@ -1604,6 +1604,8 @@ task waveform_gen;
     // Integer 3 at WAVE_WID width (for blend multiplication)
     localparam signed [WAVE_WID-1:0] WAVE_INT_THREE = 3;
 
+    localparam signed [PHASE_WID-1:0] PHASE_HALF     = PHASE_WID'($rtoi(0.5 * (2.0 ** PHASE_PRC)));
+
     // Fixed-point constants for waveform output (SAMP_WID bits)
     localparam signed [SAMP_WID-1:0] SAMP_QUARTER = SAMP_WID'($rtoi(0.25 * (2.0 ** SAMP_PRC)));
 
@@ -1621,7 +1623,10 @@ task waveform_gen;
     begin
         // Standard waveform generation using full phase precision
 
-        t = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, phase_in[WAVE_PRC-1:0]});
+        t = $signed({{(WAVE_WID-WAVE_PRC){1'b0}},
+                    (PHASE_PRC >= WAVE_PRC ?
+                     phase_in[PHASE_PRC-1 : PHASE_PRC-WAVE_PRC] :
+                     {phase_in[PHASE_PRC-1:0], {(WAVE_PRC-PHASE_PRC){1'b0}}})});
 
         case (cur_wave)
             3'd0: begin // TRIANGLE
@@ -1697,9 +1702,13 @@ task waveform_gen;
                 if (filt_buzz) begin
                     // Buzz harmonic: ret * 0.83 - (condition ? 0.085 : 0)
                     // Condition: abs(phase_in mod 2 - 1) < 0.5
-                    // phase_in mod 2 uses bits [WAVE_PRC+1:0] of phase_in
+                    // phase_in mod 2 uses bits [PHASE_PRC:0] of phase_in
                     // temp4 = signed(phase_in mod 2) - 1
-                    temp4 = $signed({{(WAVE_WID-WAVE_PRC-2){1'b0}}, phase_in[WAVE_PRC+1:0]}) - WAVE_ONE;
+                    /*temp4 = $signed({{(WAVE_WID-WAVE_PRC-1){1'b0}},
+                        (PHASE_PRC >= WAVE_PRC ?
+                         phase_in[PHASE_PRC : PHASE_PRC-WAVE_PRC] :
+                         {phase_in[PHASE_PRC:0], {(WAVE_PRC-PHASE_PRC-1){1'b0}}})}) - WAVE_ONE;*/
+                    temp4 = $signed({{(WAVE_WID-WAVE_PRC-1){1'b0}}, phase_in[PHASE_PRC : PHASE_PRC-WAVE_PRC]}) - WAVE_ONE;
                     // abs(temp4)
                     temp4 = temp4[WAVE_WID-1] ? -temp4 : temp4;
                     // temp2 = (temp4 < 0.5) ? 0.085 : 0
@@ -1714,17 +1723,17 @@ task waveform_gen;
 
             3'd3: begin // SQUARE: 50% duty (40% with buzz), amplitude ±0.25
                 if (filt_buzz) begin
-                    sample_out = (phase_in[WAVE_PRC-1:WAVE_PRC-6] < 6'd26) ? SAMP_QUARTER : -SAMP_QUARTER;
+                    sample_out = (phase_in[PHASE_PRC-1:PHASE_PRC-6] < 6'd26) ? SAMP_QUARTER : -SAMP_QUARTER;
                 end else begin
-                    sample_out = phase_in[WAVE_PRC-1] ? -SAMP_QUARTER : SAMP_QUARTER;
+                    sample_out = phase_in[PHASE_PRC-1] ? -SAMP_QUARTER : SAMP_QUARTER;
                 end
             end
 
             3'd4: begin // PULSE: 31.6% duty (25.5% with buzz), amplitude ±0.25
                 if (filt_buzz) begin
-                    sample_out = (phase_in[WAVE_PRC-1:WAVE_PRC-5] < 5'd8) ? SAMP_QUARTER : -SAMP_QUARTER;
+                    sample_out = (phase_in[PHASE_PRC-1:PHASE_PRC-5] < 5'd8) ? SAMP_QUARTER : -SAMP_QUARTER;
                 end else begin
-                    sample_out = (phase_in[WAVE_PRC-1:WAVE_PRC-5] < 5'd10) ? SAMP_QUARTER : -SAMP_QUARTER;
+                    sample_out = (phase_in[PHASE_PRC-1:PHASE_PRC-5] < 5'd10) ? SAMP_QUARTER : -SAMP_QUARTER;
                 end
             end
 
@@ -1794,7 +1803,10 @@ task waveform_gen;
                 // Calculate phase * 109/110, take fractional part
                 temp5 = `fp_phase_mul_uu(phase_in, PHASE_109_110);
                 // Extract t_secondary (fractional part)
-                temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, temp5[WAVE_PRC-1:0]});
+                temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}},
+                                (PHASE_PRC >= WAVE_PRC ?
+                                 temp5[PHASE_PRC-1 : PHASE_PRC-WAVE_PRC] :
+                                 {temp5[PHASE_PRC-1:0], {(WAVE_PRC-PHASE_PRC){1'b0}}})});
                 // Calculate: 1 - abs(4 * t_sec - 2)
                 temp1 = temp4 * 4;
                 temp1 = temp1 - WAVE_TWO;
@@ -1805,8 +1817,11 @@ task waveform_gen;
                 if (filt_buzz) begin
                     // Harmonic at 2x: 0.25 - abs(1 * ((phase*2 + 0.5) mod 1) - 0.5)
                     // phase*2 + 0.5, take fractional part
-                    temp5 = (phase_in <<< 1) + WAVE_HALF;
-                    temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, temp5[WAVE_PRC-1:0]});
+                    temp5 = (phase_in <<< 1) + PHASE_HALF;
+                    temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}},
+                                    (PHASE_PRC >= WAVE_PRC ?
+                                     temp5[PHASE_PRC-1 : PHASE_PRC-WAVE_PRC] :
+                                     {temp5[PHASE_PRC-1:0], {(WAVE_PRC-PHASE_PRC){1'b0}}})});
                     // Calculate: 0.25 - abs(t - 0.5)
                     temp1 = temp4 - WAVE_HALF;
                     temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;  // abs
@@ -1815,7 +1830,10 @@ task waveform_gen;
                     // Harmonic at 4x: 0.125 - abs(0.5 * ((phase*4) mod 1) - 0.25)
                     // phase*4, take fractional part
                     temp5 = phase_in <<< 2;
-                    temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}}, temp5[WAVE_PRC-1:0]});
+                    temp4 = $signed({{(WAVE_WID-WAVE_PRC){1'b0}},
+                                    (PHASE_PRC >= WAVE_PRC ?
+                                     temp5[PHASE_PRC-1 : PHASE_PRC-WAVE_PRC] :
+                                     {temp5[PHASE_PRC-1:0], {(WAVE_PRC-PHASE_PRC){1'b0}}})});
                     // Calculate: 0.125 - abs(0.5*t - 0.25)
                     temp1 = (temp4 >>> 1) - WAVE_QUARTER;  // 0.5*t - 0.25
                     temp1 = temp1[WAVE_WID-1] ? -temp1 : temp1;  // abs
