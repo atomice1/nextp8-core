@@ -78,7 +78,7 @@ localparam WAVE_WID = 22;   // S22F18: total width for internal waveform math
 localparam WAVE_PRC = 18;   // S22F18: fractional bits
 
 // Phase accumulator width (wraps at 110 * 2^18)
-localparam PHASE_WID = WAVE_PRC+7; // U25F18: phase accumulator width
+localparam PHASE_WID = 29; // U25F18: phase accumulator width
 localparam PHASE_PRC = WAVE_PRC;
 localparam [PHASE_WID-1:0] PHASE_ACC_MAX = 110 << PHASE_PRC;
 
